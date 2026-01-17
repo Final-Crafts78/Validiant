@@ -242,281 +242,142 @@ const sequelize = new Sequelize(dbUrl, {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DATABASE MODELS
+// DATABASE MODELS (v3.0 ENTERPRISE EDITION)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// USER MODEL - Admin and Employee accounts
-const User = sequelize.define(
-  "User",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    name: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [2, 100],
-      },
-    },
-    email: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: true,
-        notEmpty: true,
-      },
-    },
-    password: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [6, 255],
-      },
-    },
-    role: {
-      type: DataTypes.ENUM("admin", "employee"),
-      defaultValue: "employee",
-      allowNull: false,
-    },
-    employeeId: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      unique: true,
-    },
-    phone: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        is: /^[0-9+\-() ]*$/i,
-      },
-    },
-    lastActive: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-    },
-  },
-  {
-    indexes: [
-      { fields: ["email"] },
-      { fields: ["role"] },
-      { fields: ["employeeId"] },
-    ],
-  },
-);
+// 1. CLIENTS MODEL (B2B Companies)
+const Client = sequelize.define("Client", {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING, allowNull: false },
+  logo_url: { type: DataTypes.TEXT },
+  gst_number: { type: DataTypes.STRING },
+  auto_approve_hours: { type: DataTypes.INTEGER, defaultValue: 8 },
+  webhook_secret: { type: DataTypes.STRING }, // Security for Zoho/API integrations
+});
 
-// TASK MODEL - Task assignments and tracking
-const Task = sequelize.define(
-  "Task",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    title: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 500],
-      },
-    },
-    clientName: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        len: [0, 200],
-      },
-    },
-    pincode: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        is: /^[0-9]{6}$/i,
-      },
-    },
-    mapLink: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    },
-    mapUrl: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    latitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      validate: {
-        min: -90,
-        max: 90,
-      },
-    },
-    longitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      validate: {
-        min: -180,
-        max: 180,
-      },
-    },
-    assignedDate: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    assignedTo: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Users",
-        key: "id",
-      },
-    },
-    status: {
-      type: DataTypes.STRING,
-      defaultValue: "Unassigned",
-      allowNull: false,
-      validate: {
-        isIn: [
-          [
-            "Unassigned",
-            "Pending",
-            "Completed",
-            "Verified",
-            "Left Job",
-            "Not Sharing Info",
-            "Not Picking",
-            "Switch Off",
-            "Incorrect Number",
-            "Wrong Address",
-          ],
-        ],
-      },
-    },
-    notes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    assignedAtTimestamp: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    completedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    verifiedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    manualDate: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    manualTime: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
+// 2. USER MODEL (Updated for Role-Based Access)
+const User = sequelize.define("User", {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { 
+    type: DataTypes.STRING, 
+    allowNull: false,
+    validate: { len: [2, 100] } 
   },
-  {
-    indexes: [
-      { fields: ["assignedTo"] },
-      { fields: ["status"] },
-      { fields: ["pincode"] },
-      { fields: ["assignedDate"] },
-      { fields: ["createdAt"] },
-    ],
+  email: { 
+    type: DataTypes.STRING, 
+    allowNull: false, 
+    unique: true,
+    validate: { isEmail: true } 
   },
-);
+  password: { type: DataTypes.STRING, allowNull: false },
+  // FIX: Changed from ENUM to STRING to match Supabase schema
+  role: { 
+    type: DataTypes.STRING, 
+    defaultValue: "employee",
+    validate: {
+      isIn: [["superadmin", "admin", "client", "employee", "rider"]] 
+    }
+  },
+  employeeId: { type: DataTypes.STRING, allowNull: true },
+  phone: { type: DataTypes.STRING },
+  clientId: { type: DataTypes.INTEGER, allowNull: true }, // Links HR to their Company
+  lastActive: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+}, {
+  indexes: [{ fields: ["email"] }, { fields: ["role"] }]
+});
 
-// ACTIVITY LOG MODEL - Audit trail for all actions
-const ActivityLog = sequelize.define(
-  "ActivityLog",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    userId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Users",
-        key: "id",
-      },
-    },
-    userName: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    action: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    taskId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    taskTitle: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    oldValue: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    newValue: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    ipAddress: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    timestamp: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
+// 3. VERIFICATION REQUESTS (Candidate Onboarding Flow)
+const VerificationRequest = sequelize.define("VerificationRequest", {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  token: { type: DataTypes.STRING, unique: true, allowNull: false }, // Magic Link Token
+  candidateName: { type: DataTypes.STRING, allowNull: false },
+  candidatePhone: { type: DataTypes.STRING, allowNull: false },
+  candidateEmail: { type: DataTypes.STRING },
+  status: { 
+    type: DataTypes.STRING, 
+    defaultValue: "Pending",
+    validate: {
+      isIn: [["Pending", "Submitted", "Auto-Approved", "Manual-Review", "Rejected"]]
+    }
   },
-  {
-    indexes: [
-      { fields: ["userId"] },
-      { fields: ["taskId"] },
-      { fields: ["action"] },
-      { fields: ["timestamp"] },
-    ],
-  },
-);
+  addressInput: { type: DataTypes.TEXT }, // Address typed by candidate
+  gpsLat: { type: DataTypes.FLOAT },      // GPS captured at submission
+  gpsLng: { type: DataTypes.FLOAT },
+  ipAddress: { type: DataTypes.STRING },
+  riskScore: { type: DataTypes.STRING, defaultValue: "Low" },
+  submittedAt: { type: DataTypes.DATE }
+});
 
-// ✅ NEW: CONTACT MESSAGE MODEL (Phase 1)
+// 4. TASK MODEL (Field Operations)
+const Task = sequelize.define("Task", {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  title: { type: DataTypes.STRING, allowNull: false }, // Case ID
+  clientName: { type: DataTypes.STRING },
+  pincode: { type: DataTypes.STRING },
+  mapLink: { type: DataTypes.BOOLEAN, defaultValue: false },
+  mapUrl: { type: DataTypes.TEXT },
+  latitude: { type: DataTypes.FLOAT },
+  longitude: { type: DataTypes.FLOAT },
+  assignedDate: { type: DataTypes.STRING },
+  assignedTo: { 
+    type: DataTypes.INTEGER, 
+    references: { model: "Users", key: "id" } 
+  },
+  status: { 
+    type: DataTypes.STRING, 
+    defaultValue: "Unassigned",
+    allowNull: false 
+  },
+  notes: { type: DataTypes.TEXT },
+  // v3.0: Link task to the original Verification Request
+  verificationRequestId: { type: DataTypes.INTEGER, allowNull: true },
+  completedAt: { type: DataTypes.DATE },
+  verifiedAt: { type: DataTypes.DATE },
+  manualDate: { type: DataTypes.STRING },
+  manualTime: { type: DataTypes.STRING },
+  assignedAtTimestamp: { type: DataTypes.DATE }
+}, {
+  indexes: [
+    { fields: ["assignedTo"] }, 
+    { fields: ["status"] }, 
+    { fields: ["pincode"] }
+  ]
+});
+
+// 5. ACTIVITY LOG (Audit Trail)
+const ActivityLog = sequelize.define("ActivityLog", {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: DataTypes.INTEGER },
+  userName: { type: DataTypes.STRING },
+  action: { type: DataTypes.STRING, allowNull: false },
+  taskId: { type: DataTypes.INTEGER },
+  taskTitle: { type: DataTypes.STRING },
+  oldValue: { type: DataTypes.TEXT },
+  newValue: { type: DataTypes.TEXT },
+  ipAddress: { type: DataTypes.STRING },
+  timestamp: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+});
+
+// 6. CONTACT MESSAGES (From Landing Page)
 const ContactMessage = sequelize.define("ContactMessage", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, allowNull: false },
   message: { type: DataTypes.TEXT, allowNull: false },
-  status: { type: DataTypes.STRING, defaultValue: "New" }, // New, Read, Replied
+  status: { type: DataTypes.STRING, defaultValue: "New" },
   createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
 });
 
-// ✅ NEW: KYC REQUEST MODEL (Phase 2)
+// 7. KYC REQUEST (Legacy/Mock)
 const KYCRequest = sequelize.define("KYCRequest", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  clientName: { type: DataTypes.STRING, allowNull: false }, // Bank/Client Name
-  customerName: { type: DataTypes.STRING, allowNull: false },
-  referenceId: { type: DataTypes.STRING, allowNull: false, unique: true },
-  status: { type: DataTypes.STRING, defaultValue: "Pending" }, // Pending, Verified, Rejected
+  clientName: { type: DataTypes.STRING }, 
+  customerName: { type: DataTypes.STRING },
+  referenceId: { type: DataTypes.STRING },
+  status: { type: DataTypes.STRING, defaultValue: "Pending" }, 
   verificationLink: { type: DataTypes.TEXT },
-  sessionId: { type: DataTypes.STRING }, // From Didit.me
+  sessionId: { type: DataTypes.STRING }, 
   faceMatchScore: { type: DataTypes.FLOAT },
   livenessStatus: { type: DataTypes.STRING },
   estimatedAge: { type: DataTypes.INTEGER },
@@ -530,9 +391,23 @@ const KYCRequest = sequelize.define("KYCRequest", {
 // MODEL RELATIONSHIPS
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Clients <-> Users (HR Managers belong to Clients)
+Client.hasMany(User, { foreignKey: "clientId" });
+User.belongsTo(Client, { foreignKey: "clientId" });
+
+// Clients <-> Verification Requests
+Client.hasMany(VerificationRequest, { foreignKey: "clientId" });
+VerificationRequest.belongsTo(Client, { foreignKey: "clientId" });
+
+// Verification Request -> Becomes a Task
+VerificationRequest.hasOne(Task, { foreignKey: "verificationRequestId" });
+Task.belongsTo(VerificationRequest, { foreignKey: "verificationRequestId" });
+
+// Users (Riders) <-> Tasks
 User.hasMany(Task, { foreignKey: "assignedTo", as: "tasks" });
 Task.belongsTo(User, { foreignKey: "assignedTo", as: "User" });
 
+// Users <-> Activity Logs
 User.hasMany(ActivityLog, { foreignKey: "userId", as: "activities" });
 ActivityLog.belongsTo(User, { foreignKey: "userId", as: "user" });
 
@@ -610,7 +485,7 @@ async function initializeDatabase() {
     console.log("✅ Database connection established");
 
     // Sync models with alter (update schema without losing data)
-    await sequelize.sync({ alter: true });
+    await sequelize.sync({ alter: false });
     console.log("✅ Database synchronized successfully");
 
     // Create or update admin account
