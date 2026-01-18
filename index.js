@@ -610,7 +610,7 @@ async function initializeDatabase() {
     console.log("✅ Database connection established");
 
     // Sync models with alter (update schema without losing data)
-    await sequelize.sync({ alter: false });
+    await sequelize.sync({ alter: true });
     console.log("✅ Database synchronized successfully");
 
     // Create or update admin account
