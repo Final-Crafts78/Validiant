@@ -143,7 +143,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcryptjs");
-const { Sequelize, DataTypes, Op } = require("sequelize");
+const { createClient } = require('@supabase/supabase-js');
 const multer = require("multer");
 const xlsx = require("xlsx");
 const fs = require("fs");
@@ -214,715 +214,177 @@ app.use((req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DATABASE CONFIGURATION - SQLite with persistent storage
+// ═══════════════════════════════════════════════════════════════════════════
+// DATABASE CONFIGURATION - SUPABASE (v3.0)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const dbUrl =
-  process.env.NEON_DATABASE_URL || // your secret (Neon)
-  process.env.DATABASE_URL || // Replit provided (helium)
-  process.env.DATABASEURL; // legacy
+// Ensure these are set in your Render Environment Variables!
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Service Role Key
 
-if (!dbUrl) {
-  throw new Error(
-    "Missing database URL. Set NEON_DATABASE_URL or DATABASE_URL or DATABASEURL.",
-  );
+if (!supabaseUrl || !supabaseKey) {
+  console.error("❌ CRITICAL: Missing Supabase URL or Service Key.");
+  console.error("   Please add SUPABASE_URL and SUPABASE_SERVICE_KEY to Render Environment Variables.");
 }
-console.log("DB host:", new URL(dbUrl).host);
 
-const sequelize = new Sequelize(dbUrl, {
-  dialect: "postgres",
-  protocol: "postgres",
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false,
-    },
-  },
-  logging: false,
-});
+const supabase = createClient(supabaseUrl, supabaseKey);
+console.log("✅ Connected to Supabase Enterprise DB");
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DATABASE MODELS
+// HELPER FUNCTIONS (Supabase Versions)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// USER MODEL - Admin and Employee accounts
-const User = sequelize.define(
-  "User",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    name: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [2, 100],
-      },
-    },
-    email: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: true,
-        notEmpty: true,
-      },
-    },
-    password: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [6, 255],
-      },
-    },
-    role: {
-      type: DataTypes.ENUM("admin", "employee"),
-      defaultValue: "employee",
-      allowNull: false,
-    },
-    employeeId: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      unique: true,
-    },
-    phone: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        is: /^[0-9+\-() ]*$/i,
-      },
-    },
-    lastActive: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-    },
-  },
-  {
-    indexes: [
-      { fields: ["email"] },
-      { fields: ["role"] },
-      { fields: ["employeeId"] },
-    ],
-  },
-);
-
-// TASK MODEL - Task assignments and tracking
-const Task = sequelize.define(
-  "Task",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    title: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 500],
-      },
-    },
-    clientName: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        len: [0, 200],
-      },
-    },
-    pincode: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        is: /^[0-9]{6}$/i,
-      },
-    },
-    mapLink: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    },
-    mapUrl: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    latitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      validate: {
-        min: -90,
-        max: 90,
-      },
-    },
-    longitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      validate: {
-        min: -180,
-        max: 180,
-      },
-    },
-    assignedDate: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    assignedTo: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Users",
-        key: "id",
-      },
-    },
-    status: {
-      type: DataTypes.STRING,
-      defaultValue: "Unassigned",
-      allowNull: false,
-      validate: {
-        isIn: [
-          [
-            "Unassigned",
-            "Pending",
-            "Completed",
-            "Verified",
-            "Left Job",
-            "Not Sharing Info",
-            "Not Picking",
-            "Switch Off",
-            "Incorrect Number",
-            "Wrong Address",
-          ],
-        ],
-      },
-    },
-    notes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    assignedAtTimestamp: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    completedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    verifiedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    manualDate: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    manualTime: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-  },
-  {
-    indexes: [
-      { fields: ["assignedTo"] },
-      { fields: ["status"] },
-      { fields: ["pincode"] },
-      { fields: ["assignedDate"] },
-      { fields: ["createdAt"] },
-    ],
-  },
-);
-
-// ACTIVITY LOG MODEL - Audit trail for all actions
-const ActivityLog = sequelize.define(
-  "ActivityLog",
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    userId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Users",
-        key: "id",
-      },
-    },
-    userName: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    action: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    taskId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    taskTitle: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    oldValue: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    newValue: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    ipAddress: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    timestamp: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-  },
-  {
-    indexes: [
-      { fields: ["userId"] },
-      { fields: ["taskId"] },
-      { fields: ["action"] },
-      { fields: ["timestamp"] },
-    ],
-  },
-);
-
-// ✅ NEW: CONTACT MESSAGE MODEL (Phase 1)
-const ContactMessage = sequelize.define("ContactMessage", {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  name: { type: DataTypes.STRING, allowNull: false },
-  email: { type: DataTypes.STRING, allowNull: false },
-  message: { type: DataTypes.TEXT, allowNull: false },
-  status: { type: DataTypes.STRING, defaultValue: "New" }, // New, Read, Replied
-  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-});
-
-// ✅ NEW: KYC REQUEST MODEL (Phase 2)
-const KYCRequest = sequelize.define("KYCRequest", {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  clientName: { type: DataTypes.STRING, allowNull: false }, // Bank/Client Name
-  customerName: { type: DataTypes.STRING, allowNull: false },
-  referenceId: { type: DataTypes.STRING, allowNull: false, unique: true },
-  status: { type: DataTypes.STRING, defaultValue: "Pending" }, // Pending, Verified, Rejected
-  verificationLink: { type: DataTypes.TEXT },
-  sessionId: { type: DataTypes.STRING }, // From Didit.me
-  faceMatchScore: { type: DataTypes.FLOAT },
-  livenessStatus: { type: DataTypes.STRING },
-  estimatedAge: { type: DataTypes.INTEGER },
-  ipRiskLevel: { type: DataTypes.STRING },
-  ipCountry: { type: DataTypes.STRING },
-  idType: { type: DataTypes.STRING },
-  createdBy: { type: DataTypes.INTEGER },
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MODEL RELATIONSHIPS
-// ═══════════════════════════════════════════════════════════════════════════
-
-User.hasMany(Task, { foreignKey: "assignedTo", as: "tasks" });
-Task.belongsTo(User, { foreignKey: "assignedTo", as: "User" });
-
-User.hasMany(ActivityLog, { foreignKey: "userId", as: "activities" });
-ActivityLog.belongsTo(User, { foreignKey: "userId", as: "user" });
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Log activity for audit trail
-async function logActivity(
-  userId,
-  userName,
-  action,
-  taskId = null,
-  taskTitle = null,
-  oldValue = null,
-  newValue = null,
-  req = null,
-) {
+// 1. Audit Logging (Logs to Supabase 'activity_logs' table)
+async function logActivity(userId, userName, action, taskId = null, details = null, req = null) {
   try {
-    await ActivityLog.create({
-      userId,
-      userName,
-      action,
-      taskId,
-      taskTitle,
-      oldValue: oldValue ? JSON.stringify(oldValue) : null,
-      newValue: newValue ? JSON.stringify(newValue) : null,
-      ipAddress: req
-        ? req.headers["x-forwarded-for"] || req.connection.remoteAddress
-        : null,
-      timestamp: new Date(),
+    const ip = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress) : 'System';
+    
+    // Convert details to object if it's not already
+    const safeDetails = details ? (typeof details === 'object' ? details : { info: details }) : null;
+
+    const { error } = await supabase.from('activity_logs').insert({
+      user_id: userId,
+      user_name: userName,
+      action: action,
+      task_id: taskId,
+      details: safeDetails,
+      ip_address: ip
     });
-  } catch (error) {
-    console.error("Failed to log activity:", error);
+
+    if (error) console.error("⚠️ Audit Log Failed:", error.message);
+  } catch (err) {
+    console.error("⚠️ Audit Log Exception:", err.message);
   }
 }
 
-// Extract coordinates from Google Maps URL
+// 2. Coordinate Extractor (Google Maps Logic)
 function extractCoordinates(url) {
   if (!url) return null;
-
-  // Pattern 1: @latitude,longitude
-  const pattern1 = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const match1 = url.match(pattern1);
-  if (match1) {
-    return {
-      latitude: parseFloat(match1[1]),
-      longitude: parseFloat(match1[2]),
-    };
-  }
-
-  // Pattern 2: ?q=latitude,longitude
-  const pattern2 = /\?q=(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const match2 = url.match(pattern2);
-  if (match2) {
-    return {
-      latitude: parseFloat(match2[1]),
-      longitude: parseFloat(match2[2]),
-    };
-  }
+  
+  // Pattern: @lat,lng
+  const match1 = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (match1) return { latitude: parseFloat(match1[1]), longitude: parseFloat(match1[2]) };
+  
+  // Pattern: ?q=lat,lng
+  const match2 = url.match(/\?q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (match2) return { latitude: parseFloat(match2[1]), longitude: parseFloat(match2[2]) };
 
   return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DATABASE INITIALIZATION WITH AUTO-RECOVERY
+// MIGRATION NOTE:
+// Old 'initializeDatabase()' is removed because Supabase tables are pre-built.
+// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - AUTHENTICATION (SUPABASE EDITION)
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function initializeDatabase() {
-  try {
-    console.log("🔄 Initializing database...");
-
-    // Test connection
-    await sequelize.authenticate();
-    console.log("✅ Database connection established");
-
-    // Sync models with alter (update schema without losing data)
-    await sequelize.sync({ alter: true });
-    console.log("✅ Database synchronized successfully");
-
-    // Create or update admin account
-    const adminEmail = "admin@validiant.com";
-    const adminPassword = "Admin@123";
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
-    const [admin, created] = await User.findOrCreate({
-      where: { email: adminEmail },
-      defaults: {
-        name: "Admin",
-        email: adminEmail,
-        password: hashedPassword,
-        role: "admin",
-        employeeId: "ADMIN001",
-        isActive: true,
-      },
-    });
-
-    if (!created) {
-      // Update password if admin already exists
-      await admin.update({ password: hashedPassword });
-      console.log("✅ Admin account updated");
-    } else {
-      console.log("✅ Admin account created");
-      await logActivity(admin.id, admin.name, "ADMIN_ACCOUNT_CREATED");
-    }
-
-    console.log("📊 Admin credentials:");
-    console.log("   Email: admin@validiant.com");
-    console.log("   Password: Admin@123");
-  } catch (error) {
-    console.error("❌ Database initialization failed:", error);
-
-    // ✅ SAFER: never auto-delete / force-rebuild in production
-    // because sequelize.sync({ force: true }) drops tables and wipes data.
-    console.error(
-      "💥 Fatal error: Cannot initialize database (aborting startup)",
-    );
-    process.exit(1);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - AUTHENTICATION
-// ═══════════════════════════════════════════════════════════════════════════
-
+// 1. LOGIN API
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Supabase: Find user by email
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
-    console.log("🔐 Login attempt for:", email);
-
-    const user = await User.findOne({ where: { email, isActive: true } });
-
-    if (!user) {
-      console.log("❌ User not found:", email);
-      await logActivity(
-        null,
-        email,
-        "LOGIN_FAILED_USER_NOT_FOUND",
-        null,
-        null,
-        null,
-        null,
-        req,
-      );
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+    // Bcrypt: Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordValid) {
-      console.log("❌ Invalid password for:", email);
-      await logActivity(
-        user.id,
-        user.name,
-        "LOGIN_FAILED_INVALID_PASSWORD",
-        null,
-        null,
-        null,
-        null,
-        req,
-      );
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    // Update last active timestamp
-    await user.update({ lastActive: new Date() });
-
-    const userWithoutPassword = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      employeeId: user.employeeId,
-      phone: user.phone,
-      lastActive: user.lastActive,
-    };
-
-    console.log("✅ Login successful:", email);
-    await logActivity(
-      user.id,
-      user.name,
-      "LOGIN_SUCCESS",
-      null,
-      null,
-      null,
-      null,
-      req,
-    );
+    // Update Last Active
+    await supabase.from("users").update({ last_active: new Date() }).eq("id", user.id);
+    
+    // Audit Log
+    await logActivity(user.id, user.name, "LOGIN_SUCCESS", null, null, req);
 
     res.json({
       success: true,
-      user: userWithoutPassword,
-      message: "Login successful",
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role, // 'admin', 'employee', or 'client_hr'
+        employeeId: user.employee_id
+      }
     });
-  } catch (error) {
-    console.error("❌ Login error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error during login. Please try again.",
-    });
+
+  } catch (err) {
+    console.error("Login Error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - USER MANAGEMENT
-// ═══════════════════════════════════════════════════════════════════════════
+// 2. CREATE USER API (Admin Only)
+app.post("/api/users", async (req, res) => {
+  try {
+    const { name, email, password, role, employeeId, phone } = req.body;
 
-// Get all employees
+    // Check if user exists
+    const { data: existing } = await supabase.from("users").select("id").eq("email", email).single();
+    if (existing) {
+      return res.status(400).json({ success: false, message: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const { data, error } = await supabase
+      .from("users")
+      .insert([{
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        employee_id: employeeId,
+        phone,
+        is_active: true
+      }])
+      .select();
+
+    if (error) throw error;
+
+    await logActivity(null, "Admin", "USER_CREATED", null, `Created: ${email}`, req);
+    res.json({ success: true, message: "User created successfully" });
+
+  } catch (err) {
+    console.error("Create User Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. GET USERS LIST (For Admin Dashboard)
 app.get("/api/users", async (req, res) => {
   try {
-    const users = await User.findAll({
-      where: { role: "employee", isActive: true },
-      attributes: { exclude: ["password"] },
-      order: [["name", "ASC"]],
-    });
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("id, name, email, role, employee_id, phone, last_active, is_active")
+      .order('created_at', { ascending: false });
 
-    res.json(users);
-  } catch (error) {
-    console.error("❌ Error fetching users:", error);
+    if (error) throw error;
+
+    // Map snake_case to camelCase for frontend compatibility
+    const formattedUsers = users.map(u => ({
+      ...u,
+      employeeId: u.employee_id,
+      lastActive: u.last_active,
+      isActive: u.is_active
+    }));
+
+    res.json(formattedUsers);
+  } catch (err) {
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
-
-// Create new employee
-app.post("/api/users", async (req, res) => {
-  try {
-    const { name, email, employeeId, phone, password } = req.body;
-
-    // Validation
-    if (!name || !email) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and email are required",
-      });
-    }
-
-    // Check if email already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "Email already exists",
-      });
-    }
-
-    // Check if employeeId already exists
-    if (employeeId) {
-      const existingEmpId = await User.findOne({ where: { employeeId } });
-      if (existingEmpId) {
-        return res.status(400).json({
-          success: false,
-          message: "Employee ID already exists",
-        });
-      }
-    }
-
-    const plainPassword = password || "123456";
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
-    const newUser = await User.create({
-      name,
-      email,
-      employeeId,
-      phone,
-      password: hashedPassword,
-      role: "employee",
-      isActive: true,
-    });
-
-    const userWithoutPassword = {
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      employeeId: newUser.employeeId,
-      phone: newUser.phone,
-    };
-
-    console.log("✅ Employee created:", email);
-    await logActivity(
-      newUser.id,
-      newUser.name,
-      "EMPLOYEE_CREATED",
-      null,
-      null,
-      null,
-      userWithoutPassword,
-      req,
-    );
-
-    res.json({
-      success: true,
-      user: userWithoutPassword,
-      message: "Employee created successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error creating employee:", error);
-    res.status(400).json({
-      success: false,
-      message: "Failed to create employee: " + error.message,
-    });
-  }
-});
-
-// ADMIN: Reset employee password
-app.post("/api/users/:id/reset-password", async (req, res) => {
-  try {
-    const targetUserId = parseInt(req.params.id, 10);
-    const { adminId, adminName, newPassword } = req.body;
-
-    if (!adminId)
-      return res
-        .status(401)
-        .json({ success: false, message: "Admin required" });
-
-    // Verify admin (server-side)
-    const admin = await User.findByPk(adminId);
-    if (!admin || admin.role !== "admin" || !admin.isActive) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Not authorized" });
-    }
-
-    const user = await User.findByPk(targetUserId);
-    if (!user || !user.isActive) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-    if (user.role !== "employee") {
-      return res.status(400).json({
-        success: false,
-        message: "Only employee password can be reset here",
-      });
-    }
-
-    // Choose password: admin provided or auto-generate
-    const tempPassword =
-      (newPassword && String(newPassword).trim()) || generateTempPassword(10);
-
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    await user.update({ password: hashedPassword });
-
-    // Optional: Activity log (you already have logActivity helper)
-    await logActivity(
-      admin.id,
-      adminName || admin.name,
-      "EMPLOYEE_PASSWORD_RESET",
-      null,
-      null,
-      { employeeId: user.id, employeeEmail: user.email },
-      { resetToTemp: true },
-      req,
-    );
-
-    // Return temp password so admin can share it
-    return res.json({
-      success: true,
-      message: "Password reset successfully",
-      tempPassword,
-    });
-  } catch (error) {
-    console.error("Reset password error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to reset password" });
-  }
-});
-
-function generateTempPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#";
-  let out = "";
-  for (let i = 0; i < length; i++)
-    out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // API ROUTES - TASK MANAGEMENT
