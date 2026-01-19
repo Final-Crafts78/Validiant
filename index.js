@@ -562,37 +562,77 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK (Preserves Client Name & ID)
+// 2. CREATE TASK (Fixed - Handles mapUrl and coordinate extraction)
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { title, pincode, address, notes, createdBy, assignedTo, clientName } = req.body;
+    const { 
+      title, 
+      pincode, 
+      address, 
+      mapUrl,        // Add this
+      map_url,       // Alternative naming
+      notes, 
+      createdBy, 
+      assignedTo, 
+      clientName,
+      latitude,      // Manual coordinates
+      longitude 
+    } = req.body;
+
+    // Handle map URL from either field name
+    const finalMapUrl = mapUrl || map_url || null;
+    
+    // Use map URL as address if no address provided
+    const finalAddress = address || finalMapUrl || null;
+
+    // Extract coordinates from map URL if not manually provided
+    let finalLat = latitude;
+    let finalLng = longitude;
+    
+    if (finalMapUrl && (!finalLat || !finalLng)) {
+      const coords = extractCoordinates(finalMapUrl);
+      if (coords) {
+        finalLat = coords.latitude;
+        finalLng = coords.longitude;
+      }
+    }
 
     let initialStatus = "Unassigned";
-    let finalAssignee = null; // Send NULL if unassigned, not empty string
+    let finalAssignee = null;
     let assignedDate = null;
 
     // Strict check to ensure we only assign if a real ID is provided
     if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
       initialStatus = "Pending";
-      finalAssignee = assignedTo; 
+      finalAssignee = assignedTo;
       assignedDate = new Date().toISOString().split('T')[0];
     }
 
     const { data, error } = await supabase
       .from("tasks")
       .insert([{
-        title, pincode, address, notes,
+        title,
+        pincode,
+        address: finalAddress,
+        map_url: finalMapUrl,
+        latitude: finalLat,
+        longitude: finalLng,
+        notes,
         client_name: clientName,
         status: initialStatus,
-        assigned_to: finalAssignee, // <--- Correct ID or Null
+        assigned_to: finalAssignee,
         assigned_date: assignedDate,
-        created_by: createdBy
+        created_by: createdBy,
       }])
       .select();
 
     if (error) throw error;
+
+    console.log(`✅ Task created: ${title} | Map: ${finalMapUrl ? 'Yes' : 'No'} | Assigned: ${finalAssignee ? 'Yes' : 'No'}`);
+
     res.json({ success: true, task: data[0] });
   } catch (err) {
+    console.error("❌ Create Task Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
