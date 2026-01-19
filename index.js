@@ -231,6 +231,50 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 console.log("✅ Connected to Supabase Enterprise DB");
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NODEMAILER CONFIGURATION (Contact Form Emails)
+// ═══════════════════════════════════════════════════════════════════════════
+const nodemailer = require('nodemailer');
+
+// Email transporter setup (Gmail)
+let emailTransporter = null;
+
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  emailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS, // Use App Password, not regular password
+    },
+  });
+  console.log('✅ Email service configured');
+} else {
+  console.warn('⚠️ EMAIL_USER or EMAIL_PASS not set. Contact form emails will be disabled.');
+}
+
+// Helper function to send emails
+async function sendEmail(to, subject, html) {
+  if (!emailTransporter) {
+    console.warn('⚠️ Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured' };
+  }
+  
+  try {
+    await emailTransporter.sendMail({
+      from: `"Validiant Notifications" <${process.env.EMAIL_USER}>`,
+      to: to,
+      subject: subject,
+      html: html,
+    });
+    console.log(`✅ Email sent to ${to}`);
+    return { success: true };
+  } catch (err) {
+    console.error('❌ Email send failed:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS (Supabase Versions)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -626,6 +670,479 @@ app.get("/api/kyc/list", async (req, res) => {
     res.json(data); 
   } catch (err) {
     res.status(500).json({ error: "Failed to load KYC" });
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. BULK UPLOAD (Excel/CSV Task Import - Supabase Version)
+// ═══════════════════════════════════════════════════════════════════════════
+app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded. Please select an Excel file.",
+      });
+    }
+
+    console.log("📤 Processing bulk upload:", req.file.originalname);
+    const { adminId, adminName } = req.body;
+
+    // Read Excel file
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    if (data.length === 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty or invalid format.",
+      });
+    }
+
+    console.log(`📊 Found ${data.length} rows in Excel file`);
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2; // Excel row number
+
+      try {
+        // Extract case ID/title
+        const caseId = row.RequestID || row["Request ID"] || row.CaseID || row.Title || row.title || row.caseId;
+        const clientName = row["Individual Name"] || row.IndividualName || row["Client Name"] || row.ClientName || row.clientName || row["client name"] || null;
+        const pincode = row.Pincode || row.pincode || row.PINCODE;
+
+        // Validate required fields
+        if (!caseId) {
+          errors.push(`Row ${rowNumber}: CaseID/Title is required`);
+          errorCount++;
+          continue;
+        }
+
+        if (!pincode) {
+          errors.push(`Row ${rowNumber}: Pincode is required`);
+          errorCount++;
+          continue;
+        }
+
+        // Validate pincode format
+        const pincodeStr = String(pincode).trim();
+        if (!/^[0-9]{6}$/.test(pincodeStr)) {
+          errors.push(`Row ${rowNumber}: Pincode must be exactly 6 digits (got: ${pincodeStr})`);
+          errorCount++;
+          continue;
+        }
+
+        // Check for employee assignment
+        let assignedToId = null;
+        let assignedDate = null;
+        let taskStatus = "Unassigned";
+
+        const empIdRaw = row.EmployeeID || row.employeeId || row.EMPLOYEEID || row["Employee ID"] || row["Employee Id"] || row["employee id"];
+        const empEmailRaw = row.EmployeeEmail || row.employeeEmail || row.EMPLOYEEEMAIL || row["Employee Email"] || row["employee email"];
+
+        // Try to find employee in Supabase
+        if (empIdRaw || empEmailRaw) {
+          let employeeQuery = supabase.from("users").select("id, name, employee_id, email").eq("role", "employee").eq("is_active", true);
+
+          if (empIdRaw) {
+            employeeQuery = employeeQuery.eq("employee_id", String(empIdRaw).trim());
+          } else if (empEmailRaw) {
+            employeeQuery = employeeQuery.eq("email", String(empEmailRaw).trim().toLowerCase());
+          }
+
+          const { data: emp, error: empError } = await employeeQuery.single();
+
+          if (emp && !empError) {
+            assignedToId = emp.id;
+            assignedDate = new Date().toISOString().split('T')[0];
+            taskStatus = "Pending";
+          } else {
+            const identifier = empIdRaw || empEmailRaw;
+            errors.push(`Row ${rowNumber}: Employee '${identifier}' not found or inactive, creating task as unassigned.`);
+          }
+        }
+
+        // Extract optional fields
+        const mapUrl = row.MapURL || row.mapUrl || row.mapurl || null;
+        let latitude = row.Latitude || row.latitude || row.lat || null;
+        let longitude = row.Longitude || row.longitude || row.lng || null;
+        const notes = row.Notes || row.notes || null;
+        const address = row.Address || row.address || null;
+
+        // Try to extract coordinates from MapURL if not provided
+        if (mapUrl && !latitude && !longitude) {
+          const coords = extractCoordinates(mapUrl);
+          if (coords) {
+            latitude = coords.latitude;
+            longitude = coords.longitude;
+          }
+        }
+
+        // Create task in Supabase
+        const { data: task, error: taskError } = await supabase
+          .from("tasks")
+          .insert([{
+            title: String(caseId).trim(),
+            pincode: pincodeStr,
+            client_name: clientName ? String(clientName).trim() : null,
+            map_url: mapUrl || null,
+            address: address || null,
+            latitude: latitude ? parseFloat(latitude) : null,
+            longitude: longitude ? parseFloat(longitude) : null,
+            assigned_to: assignedToId,
+            assigned_date: assignedDate,
+            notes: notes ? String(notes).trim() : null,
+            status: taskStatus,
+          }])
+          .select();
+
+        if (taskError) throw taskError;
+
+        successCount++;
+      } catch (err) {
+        console.error(`❌ Error processing row ${rowNumber}:`, err.message);
+        errors.push(`Row ${rowNumber}: ${err.message}`);
+        errorCount++;
+      }
+    }
+
+    // Delete uploaded file
+    fs.unlinkSync(req.file.path);
+
+    console.log(`✅ Bulk upload completed: ${successCount} success, ${errorCount} errors`);
+
+    // Log activity
+    await logActivity(
+      adminId,
+      adminName,
+      "BULK_UPLOAD_COMPLETED",
+      null,
+      null,
+      req
+    );
+
+    res.json({
+      success: true,
+      message: `${successCount} tasks uploaded successfully`,
+      successCount: successCount,
+      errorCount: errorCount,
+      errors: errors.length > 0 ? errors.slice(0, 20) : null, // Limit to first 20 errors
+      hasMoreErrors: errors.length > 20,
+    });
+  } catch (error) {
+    console.error("❌ Bulk upload error:", error);
+
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: `Bulk upload failed: ${error.message}`,
+    });
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. CSV EXPORT (Download Tasks with Full Details - Supabase Version)
+// ═══════════════════════════════════════════════════════════════════════════
+app.get("/api/export", async (req, res) => {
+  try {
+    console.log("📥 Exporting tasks to CSV...");
+
+    // Fetch all tasks
+    const { data: tasks, error: tasksError } = await supabase
+      .from("tasks")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (tasksError) throw tasksError;
+
+    // Fetch all users to join employee names
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id, name, email, employee_id");
+
+    if (usersError) throw usersError;
+
+    // CSV Header
+    let csv = "CaseID,ClientName,Employee,EmployeeID,Email,AssignedDate,Status,Pincode,Latitude,Longitude,MapURL,Address,Notes,CreatedAt,CompletedAt,VerifiedAt,SLAStatus\n";
+
+    // Build CSV rows
+    tasks.forEach(task => {
+      // Find employee
+      const employee = users.find(u => u.id == task.assigned_to);
+      const employeeName = employee ? employee.name : "Unassigned";
+      const employeeId = employee ? employee.employee_id : "";
+      const employeeEmail = employee ? employee.email : "";
+
+      // Calculate SLA status
+      let slaStatus = "N/A";
+      if (task.completed_at && task.assigned_date) {
+        const assignedTime = new Date(task.assigned_date).getTime();
+        const completedTime = new Date(task.completed_at).getTime();
+        const diffHours = (completedTime - assignedTime) / (1000 * 60 * 60);
+        slaStatus = diffHours <= 72 ? "On Time" : "Overdue";
+      } else if (task.status === "Pending" && task.assigned_date) {
+        const assignedTime = new Date(task.assigned_date).getTime();
+        const nowTime = new Date().getTime();
+        const diffHours = (nowTime - assignedTime) / (1000 * 60 * 60);
+        slaStatus = diffHours <= 72 ? "In Progress" : "Overdue";
+      }
+
+      // Escape function for CSV
+      const escape = (str) => {
+        if (str === null || str === undefined) return "";
+        const strVal = String(str);
+        if (strVal.includes(",") || strVal.includes('"') || strVal.includes("\n")) {
+          return `"${strVal.replace(/"/g, '""')}"`;
+        }
+        return strVal;
+      };
+
+      // Build row
+      csv += [
+        escape(task.title),
+        escape(task.client_name || ""),
+        escape(employeeName),
+        escape(employeeId),
+        escape(employeeEmail),
+        escape(task.assigned_date || ""),
+        escape(task.status),
+        escape(task.pincode || ""),
+        task.latitude || "",
+        task.longitude || "",
+        escape(task.map_url || ""),
+        escape(task.address || ""),
+        escape(task.notes || ""),
+        task.created_at ? new Date(task.created_at).toISOString() : "",
+        task.completed_at ? new Date(task.completed_at).toISOString() : "",
+        task.verified_at ? new Date(task.verified_at).toISOString() : "",
+        escape(slaStatus),
+      ].join(",") + "\n";
+    });
+
+    console.log(`✅ Exported ${tasks.length} tasks to CSV`);
+
+    res.header("Content-Type", "text/csv; charset=utf-8");
+    res.header(
+      "Content-Disposition",
+      `attachment; filename="validiant-tasks-export-${new Date().toISOString().split('T')[0]}.csv"`
+    );
+    return res.send(csv);
+  } catch (error) {
+    console.error("❌ Export error:", error);
+    res.status(500).send("Export failed. Please try again.");
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. CONTACT FORM (Landing Page Lead Generation - Supabase + Email)
+// ═══════════════════════════════════════════════════════════════════════════
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, phone, company, message } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, and message are required",
+      });
+    }
+
+    // Save to Supabase
+    const { data, error } = await supabase
+      .from("contact_messages")
+      .insert([{
+        name: name,
+        email: email,
+        phone: phone || null,
+        company: company || null,
+        message: message,
+        status: "new",
+      }])
+      .select();
+
+    if (error) throw error;
+
+    console.log(`✅ Contact form submitted by ${email}`);
+
+    // Send email notification to admin
+    if (emailTransporter) {
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #6366f1;">🔔 New Contact Form Submission</h2>
+          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
+            ${company ? `<p><strong>Company:</strong> ${company}</p>` : ''}
+            <p><strong>Message:</strong></p>
+            <p style="background: white; padding: 15px; border-radius: 4px;">${message}</p>
+          </div>
+          <p style="color: #6b7280; font-size: 14px;">
+            Submitted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+          </p>
+        </div>
+      `;
+
+      await sendEmail(
+        process.env.EMAIL_USER, // Send to yourself
+        `🔔 New Contact Form: ${name} from ${company || 'Direct'}`,
+        emailHtml
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Thank you! We'll get back to you soon.",
+    });
+  } catch (err) {
+    console.error("❌ Contact form error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to submit. Please try again.",
+    });
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. KYC/VERIFICATION SERVICE (B2B Feature - Supabase Version)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Create Verification Request
+app.post("/api/kyc/create", async (req, res) => {
+  try {
+    const { clientName, customerName, referenceId, createdBy } = req.body;
+
+    // Validate required fields
+    if (!clientName || !customerName || !referenceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Client name, customer name, and reference ID are required",
+      });
+    }
+
+    // Generate mock session ID (replace with real API in production)
+    const sessionId = `sess_${Math.random().toString(36).substr(2, 9)}`;
+    const verificationLink = `https://verify.validiant.com?session=${sessionId}`;
+
+    // Save to Supabase
+    const { data, error } = await supabase
+      .from("verification_requests")
+      .insert([{
+        reference_id: referenceId,
+        client_name: clientName,
+        customer_name: customerName,
+        session_id: sessionId,
+        verification_link: verificationLink,
+        created_by: createdBy,
+        status: "Pending",
+        ip_risk_level: "Pending",
+      }])
+      .select();
+
+    if (error) throw error;
+
+    console.log(`✅ KYC request created: ${referenceId}`);
+
+    res.json({
+      success: true,
+      kyc: data[0],
+    });
+  } catch (err) {
+    console.error("❌ KYC Create Error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+// Webhook Listener (Callback from verification service)
+app.post("/api/webhooks/didit", async (req, res) => {
+  try {
+    const { sessionId, faceMatchScore, liveness, age, risk, country, idType } = req.body;
+
+    // Find request by session ID
+    const { data: kyc, error: findError } = await supabase
+      .from("verification_requests")
+      .select("*")
+      .eq("session_id", sessionId)
+      .single();
+
+    if (findError || !kyc) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    // Update verification results
+    const { error: updateError } = await supabase
+      .from("verification_requests")
+      .update({
+        face_match_score: faceMatchScore || 0,
+        liveness_status: liveness ? "Passed" : "Failed",
+        estimated_age: age,
+        ip_risk_level: risk || "Low",
+        ip_country: country,
+        id_type: idType,
+        status: (faceMatchScore >= 80 && liveness) ? "Verified" : "Rejected",
+        updated_at: new Date(),
+      })
+      .eq("session_id", sessionId);
+
+    if (updateError) throw updateError;
+
+    console.log(`✅ KYC webhook processed: ${sessionId}`);
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List All Verification Requests (or get single by ID)
+app.get("/api/kyc/list", async (req, res) => {
+  try {
+    const { id } = req.query;
+
+    if (id) {
+      // Get single request
+      const { data, error } = await supabase
+        .from("verification_requests")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+      return res.json(data);
+    }
+
+    // Get all requests
+    const { data, error } = await supabase
+      .from("verification_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (err) {
+    console.error("❌ KYC List error:", err);
+    res.status(500).json({ error: "Failed to load verification requests" });
   }
 });
 
