@@ -3654,7 +3654,9 @@ app.get("/app.js", (req, res) => {
         // Employee
         html +=
           '<td data-label="Employee">' +
-          escapeHtml(task.assignedToName || task.assigneeName || (task.users && task.users.name) || 'Unassigned') +
+          (task.User
+            ? escapeHtml(task.User.name)
+            : '<span style="color:#9ca3af;font-style:italic">Unassigned</span>') +
           "</td>";
 
         // Pincode chip
@@ -4104,7 +4106,9 @@ app.get("/app.js", (req, res) => {
     "      html += '<td><strong>' + escapeHtml(task.title) + '</strong></td>';\n";
   html += " html += '<td>' + escapeHtml(task.clientName || '-') + '</td>';\n";
   html += "      html += '<td>';\n";
-  html += "      html += escapeHtml(task.assignedToName || task.assigneeName || (task.users && task.users.name) || 'Unassigned');\n";
+  html += "      if (task.User) {\n";
+  html += "        html += escapeHtml(task.User.name);\n";
+  html += "      } else {\n";
   html +=
     "        html += '<span style=\"color: #9ca3af; font-style: italic;\">Unassigned</span>';\n";
   html += "      }\n";
@@ -4181,7 +4185,7 @@ app.get("/app.js", (req, res) => {
   html +=
     "          html += '<p><strong>Task:</strong> ' + escapeHtml(task.title) + '</p>';\n";
   html +=
-    "          html += '<p><strong>Current Assignment:</strong> ' + escapeHtml(task.assignedToName || task.assigneeName || (task.users && task.users.name) || 'Unassigned') + '</p>';\n";
+    "          html += '<p><strong>Current Assignment:</strong> ' + (task.User ? escapeHtml(task.User.name) : 'Unassigned') + '</p>';\n";
   html += "          html += '</div>';\n";
   html += "          \n";
   html += "          html += '<div class=\"form-group\">';\n";
