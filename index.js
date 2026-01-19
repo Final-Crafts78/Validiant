@@ -3698,6 +3698,7 @@ app.get("/app.js", (req, res) => {
 
         // Date (assigned/manual/fallback)
         const dateText =
+          task.assigned_date ||
           task.assignedDate ||
           task.manualDate ||
           (task.createdAt
