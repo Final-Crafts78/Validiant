@@ -458,13 +458,13 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - FINAL POLISH (Client Name + Map Fix)
+// API ROUTES - THE "TYPE-SAFE" FIX (Solves ID Mismatch & Map)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET TASKS (Now includes Client Name & Force-Map)
+// 1. GET ALL TASKS
 app.get("/api/tasks", async (req, res) => {
   try {
+    // A. Fetch All Data
     const { data: tasks, error: taskError } = await supabase
       .from("tasks")
       .select("*")
@@ -476,31 +476,36 @@ app.get("/api/tasks", async (req, res) => {
       .select("id, name, employee_id");
     if (userError) throw userError;
 
+    // B. Build the Response
     const formatted = tasks.map(task => {
-      const matchedUser = users.find(u => u.id === task.assigned_to);
+      // --- FIX 1: LOOSE EQUALITY FOR ID MATCHING ---
+      // We use '==' instead of '===' to match "5" (string) with 5 (number)
+      const matchedUser = users.find(u => u.id == task.assigned_to);
       const userName = matchedUser ? matchedUser.name : "Unassigned";
-      const mapLink = task.address || "";
-      const hasLink = mapLink.length > 5;
+
+      // --- FIX 2: FORCE MAP "YES" ---
+      // Ensure address is a string. If it has text, Map is YES.
+      const addressText = task.address || ""; 
+      const hasMapData = addressText.trim().length > 0;
 
       return {
         ...task,
 
-        // --- CLIENT NAME FIX ---
-        clientName: task.client_name || "-",  // <--- Sends to Frontend
-        client: task.client_name || "-",      // <--- Backup format
-
-        // --- MAP FIX (The "Flood" Strategy) ---
-        // We send the link in every possible slot the frontend might check
-        address: mapLink,
-        location: mapLink,
-        map: hasLink ? "Yes" : "No",      // <--- Literal "Yes" string
-        hasMap: hasLink,                  // <--- Boolean
-        mapUrl: mapLink,
+        // 1. MAP / ADDRESS (Sending as Boolean AND String)
+        address: addressText,
+        map: hasMapData ? "Yes" : "No",   // <--- Forced String
+        hasMap: hasMapData,               // <--- Boolean
+        isMapAvailable: hasMapData,       // <--- Alternative Boolean
+        location: addressText,
         
-        // --- NAME FIX ---
-        assignedToName: userName,
+        // 2. CLIENT NAME
+        clientName: task.client_name || "-",
+        client: task.client_name || "-",
+
+        // 3. EMPLOYEE NAME (The Loose Match Result)
+        assignedToName: userName, 
         assigneeName: userName,
-        users: { name: userName },
+        users: { name: userName }, // Nested fallback
         
         status: task.status
       };
@@ -513,19 +518,19 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK (Saves Client Name)
+// 2. CREATE TASK (Preserves Client Name & ID)
 app.post("/api/tasks", async (req, res) => {
   try {
-    // Capture 'clientName' from the form
     const { title, pincode, address, notes, createdBy, assignedTo, clientName } = req.body;
 
     let initialStatus = "Unassigned";
-    let finalAssignee = null;
+    let finalAssignee = null; // Send NULL if unassigned, not empty string
     let assignedDate = null;
 
+    // Strict check to ensure we only assign if a real ID is provided
     if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
       initialStatus = "Pending";
-      finalAssignee = assignedTo;
+      finalAssignee = assignedTo; 
       assignedDate = new Date().toISOString().split('T')[0];
     }
 
@@ -533,9 +538,9 @@ app.post("/api/tasks", async (req, res) => {
       .from("tasks")
       .insert([{
         title, pincode, address, notes,
-        client_name: clientName, // <--- SAVES TO DB
+        client_name: clientName,
         status: initialStatus,
-        assigned_to: finalAssignee,
+        assigned_to: finalAssignee, // <--- Correct ID or Null
         assigned_date: assignedDate,
         created_by: createdBy
       }])
@@ -548,18 +553,17 @@ app.post("/api/tasks", async (req, res) => {
   }
 });
 
-// 3. UPDATE TASK (Updates Client Name & Map)
+// 3. UPDATE TASK
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { title, pincode, address, notes, status, assignedTo, clientName } = req.body;
 
     const updateData = { updated_at: new Date() };
-    
     if (title) updateData.title = title;
     if (pincode) updateData.pincode = pincode;
     if (address) updateData.address = address;
-    if (clientName) updateData.client_name = clientName; // <--- Updates DB
+    if (clientName) updateData.client_name = clientName;
     if (notes) updateData.notes = notes;
     if (status) updateData.status = status;
     
@@ -575,7 +579,6 @@ app.put("/api/tasks/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Failed" });
   }
 });
-
 // 2. GET UNASSIGNED TASKS
 app.get("/api/tasks/unassigned", async (req, res) => {
   try {
