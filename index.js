@@ -5883,7 +5883,7 @@ async function startServer() {
     );
 
     // Initialize database
-    await initializeDatabase();
+    // await initializeDatabase();
 
     // Start Express server
     app.listen(PORT, () => {
