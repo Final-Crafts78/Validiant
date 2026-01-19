@@ -276,7 +276,7 @@ function extractCoordinates(url) {
 // MIGRATION NOTE:
 // Old 'initializeDatabase()' is removed because Supabase tables are pre-built.
 // ═══════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════════════════
 // API ROUTES - AUTHENTICATION (SUPABASE EDITION)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -383,6 +383,94 @@ app.get("/api/users", async (req, res) => {
     res.json(formattedUsers);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - DASHBOARD ANALYTICS (New Supabase Logic)
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get("/api/analytics", async (req, res) => {
+  try {
+    const [
+      { count: totalTasks },
+      { count: assignedTasks },
+      { count: completedTasks },
+      { count: verifiedTasks },
+      { count: activeEmployees },
+      { count: admins }
+    ] = await Promise.all([
+      supabase.from("tasks").select("*", { count: "exact", head: true }),
+      supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "Unassigned"),
+      supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Completed"),
+      supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Verified"),
+      supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "employee").eq("is_active", true),
+      supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "admin")
+    ]);
+
+    res.json({
+      totalTasks: totalTasks || 0,
+      assignedTasks: assignedTasks || 0,
+      completedTasks: completedTasks || 0,
+      verifiedTasks: verifiedTasks || 0,
+      activeEmployees: activeEmployees || 0,
+      admins: admins || 0
+    });
+  } catch (err) {
+    console.error("Analytics Error:", err);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+app.get("/api/tasks", async (req, res) => {
+  try {
+    // This route intercepts the old one to prevent crashing
+    const { data, error } = await supabase
+      .from("tasks")
+      .select(`*, users ( name )`)
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+
+    const formatted = data.map(task => ({
+      ...task,
+      assignedToName: task.users ? task.users.name : "Unassigned"
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tasks/unassigned", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("status", "Unassigned")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. KYC REQUESTS (Fixes "Loading KYC data...")
+app.get("/api/kyc/list", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("verification_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data); 
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load KYC" });
   }
 });
 
