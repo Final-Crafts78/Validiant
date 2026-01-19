@@ -464,51 +464,48 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - MASTER TASK HANDLING (Fixed Assignment & Map)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - MASTER TASK HANDLING (Read, Create, UPDATE)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - GET TASKS (MANUAL STITCH METHOD - FAIL-PROOF)
-// ═══════════════════════════════════════════════════════════════════════════
-
+// 1. GET ALL TASKS (Manual Match + Map Fix)
 app.get("/api/tasks", async (req, res) => {
   try {
-    // 1. Fetch ALL Tasks (Raw Data)
+    // Fetch Tasks & Users separately to avoid join errors
     const { data: tasks, error: taskError } = await supabase
       .from("tasks")
       .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
+      .order("created_at", { ascending: false });
 
     if (taskError) throw taskError;
 
-    // 2. Fetch ALL Users (The "Phonebook")
     const { data: users, error: userError } = await supabase
       .from("users")
       .select("id, name, employee_id");
 
     if (userError) throw userError;
 
-    // 3. Manually Match Tasks to Users (Cannot fail due to DB keys)
     const formatted = tasks.map(task => {
-      // Find the user ID in our phonebook
       const matchedUser = users.find(u => u.id === task.assigned_to);
       const userName = matchedUser ? matchedUser.name : "Unassigned";
       
-      return {
-        ...task, 
-        
-        // --- MAP VISIBILITY FIX ---
-        address: task.address || "",
-        hasMap: !!(task.address && task.address.length > 1),
+      // LOGIC: If address has text, Map is YES.
+      const hasMapLink = (task.address && task.address.trim().length > 0);
 
-        // --- NAME VISIBILITY FIX (The Manual Match) ---
-        assignedToName: userName, // <--- Correct Name
+      return {
+        ...task,
         
-        // We send the name in every possible format the frontend might look for:
+        // --- MAP FIX ---
+        // We force 'address' to be the string, and 'hasMap' to be true/false
+        address: task.address || "", 
+        location: task.address || "",
+        hasMap: hasMapLink, 
+        map_url: task.address, // Some frontends look for this
+
+        // --- NAME FIX ---
+        assignedToName: userName,
         assigneeName: userName,
-        users: { name: userName }, // <--- Mimics old Sequelize structure
-        User: { name: userName },  // <--- Capital U (Common in older apps)
+        users: { name: userName },
         
         status: task.status
       };
@@ -521,50 +518,84 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK (Now respects "Assign To" selection immediately)
+// 2. CREATE TASK
 app.post("/api/tasks", async (req, res) => {
   try {
-    // 1. Capture ALL fields, including the assigned user
     const { title, pincode, address, notes, createdBy, assignedTo } = req.body;
 
-    // 2. Determine Initial Status
     let initialStatus = "Unassigned";
-    let assignedDate = null;
     let finalAssignee = null;
+    let assignedDate = null;
 
-    // If user selected someone (and it's not the string "Unassigned" or empty)
     if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
       initialStatus = "Pending";
       finalAssignee = assignedTo;
       assignedDate = new Date().toISOString().split('T')[0];
     }
 
-    // 3. Insert into Supabase
     const { data, error } = await supabase
       .from("tasks")
       .insert([{
-        title: title,
-        pincode: pincode,
-        address: address, // Saves Map Link
-        notes: notes,
+        title,
+        pincode,
+        address: address, // Map Link
+        notes,
         status: initialStatus,
-        assigned_to: finalAssignee, // <--- SAVES THE EMPLOYEE
+        assigned_to: finalAssignee,
         assigned_date: assignedDate,
         created_by: createdBy
       }])
       .select();
 
     if (error) throw error;
-
-    // 4. Log Activity
-    const action = finalAssignee ? "TASK_CREATED_ASSIGNED" : "TASK_CREATED";
-    await logActivity(createdBy, "Admin", action, data[0].id, title, req);
+    
+    // Log it
+    await logActivity(createdBy, "Admin", "TASK_CREATED", data[0].id, title, req);
 
     res.json({ success: true, task: data[0] });
 
   } catch (err) {
-    console.error("Create Task Error:", err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. UPDATE TASK (Fixes "Task is not defined" error)
+app.put("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Capture all possible fields the frontend might send
+    const { title, pincode, address, notes, status, assignedTo } = req.body;
+
+    // Build update object dynamically
+    const updateData = {
+      updated_at: new Date()
+    };
+
+    if (title) updateData.title = title;
+    if (pincode) updateData.pincode = pincode;
+    if (address) updateData.address = address; // Update Map Link
+    if (notes) updateData.notes = notes;
+    if (status) updateData.status = status;
+    
+    // Handle Assignment Change
+    if (assignedTo) {
+        updateData.assigned_to = assignedTo;
+        updateData.assigned_date = new Date().toISOString().split('T')[0];
+        if (status === "Unassigned") updateData.status = "Pending"; 
+    }
+
+    const { error } = await supabase
+      .from("tasks")
+      .update(updateData)
+      .eq("id", id);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Task updated successfully" });
+
+  } catch (err) {
+    console.error("Update Error:", err);
+    res.status(500).json({ success: false, message: "Failed to update task" });
   }
 });
 
