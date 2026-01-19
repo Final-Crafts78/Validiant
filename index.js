@@ -457,16 +457,20 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
   }
 });
 
-// 2. GET ALL TASKS (Fixed: Uses explicit relationship to avoid "Ambiguity Error")
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - TASK DATA & ACTIONS (FINAL FIX)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. GET ALL TASKS (Fixes "Unassigned" name issue)
 app.get("/api/tasks", async (req, res) => {
   try {
+    // Fetch task + the Assigned User info
     const { data, error } = await supabase
       .from("tasks")
       .select(`
         *,
         assignee:users!tasks_assigned_to_fkey ( name, employee_id )
-      `) 
-      // ^ We explicitly tell Supabase: "Follow the assigned_to link"
+      `)
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -474,8 +478,8 @@ app.get("/api/tasks", async (req, res) => {
 
     const formatted = data.map(task => ({
       ...task,
-      assignedTo: task.assigned_to,
-      // We check 'assignee' because we aliased it above
+      // Ensure we map the data correctly for the frontend
+      assignedTo: task.assigned_to, 
       assignedToName: task.assignee ? task.assignee.name : "Unassigned",
       employeeId: task.assignee ? task.assignee.employee_id : null,
       assignedDate: task.assigned_date,
@@ -490,7 +494,7 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 3. GET UNASSIGNED TASKS
+// 2. GET UNASSIGNED TASKS
 app.get("/api/tasks/unassigned", async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -505,21 +509,26 @@ app.get("/api/tasks/unassigned", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/api/tasks/unassigned", async (req, res) => {
+
+// 3. DELETE TASK (New Route - Fixes "Error deleting task")
+app.delete("/api/tasks/:id", async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { id } = req.params;
+    
+    // Delete from Supabase
+    const { error } = await supabase
       .from("tasks")
-      .select("*")
-      .eq("status", "Unassigned")
-      .order("created_at", { ascending: false });
+      .delete()
+      .eq("id", id);
 
     if (error) throw error;
-    res.json(data);
+
+    res.json({ success: true, message: "Task deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Delete Error:", err);
+    res.status(500).json({ success: false, message: "Failed to delete task" });
   }
 });
-
 // 4. KYC REQUESTS (Fixes "Loading KYC data...")
 app.get("/api/kyc/list", async (req, res) => {
   try {
