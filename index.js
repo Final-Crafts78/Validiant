@@ -425,25 +425,67 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - DATA FETCHING (Fixed Mappings)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. GET ALL TASKS (Fixed: Maps 'assigned_to' -> 'assignedTo')
 app.get("/api/tasks", async (req, res) => {
   try {
-    // This route intercepts the old one to prevent crashing
     const { data, error } = await supabase
       .from("tasks")
-      .select(`*, users ( name )`)
+      .select(`
+        *,
+        users ( name, employee_id )
+      `)
       .order("created_at", { ascending: false })
       .limit(500);
 
     if (error) throw error;
 
+    // TRANSLATOR: Convert Supabase snake_case to Frontend camelCase
     const formatted = data.map(task => ({
       ...task,
-      assignedToName: task.users ? task.users.name : "Unassigned"
+      // Key Fixes:
+      assignedTo: task.assigned_to,        // Frontend needs 'assignedTo'
+      assignedToName: task.users ? task.users.name : "Unassigned",
+      employeeId: task.users ? task.users.employee_id : null,
+      assignedDate: task.assigned_date,
+      createdAt: task.created_at,
+      status: task.status
     }));
 
     res.json(formatted);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. GET ACTIVITY LOGS (New Route)
+app.get("/api/activity-logs", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    // TRANSLATOR: Map database columns to what frontend expects
+    const formatted = data.map(log => ({
+      id: log.id,
+      userName: log.user_name,   // Frontend expects 'userName'
+      action: log.action,
+      taskTitle: log.task_id ? `Task #${log.task_id}` : "System",
+      timestamp: log.created_at, // Frontend expects 'timestamp'
+      details: log.details
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error("Log Error:", err);
+    res.json([]); // Return empty array on error to prevent crash
   }
 });
 
