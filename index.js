@@ -426,28 +426,51 @@ app.get("/api/analytics", async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - DATA FETCHING (Fixed Mappings)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - DATA FETCHING (CORRECTED - SINGULAR)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET ALL TASKS (Fixed: Maps 'assigned_to' -> 'assignedTo')
+// 1. GET ACTIVITY LOGS (Fixes the "ActivityLog not defined" crash)
+app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
+  try {
+    const { data, error } = await supabase
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    const formatted = data.map(log => ({
+      id: log.id,
+      userName: log.user_name || "System",
+      action: log.action,
+      taskTitle: log.task_id ? `Task #${log.task_id}` : "System",
+      timestamp: log.created_at,
+      details: log.details || ""
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error("Log Error:", err);
+    res.json([]); // Return empty array instead of crashing
+  }
+});
+
+// 2. GET ALL TASKS (Fixes "Tasks not visible")
 app.get("/api/tasks", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("tasks")
-      .select(`
-        *,
-        users ( name, employee_id )
-      `)
+      .select(`*, users!left ( name, employee_id )`) 
       .order("created_at", { ascending: false })
       .limit(500);
 
     if (error) throw error;
 
-    // TRANSLATOR: Convert Supabase snake_case to Frontend camelCase
     const formatted = data.map(task => ({
       ...task,
-      // Key Fixes:
-      assignedTo: task.assigned_to,        // Frontend needs 'assignedTo'
+      assignedTo: task.assigned_to,
       assignedToName: task.users ? task.users.name : "Unassigned",
       employeeId: task.users ? task.users.employee_id : null,
       assignedDate: task.assigned_date,
@@ -457,35 +480,8 @@ app.get("/api/tasks", async (req, res) => {
 
     res.json(formatted);
   } catch (err) {
+    console.error("Task Fetch Error:", err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// 2. GET ACTIVITY LOGS (New Route)
-app.get("/api/activity-logs", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("activity_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (error) throw error;
-
-    // TRANSLATOR: Map database columns to what frontend expects
-    const formatted = data.map(log => ({
-      id: log.id,
-      userName: log.user_name,   // Frontend expects 'userName'
-      action: log.action,
-      taskTitle: log.task_id ? `Task #${log.task_id}` : "System",
-      timestamp: log.created_at, // Frontend expects 'timestamp'
-      details: log.details
-    }));
-
-    res.json(formatted);
-  } catch (err) {
-    console.error("Log Error:", err);
-    res.json([]); // Return empty array on error to prevent crash
   }
 });
 
