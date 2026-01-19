@@ -463,9 +463,11 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - GET TASKS (THE "CATCH-ALL" FIX)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - MASTER TASK HANDLING (Fixed Assignment & Map)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// 1. GET ALL TASKS (Data "Shotgun": Sends data in every format to ensure display)
 app.get("/api/tasks", async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -479,66 +481,75 @@ app.get("/api/tasks", async (req, res) => {
 
     if (error) throw error;
 
-    // DEBUG: Print the first task to the console to see what's happening
-    if (data.length > 0) {
-      console.log("DEBUG - Sample Task Data from DB:", JSON.stringify(data[0], null, 2));
-    }
-
     const formatted = data.map(task => {
-      // Determine the name safely
       const userName = task.assignee ? task.assignee.name : "Unassigned";
-
+      
       return {
         ...task, 
         
-        // --- 1. ADDRESS / MAP FIX ---
-        // Ensure address is never null/undefined
-        address: task.address || "", 
-        // Force 'hasMap' to be true if address exists
-        hasMap: (task.address && task.address.length > 5) ? true : false,
+        // --- MAP VISIBILITY FIX ---
+        // We send the address in multiple fields to catch whatever the frontend checks
+        address: task.address || "",       // Standard
+        location: task.address || "",      // Fallback
+        pincode: task.pincode || "",       // Fallback
+        hasMap: !!(task.address && task.address.length > 1), // Explicit Boolean
 
-        // --- 2. ASSIGNED USER FIX (The Shotgun Approach) ---
-        // We provide the name in EVERY format the frontend might expect:
-        assignedTo: task.assigned_to,          // The ID
-        assignedToName: userName,              // Flat name
-        assigneeName: userName,                // Alias name
-        
-        // NESTED OBJECTS (Mimicking old Sequelize structure)
+        // --- NAME VISIBILITY FIX ---
+        assignedTo: task.assigned_to,
+        assignedToName: userName,
+        assigneeName: userName,
         users: task.assignee ? { name: userName } : null,
-        User: task.assignee ? { name: userName } : null, // Capital 'U' just in case
         
-        // Standard fields
-        employeeId: task.assignee ? task.assignee.employee_id : null,
         status: task.status
       };
     });
 
     res.json(formatted);
   } catch (err) {
-    console.error("Task Fetch Error:", err);
+    console.error("Fetch Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
-// 2. CREATE TASK (Fixed: Now actually SAVES the address/map link)
+
+// 2. CREATE TASK (Now respects "Assign To" selection immediately)
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { title, pincode, address, notes, createdBy } = req.body;
+    // 1. Capture ALL fields, including the assigned user
+    const { title, pincode, address, notes, createdBy, assignedTo } = req.body;
 
+    // 2. Determine Initial Status
+    let initialStatus = "Unassigned";
+    let assignedDate = null;
+    let finalAssignee = null;
+
+    // If user selected someone (and it's not the string "Unassigned" or empty)
+    if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
+      initialStatus = "Pending";
+      finalAssignee = assignedTo;
+      assignedDate = new Date().toISOString().split('T')[0];
+    }
+
+    // 3. Insert into Supabase
     const { data, error } = await supabase
       .from("tasks")
       .insert([{
         title: title,
         pincode: pincode,
-        address: address, // <--- THIS WAS MISSING! Now it saves the Map Link.
+        address: address, // Saves Map Link
         notes: notes,
-        status: "Unassigned",
+        status: initialStatus,
+        assigned_to: finalAssignee, // <--- SAVES THE EMPLOYEE
+        assigned_date: assignedDate,
         created_by: createdBy
       }])
       .select();
 
     if (error) throw error;
 
-    await logActivity(createdBy, "Admin", "TASK_CREATED", data[0].id, title, req);
+    // 4. Log Activity
+    const action = finalAssignee ? "TASK_CREATED_ASSIGNED" : "TASK_CREATED";
+    await logActivity(createdBy, "Admin", action, data[0].id, title, req);
+
     res.json({ success: true, task: data[0] });
 
   } catch (err) {
