@@ -462,7 +462,10 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 // API ROUTES - MASTER TASK HANDLING (Fixed Map & Names)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET ALL TASKS (Fixed: Fetching Map & Employee Name)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - GET TASKS (THE "CATCH-ALL" FIX)
+// ═══════════════════════════════════════════════════════════════════════════
+
 app.get("/api/tasks", async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -476,23 +479,39 @@ app.get("/api/tasks", async (req, res) => {
 
     if (error) throw error;
 
-    const formatted = data.map(task => ({
-      id: task.id,
-      title: task.title,
-      // FIX 1: Send the Address/Map Link so the UI sees "Yes"
-      address: task.address || "", 
-      hasMap: !!task.address, 
-      pincode: task.pincode,
-      notes: task.notes,
-      status: task.status,
-      created_at: task.created_at,
-      
-      // FIX 2: Robust Name Handling
-      assignedTo: task.assigned_to, 
-      assignedToName: task.assignee ? task.assignee.name : "Unassigned",
-      employeeId: task.assignee ? task.assignee.employee_id : null,
-      assignedDate: task.assigned_date
-    }));
+    // DEBUG: Print the first task to the console to see what's happening
+    if (data.length > 0) {
+      console.log("DEBUG - Sample Task Data from DB:", JSON.stringify(data[0], null, 2));
+    }
+
+    const formatted = data.map(task => {
+      // Determine the name safely
+      const userName = task.assignee ? task.assignee.name : "Unassigned";
+
+      return {
+        ...task, 
+        
+        // --- 1. ADDRESS / MAP FIX ---
+        // Ensure address is never null/undefined
+        address: task.address || "", 
+        // Force 'hasMap' to be true if address exists
+        hasMap: (task.address && task.address.length > 5) ? true : false,
+
+        // --- 2. ASSIGNED USER FIX (The Shotgun Approach) ---
+        // We provide the name in EVERY format the frontend might expect:
+        assignedTo: task.assigned_to,          // The ID
+        assignedToName: userName,              // Flat name
+        assigneeName: userName,                // Alias name
+        
+        // NESTED OBJECTS (Mimicking old Sequelize structure)
+        users: task.assignee ? { name: userName } : null,
+        User: task.assignee ? { name: userName } : null, // Capital 'U' just in case
+        
+        // Standard fields
+        employeeId: task.assignee ? task.assignee.employee_id : null,
+        status: task.status
+      };
+    });
 
     res.json(formatted);
   } catch (err) {
@@ -500,7 +519,6 @@ app.get("/api/tasks", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // 2. CREATE TASK (Fixed: Now actually SAVES the address/map link)
 app.post("/api/tasks", async (req, res) => {
   try {
