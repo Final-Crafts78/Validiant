@@ -467,38 +467,48 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 // API ROUTES - MASTER TASK HANDLING (Fixed Assignment & Map)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET ALL TASKS (Data "Shotgun": Sends data in every format to ensure display)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - GET TASKS (MANUAL STITCH METHOD - FAIL-PROOF)
+// ═══════════════════════════════════════════════════════════════════════════
+
 app.get("/api/tasks", async (req, res) => {
   try {
-    const { data, error } = await supabase
+    // 1. Fetch ALL Tasks (Raw Data)
+    const { data: tasks, error: taskError } = await supabase
       .from("tasks")
-      .select(`
-        *,
-        assignee:users!tasks_assigned_to_fkey ( name, employee_id )
-      `)
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (error) throw error;
+    if (taskError) throw taskError;
 
-    const formatted = data.map(task => {
-      const userName = task.assignee ? task.assignee.name : "Unassigned";
+    // 2. Fetch ALL Users (The "Phonebook")
+    const { data: users, error: userError } = await supabase
+      .from("users")
+      .select("id, name, employee_id");
+
+    if (userError) throw userError;
+
+    // 3. Manually Match Tasks to Users (Cannot fail due to DB keys)
+    const formatted = tasks.map(task => {
+      // Find the user ID in our phonebook
+      const matchedUser = users.find(u => u.id === task.assigned_to);
+      const userName = matchedUser ? matchedUser.name : "Unassigned";
       
       return {
         ...task, 
         
         // --- MAP VISIBILITY FIX ---
-        // We send the address in multiple fields to catch whatever the frontend checks
-        address: task.address || "",       // Standard
-        location: task.address || "",      // Fallback
-        pincode: task.pincode || "",       // Fallback
-        hasMap: !!(task.address && task.address.length > 1), // Explicit Boolean
+        address: task.address || "",
+        hasMap: !!(task.address && task.address.length > 1),
 
-        // --- NAME VISIBILITY FIX ---
-        assignedTo: task.assigned_to,
-        assignedToName: userName,
+        // --- NAME VISIBILITY FIX (The Manual Match) ---
+        assignedToName: userName, // <--- Correct Name
+        
+        // We send the name in every possible format the frontend might look for:
         assigneeName: userName,
-        users: task.assignee ? { name: userName } : null,
+        users: { name: userName }, // <--- Mimics old Sequelize structure
+        User: { name: userName },  // <--- Capital U (Common in older apps)
         
         status: task.status
       };
