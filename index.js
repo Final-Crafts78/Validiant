@@ -459,14 +459,12 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - SUPER COMPATIBILITY MODE (Fixes "No Map" & "Unassigned")
+// API ROUTES - FINAL POLISH (Client Name + Map Fix)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET ALL TASKS (Sends data in 10+ formats to force Frontend to see it)
+// 1. GET TASKS (Now includes Client Name & Force-Map)
 app.get("/api/tasks", async (req, res) => {
   try {
-    // A. Fetch Data Separately (Fail-safe)
     const { data: tasks, error: taskError } = await supabase
       .from("tasks")
       .select("*")
@@ -478,41 +476,32 @@ app.get("/api/tasks", async (req, res) => {
       .select("id, name, employee_id");
     if (userError) throw userError;
 
-    // B. Build "Super Objects"
     const formatted = tasks.map(task => {
-      // Find User
       const matchedUser = users.find(u => u.id === task.assigned_to);
       const userName = matchedUser ? matchedUser.name : "Unassigned";
-      
-      // Determine Map Status
       const mapLink = task.address || "";
-      const hasMapBoolean = (mapLink.length > 5); // True if link exists
+      const hasLink = mapLink.length > 5;
 
       return {
-        // 1. Original Data
-        ...task, 
+        ...task,
 
-        // 2. MAP FIX (Sending it everywhere)
-        address: mapLink,         // Standard
-        location: mapLink,        // Common frontend name
-        mapUrl: mapLink,          // CamelCase
-        map_url: mapLink,         // Snake_case
-        pincode: task.pincode,    
-        hasMap: hasMapBoolean,    // Boolean Check
-        isMapAvailable: hasMapBoolean,
+        // --- CLIENT NAME FIX ---
+        clientName: task.client_name || "-",  // <--- Sends to Frontend
+        client: task.client_name || "-",      // <--- Backup format
 
-        // 3. NAME FIX (Sending it everywhere)
-        assignedToName: userName, // CamelCase
-        employeeName: userName,   // Common
-        assigneeName: userName,   // Alias
-        userName: userName,       // Generic
+        // --- MAP FIX (The "Flood" Strategy) ---
+        // We send the link in every possible slot the frontend might check
+        address: mapLink,
+        location: mapLink,
+        map: hasLink ? "Yes" : "No",      // <--- Literal "Yes" string
+        hasMap: hasLink,                  // <--- Boolean
+        mapUrl: mapLink,
         
-        // 4. NESTED FIX (Mimicking Sequelize Relations)
-        users: { name: userName, employee_id: matchedUser?.employee_id },
-        User: { name: userName },       // Capital U
-        assignee: { name: userName },   // Wrapper
+        // --- NAME FIX ---
+        assignedToName: userName,
+        assigneeName: userName,
+        users: { name: userName },
         
-        // 5. STATUS FIX
         status: task.status
       };
     });
@@ -524,10 +513,11 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK
+// 2. CREATE TASK (Saves Client Name)
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { title, pincode, address, notes, createdBy, assignedTo } = req.body;
+    // Capture 'clientName' from the form
+    const { title, pincode, address, notes, createdBy, assignedTo, clientName } = req.body;
 
     let initialStatus = "Unassigned";
     let finalAssignee = null;
@@ -543,6 +533,7 @@ app.post("/api/tasks", async (req, res) => {
       .from("tasks")
       .insert([{
         title, pincode, address, notes,
+        client_name: clientName, // <--- SAVES TO DB
         status: initialStatus,
         assigned_to: finalAssignee,
         assigned_date: assignedDate,
@@ -557,16 +548,18 @@ app.post("/api/tasks", async (req, res) => {
   }
 });
 
-// 3. UPDATE TASK
+// 3. UPDATE TASK (Updates Client Name & Map)
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, pincode, address, notes, status, assignedTo } = req.body;
+    const { title, pincode, address, notes, status, assignedTo, clientName } = req.body;
 
     const updateData = { updated_at: new Date() };
+    
     if (title) updateData.title = title;
     if (pincode) updateData.pincode = pincode;
-    if (address) updateData.address = address; // Saves Map Link
+    if (address) updateData.address = address;
+    if (clientName) updateData.client_name = clientName; // <--- Updates DB
     if (notes) updateData.notes = notes;
     if (status) updateData.status = status;
     
