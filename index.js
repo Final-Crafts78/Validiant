@@ -325,18 +325,45 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// 2. CREATE USER API (Admin Only)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - USER MANAGEMENT (FIXED)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. GET EMPLOYEES ONLY (Fixes "Admin in Dropdown" issue)
+app.get("/api/users", async (req, res) => {
+  try {
+    // Only fetch users where role is 'employee'
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("id, name, email, role, employee_id, phone, last_active, is_active")
+      .eq("role", "employee")  // <--- FILTER ADDED
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    const formattedUsers = users.map(u => ({
+      ...u,
+      employeeId: u.employee_id,
+      lastActive: u.last_active,
+      isActive: u.is_active
+    }));
+
+    res.json(formattedUsers);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// 2. CREATE NEW EMPLOYEE (Fixes "Null Role" error)
 app.post("/api/users", async (req, res) => {
   try {
-    const { name, email, password, role, employeeId, phone } = req.body;
-
-    // Check if user exists
+    const { name, email, password, employeeId, phone } = req.body;
+    
+    // Check if email exists
     const { data: existing } = await supabase.from("users").select("id").eq("email", email).single();
-    if (existing) {
-      return res.status(400).json({ success: false, message: "User already exists" });
-    }
+    if (existing) return res.status(400).json({ success: false, message: "User already exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password || "123456", 10); // Default password if empty
 
     const { data, error } = await supabase
       .from("users")
@@ -344,7 +371,7 @@ app.post("/api/users", async (req, res) => {
         name,
         email,
         password: hashedPassword,
-        role,
+        role: "employee", // <--- FORCED ROLE (Fixes the crash)
         employee_id: employeeId,
         phone,
         is_active: true
@@ -359,30 +386,6 @@ app.post("/api/users", async (req, res) => {
   } catch (err) {
     console.error("Create User Error:", err);
     res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 3. GET USERS LIST (For Admin Dashboard)
-app.get("/api/users", async (req, res) => {
-  try {
-    const { data: users, error } = await supabase
-      .from("users")
-      .select("id, name, email, role, employee_id, phone, last_active, is_active")
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Map snake_case to camelCase for frontend compatibility
-    const formattedUsers = users.map(u => ({
-      ...u,
-      employeeId: u.employee_id,
-      lastActive: u.last_active,
-      isActive: u.is_active
-    }));
-
-    res.json(formattedUsers);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
