@@ -457,12 +457,16 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
   }
 });
 
-// 2. GET ALL TASKS (Fixes "Tasks not visible")
+// 2. GET ALL TASKS (Fixed: Uses explicit relationship to avoid "Ambiguity Error")
 app.get("/api/tasks", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("tasks")
-      .select(`*, users!left ( name, employee_id )`) 
+      .select(`
+        *,
+        assignee:users!tasks_assigned_to_fkey ( name, employee_id )
+      `) 
+      // ^ We explicitly tell Supabase: "Follow the assigned_to link"
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -471,8 +475,9 @@ app.get("/api/tasks", async (req, res) => {
     const formatted = data.map(task => ({
       ...task,
       assignedTo: task.assigned_to,
-      assignedToName: task.users ? task.users.name : "Unassigned",
-      employeeId: task.users ? task.users.employee_id : null,
+      // We check 'assignee' because we aliased it above
+      assignedToName: task.assignee ? task.assignee.name : "Unassigned",
+      employeeId: task.assignee ? task.assignee.employee_id : null,
       assignedDate: task.assigned_date,
       createdAt: task.created_at,
       status: task.status
@@ -485,6 +490,21 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
+// 3. GET UNASSIGNED TASKS
+app.get("/api/tasks/unassigned", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("status", "Unassigned")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get("/api/tasks/unassigned", async (req, res) => {
   try {
     const { data, error } = await supabase
