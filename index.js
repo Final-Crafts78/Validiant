@@ -458,13 +458,13 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES - TASK DATA & ACTIONS (FINAL FIX)
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - MASTER TASK HANDLING (Fixed Map & Names)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. GET ALL TASKS (Fixes "Unassigned" name issue)
+// 1. GET ALL TASKS (Fixed: Fetching Map & Employee Name)
 app.get("/api/tasks", async (req, res) => {
   try {
-    // Fetch task + the Assigned User info
     const { data, error } = await supabase
       .from("tasks")
       .select(`
@@ -477,20 +477,55 @@ app.get("/api/tasks", async (req, res) => {
     if (error) throw error;
 
     const formatted = data.map(task => ({
-      ...task,
-      // Ensure we map the data correctly for the frontend
+      id: task.id,
+      title: task.title,
+      // FIX 1: Send the Address/Map Link so the UI sees "Yes"
+      address: task.address || "", 
+      hasMap: !!task.address, 
+      pincode: task.pincode,
+      notes: task.notes,
+      status: task.status,
+      created_at: task.created_at,
+      
+      // FIX 2: Robust Name Handling
       assignedTo: task.assigned_to, 
       assignedToName: task.assignee ? task.assignee.name : "Unassigned",
       employeeId: task.assignee ? task.assignee.employee_id : null,
-      assignedDate: task.assigned_date,
-      createdAt: task.created_at,
-      status: task.status
+      assignedDate: task.assigned_date
     }));
 
     res.json(formatted);
   } catch (err) {
     console.error("Task Fetch Error:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. CREATE TASK (Fixed: Now actually SAVES the address/map link)
+app.post("/api/tasks", async (req, res) => {
+  try {
+    const { title, pincode, address, notes, createdBy } = req.body;
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert([{
+        title: title,
+        pincode: pincode,
+        address: address, // <--- THIS WAS MISSING! Now it saves the Map Link.
+        notes: notes,
+        status: "Unassigned",
+        created_by: createdBy
+      }])
+      .select();
+
+    if (error) throw error;
+
+    await logActivity(createdBy, "Admin", "TASK_CREATED", data[0].id, title, req);
+    res.json({ success: true, task: data[0] });
+
+  } catch (err) {
+    console.error("Create Task Error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -548,35 +583,7 @@ app.get("/api/kyc/list", async (req, res) => {
 // API ROUTES - TASK ACTIONS (Create, Assign, Update)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. CREATE TASK (Manual Entry)
-app.post("/api/tasks", async (req, res) => {
-  try {
-    const { title, pincode, address, notes, createdBy } = req.body;
-
-    // Insert into Supabase
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert([{
-        title: title,
-        pincode: pincode,
-        notes: notes,
-        status: "Unassigned",
-        created_by: createdBy
-      }])
-      .select();
-
-    if (error) throw error;
-
-    await logActivity(createdBy, "Admin", "TASK_CREATED", data[0].id, title, req);
-    res.json({ success: true, task: data[0] });
-
-  } catch (err) {
-    console.error("Create Task Error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 2. ASSIGN TASK TO EMPLOYEE
+// 1. ASSIGN TASK TO EMPLOYEE
 app.post("/api/tasks/:taskId/assign", async (req, res) => {
   try {
     const { taskId } = req.params;
