@@ -475,6 +475,110 @@ app.get("/api/kyc/list", async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - TASK ACTIONS (Create, Assign, Update)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. CREATE TASK (Manual Entry)
+app.post("/api/tasks", async (req, res) => {
+  try {
+    const { title, pincode, address, notes, createdBy } = req.body;
+
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert([{
+        title: title,
+        pincode: pincode,
+        notes: notes,
+        status: "Unassigned",
+        created_by: createdBy
+      }])
+      .select();
+
+    if (error) throw error;
+
+    await logActivity(createdBy, "Admin", "TASK_CREATED", data[0].id, title, req);
+    res.json({ success: true, task: data[0] });
+
+  } catch (err) {
+    console.error("Create Task Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 2. ASSIGN TASK TO EMPLOYEE
+app.post("/api/tasks/:taskId/assign", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { employeeId, adminId, adminName } = req.body;
+
+    // 1. Get Employee Details (to verify they exist)
+    const { data: employee } = await supabase
+      .from("users")
+      .select("id, name")
+      .eq("id", employeeId)
+      .single();
+
+    if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
+
+    // 2. Update the Task
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        assigned_to: employeeId,
+        assigned_date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+        status: "Pending",
+        updated_at: new Date()
+      })
+      .eq("id", taskId);
+
+    if (error) throw error;
+
+    // 3. Log it
+    await logActivity(adminId, adminName, "TASK_ASSIGNED", taskId, `Assigned to ${employee.name}`, req);
+
+    res.json({ success: true, message: `Assigned to ${employee.name}` });
+
+  } catch (err) {
+    console.error("Assign Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. UPDATE TASK STATUS (Completed, Verified, etc.)
+app.put("/api/tasks/:taskId/status", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, userId, userName, notes, location } = req.body;
+
+    const updateData = {
+      status: status,
+      updated_at: new Date()
+    };
+
+    // Add specific timestamps based on status
+    if (status === 'Completed') updateData.completed_at = new Date();
+    if (status === 'Verified') updateData.verified_at = new Date();
+
+    // Perform Update
+    const { error } = await supabase
+      .from("tasks")
+      .update(updateData)
+      .eq("id", taskId);
+
+    if (error) throw error;
+
+    // Log Activity
+    await logActivity(userId, userName, `TASK_${status.toUpperCase()}`, taskId, notes, req);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // API ROUTES - TASK MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
