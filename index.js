@@ -3526,10 +3526,8 @@ app.get("/app.js", (req, res) => {
     const toDate = toVal ? new Date(toVal + "T23:59:59") : null;
 
     return tasks.filter(function (task) {
-      let dateStr =
-        task.assignedDate ||
-        (task.manualDate ? task.manualDate : null) ||
-        (task.createdAt ? task.createdAt.toString() : null);
+      let dateStr = task.assigned_date || task.assignedDate || task.manualDate || 
+              (task.createdAt ? task.createdAt.toString() : null);
 
       if (!dateStr) return false;
 
@@ -3697,13 +3695,8 @@ app.get("/app.js", (req, res) => {
           "</span></td>";
 
         // Date (assigned/manual/fallback)
-        const dateText =
-          task.assigned_date ||
-          task.assignedDate ||
-          task.manualDate ||
-          (task.createdAt
-            ? new Date(task.createdAt).toISOString().split("T")[0]
-            : "NA");
+        const dateText = task.assigned_date || task.assignedDate || task.manualDate || 
+                 (task.createdAt ? new Date(task.createdAt).toISOString().split('T')[0] : "N/A");
         html += '<td data-label="Date">' + escapeHtml(dateText) + "</td>";
 
         // Actions
@@ -5314,7 +5307,7 @@ app.get("/app.js", (req, res) => {
   html +=
     "      html += '<td><span class=\"status-badge ' + statusClass + '\">' + escapeHtml(task.status) + '</span></td>';\n";
   html +=
-    "      html += '<td>' + escapeHtml(task.manualDate || task.assignedDate || 'N/A') + '</td>';\n";
+    "      html += '<td>' + escapeHtml(task.assigned_date || task.assignedDate || task.manualDate || 'N/A') + '</td>';\n";
   html += "      html += '<td>';\n";
   html += "      if (task.mapUrl) {\n";
   html +=
