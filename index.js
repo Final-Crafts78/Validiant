@@ -2674,7 +2674,7 @@ app.get("/app.js", (req, res) => {
   html += "  input.id = 'editMapUrl';";
   html += "  input.className = 'search-box';";
   html += "  input.placeholder = 'Paste Google Maps link';";
-  html += "  input.value = task.mapUrl || '';";
+  html += "  input.value = task.mapurl || task.map_url || task.mapUrl || '';";
   html += "  group.appendChild(input);";
   html += "  content.appendChild(group);";
   html += "  var buttonsRow = document.createElement('div');";
@@ -4862,9 +4862,9 @@ app.get("/app.js", (req, res) => {
   html += "      }\n";
   html += "      \n";
   html += "      // Feature #8: MapURL visibility (CRITICAL)\n";
-  html += "      if (task.mapUrl) {\n";
-  html +=
-    '        html += \'<a href="\' + escapeHtml(task.mapUrl) + \'" target="_blank" rel="noopener noreferrer" class="map-button">\';\n';
+  html += '        var taskMapUrl = task.mapurl || task.map_url || task.mapUrl;\n';
+  html += '        if (taskMapUrl) {\n';
+  html += '        html += \'<a href="\' + escapeHtml(taskMapUrl) + \'" target="_blank" rel="noopener noreferrer" class="map-button">\';\n';
   html +=
     "        html += '<i class=\"fas fa-location-arrow\"></i> Open Map';\n";
   html += "        html += '</a>';\n";
