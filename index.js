@@ -3719,10 +3719,8 @@ app.get("/app.js", (req, res) => {
     container.innerHTML = html;
   }
 
-  // Render All Tasks table with Reassign / Unassign / Delete actions
 // ═══════════════════════════════════════════════════════════════════════════
 // MISSING FUNCTION: DISPLAY ALL TASKS
-// Paste this inside app.get('/app.js') 
 // ═══════════════════════════════════════════════════════════════════════════
 
 html += "function displayAllTasks(tasks) {\n";
@@ -3748,73 +3746,53 @@ html += "    html += '    <th>Pincode</th>';\n";
 html += "    html += '    <th>Map</th>';\n";
 html += "    html += '    <th>Status</th>';\n";
 html += "    html += '    <th>Date</th>';\n";
-html += "    html += '    <th>Time Elapsed</th>';\n"; // Renamed Headerhtml += "    html += '    <th>Actions</th>';\n";
+html += "    html += '    <th>Time Elapsed</th>';\n";
+html += "    html += '    <th>Actions</th>';\n";
 html += "    html += '  </tr></thead><tbody>';\n";
 html += "\n";
 html += "    tasks.forEach(function (task) {\n";
 html += "      const statusClass = 'status-' + task.status.toLowerCase().replace(/[^a-z0-9]+/g, '-');\n";
 html += "\n";
+html += "      // --- FIX 1: ROBUST MAP CHECK ---\n";
+html += "      const finalMapUrl = task.mapUrl || task.map_url || task.mapurl || null;\n";
+html += "\n";
 html += "      html += '<tr>';\n";
-html += "\n";
-html += "      // Case ID\n";
 html += "      html += '<td data-label=\"Case ID\"><strong>' + escapeHtml(task.title) + '</strong></td>';\n";
-html += "\n";
-html += "      // Client\n";
 html += "      html += '<td data-label=\"Client\">' + escapeHtml(task.clientName || '-') + '</td>';\n";
-html += "\n";
-html += "      // Employee\n";
 html += "      html += '<td data-label=\"Employee\">' + (task.assignedToName ? escapeHtml(task.assignedToName) : '<span style=\"color:#9ca3af;font-style:italic\">Unassigned</span>') + '</td>';\n";
-html += "\n";
-html += "      // Pincode\n";
 html += "      html += '<td data-label=\"Pincode\"><span class=\"pincode-highlight\"><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'NA') + '</span></td>';\n";
 html += "\n";
-html += "      // Map\n";
 html += "      html += '<td data-label=\"Map\">';\n";
-html += "      html += (task.mapUrl ? '<a href=\"' + escapeHtml(task.mapUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#3b82f6;font-weight:600;margin-right:8px;\"><i class=\"fas fa-map-marker-alt\"></i> View Map</a>' : '<span style=\"color:#9ca3af;font-style:italic;margin-right:8px;\">No map</span>');\n";
+html += "      html += (finalMapUrl ? '<a href=\"' + escapeHtml(finalMapUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#3b82f6;font-weight:600;margin-right:8px;\"><i class=\"fas fa-map-marker-alt\"></i> View Map</a>' : '<span style=\"color:#9ca3af;font-style:italic;margin-right:8px;\">No map</span>');\n";
 html += "      html += '<button class=\"btn btn-secondary btn-sm\" style=\"padding:4px 8px;font-size:11px;\" title=\"Edit map link\" onclick=\"showEditMapModal(' + task.id + ')\"><i class=\"fas fa-pen\"></i></button>';\n";
 html += "      html += '</td>';\n";
 html += "\n";
-html += "      // Status\n";
 html += "      html += '<td data-label=\"Status\"><span class=\"status-badge ' + statusClass + '\">' + escapeHtml(task.status) + '</span></td>';\n";
 html += "\n";
-html += "      // Date\n";
 html += "      const dateText = task.assigned_date || task.assignedDate || task.manualDate || (task.createdAt ? new Date(task.createdAt).toISOString().split('T')[0] : 'N/A');\n";
 html += "      html += '<td data-label=\"Date\">' + escapeHtml(dateText) + '</td>';\n";
 html += "\n";
-html += "      // --- NEW SLA LOGIC: TIME PASSED ---\n";
+html += "      // SLA Logic\n";
 html += "      let slaStatus = 'N/A';\n";
 html += "      let slaColor = '#6b7280';\n";
-html += "      \n";
-html += "      // Use assigned date, fallback to creation date\n";
 html += "      let startDateStr = task.assigned_date || task.assignedDate || task.created_at || task.createdAt;\n";
-html += "      \n";
 html += "      if (startDateStr && task.status === 'Pending') {\n";
 html += "        const startTime = new Date(startDateStr).getTime();\n";
 html += "        const nowTime = new Date().getTime();\n";
-html += "        // Calculate hours passed\n";
 html += "        const hoursPassed = Math.floor((nowTime - startTime) / (1000 * 60 * 60));\n";
-html += "\n";
-html += "        if (hoursPassed < 48) {\n";
-html += "          slaStatus = hoursPassed + 'h passed';\n";
-html += "          slaColor = '#10b981'; // Green (Safe)\n";
-html += "        } else if (hoursPassed < 72) {\n";
-html += "          slaStatus = hoursPassed + 'h passed';\n";
-html += "          slaColor = '#f59e0b'; // Orange (Warning)\n";
-html += "        } else {\n";
-html += "          slaStatus = hoursPassed + 'h passed (Overdue)';\n";
-html += "          slaColor = '#ef4444'; // Red (Overdue)\n";
-html += "        }\n";
+html += "        if (hoursPassed < 48) { slaStatus = hoursPassed + 'h passed'; slaColor = '#10b981'; }\n";
+html += "        else if (hoursPassed < 72) { slaStatus = hoursPassed + 'h passed'; slaColor = '#f59e0b'; }\n";
+html += "        else { slaStatus = hoursPassed + 'h passed (Overdue)'; slaColor = '#ef4444'; }\n";
 html += "      } else if (task.status === 'Completed' || task.status === 'Verified') {\n";
-html += "         slaStatus = 'Done';\n";
-html += "         slaColor = '#10b981';\n";
+html += "         slaStatus = 'Done'; slaColor = '#10b981';\n";
 html += "      }\n";
 html += "      html += '<td data-label=\"Time Elapsed\"><span style=\"color: ' + slaColor + '; font-weight: 600;\">' + escapeHtml(slaStatus) + '</span></td>';\n";
 html += "\n";
 html += "      html += '<td data-label=\"Actions\">';\n";
 html += "      html += '  <div class=\"action-buttons\">';\n";
-html += "      html += '    <button class=\"btn btn-warning btn-sm\" onclick=\"showReassignModal(' + task.id + ')\" title=\"Reassign\"><i class=\"fas fa-sync-alt\"></i></button>';\n";
-html += "      html += '    <button class=\"btn btn-secondary btn-sm\" onclick=\"unassignTask(' + task.id + ')\" title=\"Unassign\"><i class=\"fas fa-times\"></i></button>';\n";
-html += "      html += '    <button class=\"btn btn-danger btn-sm\" onclick=\"deleteTask(' + task.id + ')\" title=\"Delete\"><i class=\"fas fa-trash\"></i></button>';\n";
+html += "      html += '    <button class=\"btn btn-warning btn-sm\" onclick=\"showReassignModal(' + task.id + ')\"><i class=\"fas fa-sync-alt\"></i></button>';\n";
+html += "      html += '    <button class=\"btn btn-secondary btn-sm\" onclick=\"unassignTask(' + task.id + ')\"><i class=\"fas fa-times\"></i></button>';\n";
+html += "      html += '    <button class=\"btn btn-danger btn-sm\" onclick=\"deleteTask(' + task.id + ')\"><i class=\"fas fa-trash\"></i></button>';\n";
 html += "      html += '  </div>';\n";
 html += "      html += '</td>';\n";
 html += "      html += '</tr>';\n";
@@ -3825,6 +3803,7 @@ html += "  }\n";
 html += "  const list = document.getElementById('allTasksList');\n";
 html += "  if (list) list.innerHTML = html;\n";
 html += "}\n";
+  
 // ═══════════════════════════════════════════════════════════════════════════
 // ATTACH EVENT LISTENERS FOR ALL TASKS FILTERS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4870,9 +4849,9 @@ function attachAllTasksFilterListeners() {
   html += "}\n";
   html += "\n";
   html += "function loadTodayTasks(searchTerm) {\n";
-  // REMOVED: const today = ... (No longer needed for filtering)
-  html +=
-    "  const url = '/api/tasks?role=employee&userId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
+  html += "  // --- FIX 2: PRIVACY FIX ---\n";
+  html += "  // Changed userId= to employeeId= so backend filters correctly\n";
+  html += "  const url = '/api/tasks?role=employee&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
   html += "  \n";
   html += "  fetch(url)\n";
   html += "    .then(function(res) { return res.json(); })\n";
@@ -4894,8 +4873,7 @@ function attachAllTasksFilterListeners() {
   html += "        })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading tasks:', err);\n";
-  html +=
-    "      document.getElementById('todayTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Tasks</h3><p>Please try again.</p></div>';\n";
+  html += "      document.getElementById('todayTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Tasks</h3><p>Please try again.</p></div>';\n";
   html += "      showToast('Failed to load tasks', 'error');\n";
   html += "    });\n";
   html += "}\n";
@@ -5340,19 +5318,25 @@ function attachAllTasksFilterListeners() {
   html += "}\n";
   html += "\n";
   html += "function loadTaskHistory(searchTerm) {\n";
-  html +=
-    "  const url = '/api/tasks?role=employee&userId=' + currentUser.id + '&status=all' + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
+  html += "  // --- FIX 3: HISTORY LOGIC ---\n";
+  html += "  // 1. Use employeeId for security\n";
+  html += "  // 2. Fetch all tasks for this employee, then filter in JS\n";
+  html += "  const url = '/api/tasks?role=employee&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
   html += "  \n";
   html += "  fetch(url)\n";
   html += "    .then(function(res) { return res.json(); })\n";
   html += "    .then(function(tasks) {\n";
-  html += "      allHistoryTasks = tasks;\n";
-  html += "      displayHistoryTasks(tasks);\n";
+  html += "      // Only show Completed or Verified tasks in history\n";
+  html += "      const historyTasks = tasks.filter(function(t) {\n";
+  html += "        return t.status === 'Completed' || t.status === 'Verified';\n";
+  html += "      });\n";
+  html += "      \n";
+  html += "      allHistoryTasks = historyTasks;\n";
+  html += "      displayHistoryTasks(historyTasks);\n";
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading history:', err);\n";
-  html +=
-    "      document.getElementById('historyTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading History</h3><p>Please try again.</p></div>';\n";
+  html += "      document.getElementById('historyTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading History</h3><p>Please try again.</p></div>';\n";
   html += "      showToast('Failed to load history', 'error');\n";
   html += "    });\n";
   html += "}\n";
