@@ -4783,10 +4783,10 @@ function attachAllTasksFilterListeners() {
   // inside employees.forEach row build (after phone td)
   html += "      html += '<td>';\n";
   html +=
-    "      html += '<button class=\"btn btn-warning btn-sm\" onclick='openResetPasswordModal(' + emp.id + ', ' + JSON.stringify(emp.email) + ')'><i class=\"fas fa-key\"></i> Reset</button>';\n";
+    "      html += '<button class=\"btn btn-warning btn-sm\" onclick=\\'openResetPasswordModal(' + emp.id + ', ' + JSON.stringify(emp.email) + ')\\'><i class=\"fas fa-key\"></i> Reset</button>';\n";
   html += "      html += ' ';\n";
   html +=
-    "      html += '<button class=\"btn btn-danger btn-sm\" onclick='deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
+    "      html += '<button class=\"btn btn-danger btn-sm\" onclick=\\'deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')\\'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
   html += "      html += '</td>';\n";
   html += "          html += '</tr>';\n";
   html += "        });\n";
