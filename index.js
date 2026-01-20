@@ -4828,9 +4828,9 @@ function attachAllTasksFilterListeners() {
   html += "      html += '<td>';\n";
   html +=
   "      html += '<button class=\"btn btn-warning btn-sm\" onclick='openResetPasswordModal(' + emp.id + ', ' + JSON.stringify(emp.email) + ')'><i class=\"fas fa-key\"></i> Reset</button>';\n";
-  html += "      html += ' ';\n";  // ⬅️ NEW: Space between buttons
+  html += "      html += ' ';\n";
   html +=
-  "      html += '<button class=\"btn btn-danger btn-sm\" onclick='deleteEmployeePrompt(' + emp.id + ', \\'' + escapeHtml(emp.name) + '\\')'><i class=\"fas fa-trash\"></i> Delete</button>';\n";  // ⬅️ NEW: Delete button
+  "      html += '<button class=\"btn btn-danger btn-sm\" onclick='deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
   html += "      html += '</td>';\n";
   html += "          html += '</tr>';\n";
   html += "        });\n";
