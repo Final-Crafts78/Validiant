@@ -3720,179 +3720,111 @@ app.get("/app.js", (req, res) => {
   }
 
   // Render All Tasks table with Reassign / Unassign / Delete actions
-  function displayAllTasks(tasks) {
-    let html = "";
+// ═══════════════════════════════════════════════════════════════════════════
+// MISSING FUNCTION: DISPLAY ALL TASKS
+// Paste this inside app.get('/app.js') 
+// ═══════════════════════════════════════════════════════════════════════════
 
-    if (!tasks || tasks.length === 0) {
-      html += '<div class="empty-state">';
-      html += '  <i class="fas fa-inbox"></i>';
-      html += "  <h3>No Tasks Found</h3>";
-      html +=
-        "  <p>Start by creating a new task or uploading tasks in bulk.</p>";
-      html += "</div>";
-    } else {
-      html +=
-        '<p style="color:#e5e7eb;font-weight:600;font-size:13px;margin-bottom:14px;">';
-      html +=
-        '  <i class="fas fa-info-circle"></i> Found ' + tasks.length + " tasks";
-      html += "</p>";
+html += "function displayAllTasks(tasks) {\n";
+html += "  let html = '';\n";
+html += "\n";
+html += "  if (!tasks || tasks.length === 0) {\n";
+html += "    html += '<div class=\"empty-state\">';\n";
+html += "    html += '  <i class=\"fas fa-inbox\"></i>';\n";
+html += "    html += '  <h3>No Tasks Found</h3>';\n";
+html += "    html += '  <p>Start by creating a new task or uploading tasks in bulk.</p>';\n";
+html += "    html += '</div>';\n";
+html += "  } else {\n";
+html += "    html += '<p style=\"color:#e5e7eb;font-weight:600;font-size:13px;margin-bottom:14px;\">';\n";
+html += "    html += '  <i class=\"fas fa-info-circle\"></i> Found ' + tasks.length + ' tasks';\n";
+html += "    html += '</p>';\n";
+html += "\n";
+html += "    html += '<table class=\"table\">';\n";
+html += "    html += '  <thead><tr>';\n";
+html += "    html += '    <th>Case ID</th>';\n";
+html += "    html += '    <th>Client Name</th>';\n";
+html += "    html += '    <th>Employee</th>';\n";
+html += "    html += '    <th>Pincode</th>';\n";
+html += "    html += '    <th>Map</th>';\n";
+html += "    html += '    <th>Status</th>';\n";
+html += "    html += '    <th>Date</th>';\n";
+html += "    html += '    <th>SLA Status</th>';\n";
+html += "    html += '    <th>Actions</th>';\n";
+html += "    html += '  </tr></thead><tbody>';\n";
+html += "\n";
+html += "    tasks.forEach(function (task) {\n";
+html += "      const statusClass = 'status-' + task.status.toLowerCase().replace(/[^a-z0-9]+/g, '-');\n";
+html += "\n";
+html += "      html += '<tr>';\n";
+html += "\n";
+html += "      // Case ID\n";
+html += "      html += '<td data-label=\"Case ID\"><strong>' + escapeHtml(task.title) + '</strong></td>';\n";
+html += "\n";
+html += "      // Client\n";
+html += "      html += '<td data-label=\"Client\">' + escapeHtml(task.clientName || '-') + '</td>';\n";
+html += "\n";
+html += "      // Employee\n";
+html += "      html += '<td data-label=\"Employee\">' + (task.assignedToName ? escapeHtml(task.assignedToName) : '<span style=\"color:#9ca3af;font-style:italic\">Unassigned</span>') + '</td>';\n";
+html += "\n";
+html += "      // Pincode\n";
+html += "      html += '<td data-label=\"Pincode\"><span class=\"pincode-highlight\"><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'NA') + '</span></td>';\n";
+html += "\n";
+html += "      // Map\n";
+html += "      html += '<td data-label=\"Map\">';\n";
+html += "      html += (task.mapUrl ? '<a href=\"' + escapeHtml(task.mapUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#3b82f6;font-weight:600;margin-right:8px;\"><i class=\"fas fa-map-marker-alt\"></i> View Map</a>' : '<span style=\"color:#9ca3af;font-style:italic;margin-right:8px;\">No map</span>');\n";
+html += "      html += '<button class=\"btn btn-secondary btn-sm\" style=\"padding:4px 8px;font-size:11px;\" title=\"Edit map link\" onclick=\"showEditMapModal(' + task.id + ')\"><i class=\"fas fa-pen\"></i></button>';\n";
+html += "      html += '</td>';\n";
+html += "\n";
+html += "      // Status\n";
+html += "      html += '<td data-label=\"Status\"><span class=\"status-badge ' + statusClass + '\">' + escapeHtml(task.status) + '</span></td>';\n";
+html += "\n";
+html += "      // Date\n";
+html += "      const dateText = task.assigned_date || task.assignedDate || task.manualDate || (task.createdAt ? new Date(task.createdAt).toISOString().split('T')[0] : 'N/A');\n";
+html += "      html += '<td data-label=\"Date\">' + escapeHtml(dateText) + '</td>';\n";
+html += "\n";
+html += "      // SLA Status\n";
+html += "      let slaStatus = 'N/A';\n";
+html += "      let slaColor = '#6b7280';\n";
+html += "      if (task.assigned_date && task.status === 'Pending') {\n";
+html += "        const assignedTime = new Date(task.assigned_date).getTime();\n";
+html += "        const nowTime = new Date().getTime();\n";
+html += "        const hoursElapsed = (nowTime - assignedTime) / (1000 * 60 * 60);\n";
+html += "        const hoursRemaining = 72 - hoursElapsed;\n";
+html += "        if (hoursRemaining > 24) {\n";
+html += "          slaStatus = Math.floor(hoursRemaining) + 'h left';\n";
+html += "          slaColor = '#10b981';\n";
+html += "        } else if (hoursRemaining > 0) {\n";
+html += "          slaStatus = Math.floor(hoursRemaining) + 'h left';\n";
+html += "          slaColor = '#f59e0b';\n";
+html += "        } else {\n";
+html += "          slaStatus = 'Overdue ' + Math.floor(Math.abs(hoursRemaining)) + 'h';\n";
+html += "          slaColor = '#ef4444';\n";
+html += "        }\n";
+html += "      }\n";
+html += "      html += '<td data-label=\"SLA Status\"><span style=\"color: ' + slaColor + '; font-weight: 600;\">' + escapeHtml(slaStatus) + '</span></td>';\n";
+html += "\n";
+html += "      // Actions\n";
+html += "      html += '<td data-label=\"Actions\">';\n";
+html += "      html += '  <div class=\"action-buttons\">';\n";
+html += "      html += '    <button class=\"btn btn-warning btn-sm\" onclick=\"showReassignModal(' + task.id + ')\" title=\"Reassign to different employee\"><i class=\"fas fa-sync-alt\"></i></button>';\n";
+html += "      html += '    <button class=\"btn btn-secondary btn-sm\" onclick=\"unassignTask(' + task.id + ')\" title=\"Remove assignment\"><i class=\"fas fa-times\"></i></button>';\n";
+html += "      html += '    <button class=\"btn btn-danger btn-sm\" onclick=\"deleteTask(' + task.id + ')\" title=\"Delete task permanently\"><i class=\"fas fa-trash\"></i></button>';\n";
+html += "      html += '  </div>';\n";
+html += "      html += '</td>';\n";
+html += "\n";
+html += "      html += '</tr>';\n";
+html += "    });\n";
+html += "\n";
+html += "    html += '  </tbody></table>';\n";
+html += "  }\n";
+html += "\n";
+html += "  const list = document.getElementById('allTasksList');\n";
+html += "  if (list) {\n";
+html += "    list.innerHTML = html;\n";
+html += "  }\n";
+html += "}\n";
 
-      html += '<table class="table">';
-      html += "  <thead><tr>";
-      html += "    <th>Case ID</th>";
-      html += "    <th>Client Name</th>";
-      html += "    <th>Employee</th>";
-      html += "    <th>Pincode</th>";
-      html += "    <th>Map</th>";
-      html += "    <th>Status</th>";
-      html += "    <th>Date</th>";
-      html += "    <th>SLA Status</th>";
-      html += "    <th>Actions</th>";
-      html += "  </tr></thead><tbody>";
-
-      tasks.forEach(function (task) {
-        const statusClass =
-          "status-" + task.status.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-        html += "<tr>";
-
-        // Case ID
-        html +=
-          '<td data-label="Case ID"><strong>' +
-          escapeHtml(task.title) +
-          "</strong></td>";
-
-        // Client
-        html +=
-          '<td data-label="Client">' +
-          escapeHtml(task.clientName || "-") +
-          "</td>";
-
-        // Employee
-        html +=
-          '<td data-label="Employee">' +
-          (task.assignedToName
-            ? escapeHtml(task.assignedToName)
-            : '<span style="color:#9ca3af;font-style:italic">Unassigned</span>') +
-          "</td>";
-
-        // Pincode chip
-        html +=
-          '<td data-label="Pincode"><span class="pincode-highlight"><i class="fas fa-map-pin"></i>' +
-          escapeHtml(task.pincode || "NA") +
-          "</span></td>";
-        html += "</td>";
-
-        // Map availability + edit
-        html +=
-          '<td data-label="Map">' +
-          (task.mapUrl
-            ? '<a href="' +
-              escapeHtml(task.mapUrl) +
-              '" target="_blank" rel="noopener noreferrer" style="color:#3b82f6;font-weight:600;margin-right:8px;"><i class="fas fa-map-marker-alt"></i> View Map</a>'
-            : '<span style="color:#9ca3af;font-style:italic;margin-right:8px;">No map</span>');
-
-        // Small edit icon button
-        html +=
-          '<button class="btn btn-secondary btn-sm" ' +
-          '        style="padding:4px 8px;font-size:11px;" ' +
-          '        title="Edit map link" ' +
-          '        onclick="showEditMapModal(' +
-          task.id +
-          ')\">' +
-          '<i class="fas fa-pen"></i>' +
-          "</button>";
-
-        html += "</td>";
-
-        // Status badge
-        html +=
-          '<td data-label="Status"><span class="status-badge ' +
-          statusClass +
-          '">' +
-          escapeHtml(task.status) +
-          "</span></td>";
-
-        // Date (assigned/manual/fallback)
-        const dateText = task.assigned_date || task.assignedDate || task.manualDate || 
-                 (task.createdAt ? new Date(task.createdAt).toISOString().split('T')[0] : "N/A");
-        html += '<td data-label="Date">' + escapeHtml(dateText) + "</td>";
-
-        // SLA Status Calculation
-        let slaStatus = "N/A";
-        let slaColor = "#6b7280";
-        if (task.assigned_date && task.status === "Pending") {
-          const assignedTime = new Date(task.assigned_date).getTime();
-          const nowTime = new Date().getTime();
-          const hoursElapsed = (nowTime - assignedTime) / (1000 * 60 * 60);
-          const hoursRemaining = 72 - hoursElapsed;
-          if (hoursRemaining > 24) {
-            slaStatus = Math.floor(hoursRemaining) + "h left";
-            slaColor = "#10b981";
-          } else if (hoursRemaining > 0) {
-            slaStatus = Math.floor(hoursRemaining) + "h left";
-            slaColor = "#f59e0b";
-          } else {
-            slaStatus = "Overdue " + Math.floor(Math.abs(hoursRemaining)) + "h";
-            slaColor = "#ef4444";
-          }
-        } else if (task.status === "Completed" && task.completed_at && task.assigned_date) {
-          const assignedTime = new Date(task.assigned_date).getTime();
-          const completedTime = new Date(task.completed_at).getTime();
-          const hoursElapsed = (completedTime - assignedTime) / (1000 * 60 * 60);
-          if (hoursElapsed <= 72) {
-            slaStatus = "On Time";
-            slaColor = "#10b981";
-          } else {
-            slaStatus = "Late";
-            slaColor = "#ef4444";
-          }
-        }
-        html += '<td data-label="SLA Status"><span style="color: ' + slaColor + '; font-weight: 600;">' + 
-                escapeHtml(slaStatus) + '</span></td>';
-
-        // Actions
-        html += '<td data-label="Actions">';
-        html += '  <div class="action-buttons">';
-        html +=
-          '    <button class="btn btn-warning btn-sm" ' +
-          'onclick="showReassignModal(' +
-          task.id +
-          ')" ' +
-          'title="Reassign to different employee">';
-        html += '      <i class="fas fa-sync-alt"></i>';
-        html += "    </button>";
-        html +=
-          '    <button class="btn btn-secondary btn-sm" ' +
-          'onclick="unassignTask(' +
-          task.id +
-          ')" ' +
-          'title="Remove assignment">';
-        html += '      <i class="fas fa-times"></i>';
-        html += "    </button>";
-        html +=
-          '    <button class="btn btn-danger btn-sm" ' +
-          'onclick="deleteTask(' +
-          task.id +
-          ')" ' +
-          'title="Delete task permanently">';
-        html += '      <i class="fas fa-trash"></i>';
-        html += "    </button>";
-        html += "  </div>";
-        html += "</td>";
-
-        html += "</tr>";
-      });
-
-      html += "  </tbody></table>";
-    }
-
-    const list = document.getElementById("allTasksList");
-    if (list) {
-      list.innerHTML = html;
-    }
-  }
-  // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // ATTACH EVENT LISTENERS FOR ALL TASKS FILTERS
 // ═══════════════════════════════════════════════════════════════════════════
 function attachAllTasksFilterListeners() {
@@ -4140,7 +4072,7 @@ function attachAllTasksFilterListeners() {
   html += "\n";
   html += "// Apply current filter controls + fetch from /api/tasks\n";
   html += "function loadAllTasks() {\n";
-  html += "  let url = 'api/tasks?role=admin';\n";
+  html += "  let url = '/api/tasks?role=admin';\n";
   html += "\n";
   html +=
     "  const statusEl = document.getElementById('allTasksStatusFilter');\n";
