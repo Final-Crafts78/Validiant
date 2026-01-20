@@ -3989,7 +3989,7 @@ app.get("/app.js", (req, res) => {
   html += "\n";
   html += "  return tasks.filter(function(task) {\n";
   html +=
-    "    let dateStr = task.assignedDate || (task.createdAt ? task.createdAt.toString() : null);\n";
+  "    let dateStr = task.assigned_date || task.assignedDate || (task.createdAt ? task.createdAt.toString() : null);\n";
   html += "    if (!dateStr) return false;\n";
   html += "\n";
   html += "    const d = new Date(dateStr);\n";
@@ -4123,7 +4123,7 @@ app.get("/app.js", (req, res) => {
   html +=
     "      html += '<td><span class=\"status-badge ' + statusClass + '\">' + escapeHtml(task.status) + '</span></td>';\n";
   html +=
-    "      html += '<td>' + escapeHtml(task.assignedDate || 'N/A') + '</td>';\n";
+  "      html += '<td>' + escapeHtml(task.assigned_date || task.assignedDate || 'N/A') + '</td>';\n";
   html += "      html += '<td>';\n";
   html += "      html += '<div class=\"action-buttons\">';\n";
   html +=
