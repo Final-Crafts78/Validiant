@@ -508,11 +508,27 @@ app.get("/api/activity-log", async (req, res) => { // <--- FIXED: SINGULAR
 // 1. GET ALL TASKS
 app.get("/api/tasks", async (req, res) => {
   try {
-    // A. Fetch All Data
-    const { data: tasks, error: taskError } = await supabase
+    // ✅ NEW: Read filter parameters from URL
+    const { status, employeeId, pincode, search } = req.query;
+    
+    // A. Fetch Data (WITH FILTERS)
+    let query = supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false });
+    
+    // ✅ NEW: Apply database-level filters
+    if (status && status !== "all") {
+      query = query.eq("status", status);
+    }
+    if (employeeId && employeeId !== "all") {
+      query = query.eq("assigned_to", parseInt(employeeId));
+    }
+    if (pincode) {
+      query = query.eq("pincode", pincode);
+    }
+    
+    const { data: tasks, error: taskError } = await query;
     if (taskError) throw taskError;
 
     const { data: users, error: userError } = await supabase
@@ -523,39 +539,45 @@ app.get("/api/tasks", async (req, res) => {
     // B. Build the Response
     const formatted = tasks.map(task => {
       // --- FIX 1: LOOSE EQUALITY FOR ID MATCHING ---
-      // We use '==' instead of '===' to match "5" (string) with 5 (number)
       const matchedUser = users.find(u => u.id == task.assigned_to);
       const userName = matchedUser ? matchedUser.name : "Unassigned";
 
       // --- FIX 2: FORCE MAP "YES" ---
-      // Ensure address is a string. If it has text, Map is YES.
       const addressText = task.address || ""; 
       const hasMapData = addressText.trim().length > 0;
 
       return {
         ...task,
-
-        // 1. MAP / ADDRESS (Sending as Boolean AND String)
         address: addressText,
-        map: hasMapData ? "Yes" : "No",   // <--- Forced String
-        hasMap: hasMapData,               // <--- Boolean
-        isMapAvailable: hasMapData,       // <--- Alternative Boolean
+        map: hasMapData ? "Yes" : "No",
+        hasMap: hasMapData,
+        isMapAvailable: hasMapData,
         location: addressText,
-        
-        // 2. CLIENT NAME
         clientName: task.client_name || "-",
         client: task.client_name || "-",
-
-        // 3. EMPLOYEE NAME (The Loose Match Result)
         assignedToName: userName, 
         assigneeName: userName,
-        users: { name: userName }, // Nested fallback
-        
+        users: { name: userName },
         status: task.status
       };
     });
 
-    res.json(formatted);
+    // ✅ NEW: Apply search filter
+    let finalResult = formatted;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      finalResult = formatted.filter(task => {
+        return (
+          (task.title && task.title.toLowerCase().includes(searchLower)) ||
+          (task.clientName && task.clientName.toLowerCase().includes(searchLower)) ||
+          (task.pincode && task.pincode.includes(searchLower)) ||
+          (task.assignedToName && task.assignedToName.toLowerCase().includes(searchLower)) ||
+          (task.notes && task.notes.toLowerCase().includes(searchLower))
+        );
+      });
+    }
+
+    res.json(finalResult);
   } catch (err) {
     console.error("Fetch Error:", err);
     res.status(500).json({ error: err.message });
