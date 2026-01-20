@@ -439,6 +439,7 @@ app.delete("/api/users/:id", async (req, res) => {
     const { id } = req.params;
     const { adminPassword } = req.body;
     
+    // Verify admin password
     const { data: admin, error: adminError } = await supabase
       .from("users")
       .select("*")
@@ -446,14 +447,35 @@ app.delete("/api/users/:id", async (req, res) => {
       .single();
     
     if (adminError || !admin) {
-      return res.status(401).json({ success: false, message: "Admin authentication failed" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Admin authentication failed" 
+      });
     }
     
     const isMatch = await bcrypt.compare(adminPassword, admin.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid admin password" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid admin password" 
+      });
     }
     
+    // ✅ NEW: First, unassign all tasks from this employee
+    const { error: unassignError } = await supabase
+      .from("tasks")
+      .update({ 
+        assigned_to: null, 
+        status: "Unassigned" 
+      })
+      .eq("assigned_to", parseInt(id));
+    
+    if (unassignError) {
+      console.error("Error unassigning tasks:", unassignError);
+      // Continue anyway - maybe employee has no tasks
+    }
+    
+    // Then delete the employee
     const { error: deleteError } = await supabase
       .from("users")
       .delete()
@@ -464,11 +486,17 @@ app.delete("/api/users/:id", async (req, res) => {
     
     await logActivity(admin.id, "Admin", "EMPLOYEE_DELETED", null, `Deleted user ID: ${id}`, req);
     
-    res.json({ success: true, message: "Employee deleted successfully" });
+    res.json({ 
+      success: true, 
+      message: "Employee deleted successfully. Tasks unassigned." 
+    });
     
   } catch (err) {
     console.error("Delete user error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 });
 
