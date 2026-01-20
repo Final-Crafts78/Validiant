@@ -3428,6 +3428,9 @@ app.get("/app.js", (req, res) => {
           );
           select.appendChild(option);
         });
+        
+        attachAllTasksFilterListeners();  // ⬅️ ADD THIS ONE LINE!
+        
       })
       .catch(function (err) {
         console.error("Error loading employees for All Tasks filter:", err);
