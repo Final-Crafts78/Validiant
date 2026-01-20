@@ -539,6 +539,13 @@ app.get('/api/tasks', async (req, res) => {
     // Execute query with ordering
     const { data: tasks, error: taskError } = await query.order('createdat', { ascending: false });
 
+    if (taskError) throw taskError;
+
+    const { data: users, error: userError } = await supabase
+      .from("users")
+      .select("id, name, employee_id");
+    if (userError) throw userError;
+
     // B. Build the Response
     const formatted = tasks.map(task => {
       // --- FIX 1: LOOSE EQUALITY FOR ID MATCHING ---
