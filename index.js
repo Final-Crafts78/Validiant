@@ -3458,7 +3458,7 @@ app.get("/app.js", (req, res) => {
 
   // Apply current filter controls and fetch from /api/tasks
   function loadAllTasks() {
-    let url = "/api/tasks?role=admin";
+    let url = "/api/tasks";
 
     const statusEl = document.getElementById("allTasksStatusFilter");
     const empEl = document.getElementById("allTasksEmployeeFilter");
