@@ -433,60 +433,6 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-// DELETE EMPLOYEE (WITH ADMIN PASSWORD CHECK)
-app.delete("/api/users/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminPassword } = req.body;
-    
-    // Verify admin password
-    const { data: admin, error: adminError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", "admin@validiant.com")
-      .single();
-    
-    if (adminError || !admin) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Admin authentication failed" 
-      });
-    }
-    
-    // Check password
-    const isMatch = await bcrypt.compare(adminPassword, admin.password);
-    if (!isMatch) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Invalid admin password" 
-      });
-    }
-    
-    // Delete the employee
-    const { error: deleteError } = await supabase
-      .from("users")
-      .delete()
-      .eq("id", parseInt(id))
-      .eq("role", "employee"); // Safety: only delete employees
-    
-    if (deleteError) throw deleteError;
-    
-    await logActivity(admin.id, "Admin", "EMPLOYEE_DELETED", null, `Deleted user ID: ${id}`, req);
-    
-    res.json({ 
-      success: true, 
-      message: "Employee deleted successfully" 
-    });
-    
-  } catch (err) {
-    console.error("Delete user error:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: err.message 
-    });
-  }
-});
-
 // ═══════════════════════════════════════════════════════════════════════════
 // API ROUTES - DASHBOARD ANALYTICS (New Supabase Logic)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3707,7 +3653,6 @@ app.get("/app.js", (req, res) => {
       html += "    <th>Map</th>";
       html += "    <th>Status</th>";
       html += "    <th>Date</th>";
-      html += "    <th>SLA Status</th>";    // ⬅️ NEW LINE
       html += "    <th>Actions</th>";
       html += "  </tr></thead><tbody>";
 
@@ -3778,42 +3723,6 @@ app.get("/app.js", (req, res) => {
         const dateText = task.assigned_date || task.assignedDate || task.manualDate || 
                  (task.createdAt ? new Date(task.createdAt).toISOString().split('T')[0] : "N/A");
         html += '<td data-label="Date">' + escapeHtml(dateText) + "</td>";
-
-        // ✅ NEW: SLA Status Calculation
-let slaStatus = "N/A";
-let slaColor = "#6b7280"; // Gray
-if (task.assigned_date && task.status === "Pending") {
-  const assignedTime = new Date(task.assigned_date).getTime();
-  const nowTime = new Date().getTime();
-  const hoursElapsed = (nowTime - assignedTime) / (1000 * 60 * 60);
-  const hoursRemaining = 72 - hoursElapsed;
-  
-  if (hoursRemaining > 24) {
-    slaStatus = Math.floor(hoursRemaining) + "h left";
-    slaColor = "#10b981"; // Green
-  } else if (hoursRemaining > 0) {
-    slaStatus = Math.floor(hoursRemaining) + "h left";
-    slaColor = "#f59e0b"; // Orange
-  } else {
-    slaStatus = "Overdue " + Math.floor(Math.abs(hoursRemaining)) + "h";
-    slaColor = "#ef4444"; // Red
-  }
-} else if (task.status === "Completed" && task.completed_at && task.assigned_date) {
-  const assignedTime = new Date(task.assigned_date).getTime();
-  const completedTime = new Date(task.completed_at).getTime();
-  const hoursElapsed = (completedTime - assignedTime) / (1000 * 60 * 60);
-  
-  if (hoursElapsed <= 72) {
-    slaStatus = "On Time";
-    slaColor = "#10b981"; // Green
-  } else {
-    slaStatus = "Late";
-    slaColor = "#ef4444"; // Red
-  }
-}
-
-html += '<td data-label="SLA Status"><span style="color: ' + slaColor + '; font-weight: 600;">' + 
-        escapeHtml(slaStatus) + '</span></td>';
 
         // Actions
         html += '<td data-label="Actions">';
@@ -4597,45 +4506,6 @@ function attachAllTasksFilterListeners() {
   html += "    showToast(err.message || 'Reset failed', 'error');\n";
   html += "  });\n";
   html += "}\n";
-  html += "\n";
-  html += "// Delete Employee with Admin Password\n";
-  html += "function deleteEmployeePrompt(employeeId, employeeName) {\n";
-  html += "  const confirmDelete = confirm(\n";
-  html += "    '⚠️ DELETE EMPLOYEE: ' + employeeName + '\\\\n\\\\n' +\n";
-  html += "    'This will permanently delete this employee.\\\\n' +\n";
-  html += "    'Click OK to proceed with admin authentication.'\n";
-  html += "  );\n";
-  html += "  if (!confirmDelete) return;\n";
-  html += "  \n";
-  html += "  const adminPassword = prompt(\n";
-  html += "    '🔐 ADMIN AUTHENTICATION REQUIRED\\\\n\\\\n' +\n";
-  html += "    'Enter admin password to delete employee:'\n";
-  html += "  );\n";
-  html += "  if (!adminPassword) {\n";
-  html += "    showToast('Delete cancelled', 'info');\n";
-  html += "    return;\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  fetch('/api/users/' + employeeId, {\n";
-  html += "    method: 'DELETE',\n";
-  html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify({ adminPassword: adminPassword })\n";
-  html += "  })\n";
-  html += "  .then(function(res) { return res.json(); })\n";
-  html += "  .then(function(data) {\n";
-  html += "    if (data.success) {\n";
-  html += "      showToast('✅ Employee deleted: ' + employeeName, 'success');\n";
-  html += "      showEmployees(); // Refresh the list\n";
-  html += "    } else {\n";
-  html += "      showToast('❌ ' + data.message, 'error');\n";
-  html += "    }\n";
-  html += "  })\n";
-  html += "  .catch(function(err) {\n";
-  html += "    console.error('Delete error:', err);\n";
-  html += "    showToast('Failed to delete employee', 'error');\n";
-  html += "  });\n";
-  html += "}\n";
-
   // Activity Log viewer
   html += "function showActivityLog() {\n";
   html += "  let html = '';\n";
@@ -4827,10 +4697,7 @@ function attachAllTasksFilterListeners() {
   // inside employees.forEach row build (after phone td)
   html += "      html += '<td>';\n";
   html +=
-  "      html += '<button class=\"btn btn-warning btn-sm\" onclick='openResetPasswordModal(' + emp.id + ', ' + JSON.stringify(emp.email) + ')'><i class=\"fas fa-key\"></i> Reset</button>';\n";
-  html += "      html += ' ';\n";
-  html +=
-  "      html += '<button class=\"btn btn-danger btn-sm\" onclick='deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
+    "      html += '<button class=\"btn btn-warning btn-sm\" onclick=\\'openResetPasswordModal(' + emp.id + ', ' + JSON.stringify(emp.email) + ')\\'><i class=\"fas fa-key\"></i> Reset</button>';\n";
   html += "      html += '</td>';\n";
   html += "          html += '</tr>';\n";
   html += "        });\n";
