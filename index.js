@@ -539,35 +539,36 @@ app.get('/api/tasks', async (req, res) => {
     // Execute query with ordering
     const { data: tasks, error: taskError } = await query.order('createdat', { ascending: false });
 
-    if (taskError) throw taskError;
-
-    const { data: users, error: userError } = await supabase
-      .from("users")
-      .select("id, name, employeeid");  // ✅ FIXED
-    if (userError) throw userError;
-
     // B. Build the Response
     const formatted = tasks.map(task => {
-      const matchedUser = users.find(u => u.id == task.assignedto);  // ✅ FIXED
+      // --- FIX 1: LOOSE EQUALITY FOR ID MATCHING ---
+      // We use '==' instead of '===' to match "5" (string) with 5 (number)
+      const matchedUser = users.find(u => u.id == task.assigned_to);
       const userName = matchedUser ? matchedUser.name : "Unassigned";
 
+      // --- FIX 2: FORCE MAP "YES" ---
+      // Ensure address is a string. If it has text, Map is YES.
       const addressText = task.address || ""; 
       const hasMapData = addressText.trim().length > 0;
 
       return {
         ...task,
+
+        // 1. MAP / ADDRESS (Sending as Boolean AND String)
         address: addressText,
-        map: hasMapData ? "Yes" : "No",
-        hasMap: hasMapData,
-        isMapAvailable: hasMapData,
+        map: hasMapData ? "Yes" : "No",   // <--- Forced String
+        hasMap: hasMapData,               // <--- Boolean
+        isMapAvailable: hasMapData,       // <--- Alternative Boolean
         location: addressText,
         
-        clientName: task.clientname || "-",  // ✅ FIXED
-        client: task.clientname || "-",      // ✅ FIXED
+        // 2. CLIENT NAME
+        clientName: task.client_name || "-",
+        client: task.client_name || "-",
 
+        // 3. EMPLOYEE NAME (The Loose Match Result)
         assignedToName: userName, 
         assigneeName: userName,
-        users: { name: userName },
+        users: { name: userName }, // Nested fallback
         
         status: task.status
       };
