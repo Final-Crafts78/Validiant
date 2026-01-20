@@ -461,7 +461,16 @@ app.delete("/api/users/:id", async (req, res) => {
       });
     }
     
-    // ✅ NEW: First, unassign all tasks from this employee
+    // Get employee name before deletion (for logging)
+    const { data: employee } = await supabase
+      .from("users")
+      .select("name, email")
+      .eq("id", parseInt(id))
+      .single();
+    
+    const employeeName = employee ? employee.name : `User ID ${id}`;
+    
+    // Step 1: Unassign all tasks from this employee
     const { error: unassignError } = await supabase
       .from("tasks")
       .update({ 
@@ -472,10 +481,19 @@ app.delete("/api/users/:id", async (req, res) => {
     
     if (unassignError) {
       console.error("Error unassigning tasks:", unassignError);
-      // Continue anyway - maybe employee has no tasks
     }
     
-    // Then delete the employee
+    // Step 2: Nullify user_id in activity_logs (preserve audit trail)
+    const { error: logsError } = await supabase
+      .from("activity_logs")
+      .update({ user_id: null })
+      .eq("user_id", parseInt(id));
+    
+    if (logsError) {
+      console.error("Error updating activity logs:", logsError);
+    }
+    
+    // Step 3: Delete the employee
     const { error: deleteError } = await supabase
       .from("users")
       .delete()
@@ -484,18 +502,26 @@ app.delete("/api/users/:id", async (req, res) => {
     
     if (deleteError) throw deleteError;
     
-    await logActivity(admin.id, "Admin", "EMPLOYEE_DELETED", null, `Deleted user ID: ${id}`, req);
+    // Log the deletion
+    await logActivity(
+      admin.id, 
+      "Admin", 
+      "EMPLOYEE_DELETED", 
+      null, 
+      `Deleted employee: ${employeeName}`, 
+      req
+    );
     
     res.json({ 
       success: true, 
-      message: "Employee deleted successfully. Tasks unassigned." 
+      message: `Employee "${employeeName}" deleted successfully.` 
     });
     
   } catch (err) {
     console.error("Delete user error:", err);
     res.status(500).json({ 
       success: false, 
-      message: err.message 
+      message: err.message || "Failed to delete employee"
     });
   }
 });
