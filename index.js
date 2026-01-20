@@ -3740,6 +3740,87 @@ app.get("/app.js", (req, res) => {
       list.innerHTML = html;
     }
   }
+  // ═══════════════════════════════════════════════════════════════════════════
+// ATTACH EVENT LISTENERS FOR ALL TASKS FILTERS
+// ═══════════════════════════════════════════════════════════════════════════
+function attachAllTasksFilterListeners() {
+  // Status filter
+  const statusEl = document.getElementById("allTasksStatusFilter");
+  if (statusEl) {
+    statusEl.addEventListener("change", function() {
+      console.log("Status filter changed");
+      loadAllTasks();
+    });
+  }
+
+  // Employee filter
+  const empEl = document.getElementById("allTasksEmployeeFilter");
+  if (empEl) {
+    empEl.addEventListener("change", function() {
+      console.log("Employee filter changed");
+      loadAllTasks();
+    });
+  }
+
+  // Pincode filter
+  const pinEl = document.getElementById("allTasksPincodeFilter");
+  if (pinEl) {
+    pinEl.addEventListener("input", function() {
+      const val = this.value.trim();
+      // Only trigger if 6 digits or empty
+      if (val.length === 0 || val.length === 6) {
+        console.log("Pincode filter changed:", val);
+        loadAllTasks();
+      }
+    });
+  }
+
+  // Search box
+  const searchEl = document.getElementById("allTasksSearch");
+  if (searchEl) {
+    searchEl.addEventListener("input", function() {
+      console.log("Search changed:", this.value);
+      loadAllTasks();
+    });
+    
+    // Also handle Enter key
+    searchEl.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        loadAllTasks();
+      }
+    });
+  }
+
+  // Date filters
+  const fromDateEl = document.getElementById("allTasksFromDate");
+  const toDateEl = document.getElementById("allTasksToDate");
+  
+  if (fromDateEl) {
+    fromDateEl.addEventListener("change", function() {
+      console.log("From date changed");
+      loadAllTasks();
+    });
+  }
+  
+  if (toDateEl) {
+    toDateEl.addEventListener("change", function() {
+      console.log("To date changed");
+      loadAllTasks();
+    });
+  }
+
+  // Reset button (if it exists in your HTML)
+  const resetBtn = document.getElementById("allTasksResetFilter");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
+      console.log("Reset filters clicked");
+      resetAllTaskFilters();
+      loadAllTasks();
+    });
+  }
+
+  console.log("✅ All Tasks filter listeners attached");
+ }
   html += "\n";
   html += "function assignTaskToEmployee(taskId) {\n";
   html += "  const select = document.getElementById('emp-' + taskId);\n";
