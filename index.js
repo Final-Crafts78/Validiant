@@ -4917,6 +4917,18 @@ function attachAllTasksFilterListeners() {
   html +=
     "      html += '<button class=\"btn btn-danger btn-sm\" onclick=\\'deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')\\'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
   html += "      html += '</td>';\n";
+  html += "      html += '</tr>';\n";
+  html += "    });\n";
+  html += "    html += '</tbody></table>';\n";
+  html += "  }\n";
+  html += "  document.getElementById('employeesList').innerHTML = html;\n";
+  html += "})\n";
+  html += ".catch(function(err) {\n";
+  html += "  console.error('Error loading employees:', err);\n";
+  html += "  document.getElementById('employeesList').innerHTML = '<p>Error loading list.</p>';\n";
+  html += "});\n";
+  html += "}\n";
+  
   // Password Reset Modal Function
   html += "\n";
   html += "function openResetPasswordModal(empId, empEmail) {\n";
