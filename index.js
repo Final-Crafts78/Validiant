@@ -6131,20 +6131,16 @@ async function startServer() {
     // await initializeDatabase();
 
     // Start Express server
-    app.listen(PORT, () => {
-      console.log("");
-      console.log(
-        "═══════════════════════════════════════════════════════════════",
-      );
-      console.log("✅ SERVER RUNNING SUCCESSFULLY");
-      console.log(
-        "═══════════════════════════════════════════════════════════════",
-      );
-      console.log(`🌐 URL: http://localhost:${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || "production"}`);
-      console.log(`🔐 Admin Login: admin@validiant.com / Admin@123`);
-      console.log("");
-      console.log("✅ Keep-alive system starting...");
+    app.listen(PORT, HOST, () => {
+  console.log("");
+  console.log("═══════════════════════════════════════════════════════════════");
+  console.log("✅ SERVER RUNNING SUCCESSFULLY");
+  console.log("═══════════════════════════════════════════════════════════════");
+  console.log(`🌐 URL: http://${HOST}:${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || "production"}`);
+  console.log(`🔐 Admin Login: admin@validiant.com / Admin@123`);
+  console.log("");
+  console.log("✅ Keep-alive system starting...");
 
       // Start keep-alive pings every 3 minutes
       setInterval(keepAlive, 180000);
