@@ -4241,7 +4241,7 @@ function attachAllTasksFilterListeners() {
   html += "      updateAllTasksFilterChips();\n";
   html += "      displayAllTasks(finalTasks);\n";
   html += "    attachAllTasksFilterListeners();\n";
-  html += "    });\n";
+  html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading tasks:', err);\n";
   html +=
