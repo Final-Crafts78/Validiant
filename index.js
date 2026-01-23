@@ -879,95 +879,102 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 6. CSV EXPORT (Download Tasks with Full Details - Supabase Version)
-// ═══════════════════════════════════════════════════════════════════════════
+// 6. CSV EXPORT (Fixed - Respects Filters & Date Range)
 app.get("/api/export", async (req, res) => {
   try {
-    console.log("📥 Exporting tasks to CSV...");
+    const { status, employeeId, pincode, search, startDate, endDate } = req.query;
+    console.log("📥 Exporting tasks with filters:", req.query);
 
-    // Fetch all tasks
-    const { data: tasks, error: tasksError } = await supabase
+    // 1. Build Query (Database Level Filters)
+    let query = supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false });
 
+    if (status && status !== "all") query = query.eq("status", status);
+    if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
+    if (pincode) query = query.eq("pincode", pincode);
+
+    const { data: tasks, error: tasksError } = await query;
     if (tasksError) throw tasksError;
 
-    // Fetch all users to join employee names
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, name, email, employee_id");
+    // 2. Fetch Users (for names)
+    const { data: users } = await supabase.from("users").select("id, name, email, employee_id");
 
-    if (usersError) throw usersError;
-
-    // CSV Header
-    let csv = "CaseID,ClientName,Employee,EmployeeID,Email,AssignedDate,Status,Pincode,Latitude,Longitude,MapURL,Address,Notes,CreatedAt,CompletedAt,VerifiedAt,SLAStatus\n";
-
-    // Build CSV rows
-    tasks.forEach(task => {
-      // Find employee
-      const employee = users.find(u => u.id == task.assigned_to);
-      const employeeName = employee ? employee.name : "Unassigned";
-      const employeeId = employee ? employee.employee_id : "";
-      const employeeEmail = employee ? employee.email : "";
-
-      // Calculate SLA status
-      let slaStatus = "N/A";
-      if (task.completed_at && task.assigned_date) {
-        const assignedTime = new Date(task.assigned_date).getTime();
-        const completedTime = new Date(task.completed_at).getTime();
-        const diffHours = (completedTime - assignedTime) / (1000 * 60 * 60);
-        slaStatus = diffHours <= 72 ? "On Time" : "Overdue";
-      } else if (task.status === "Pending" && task.assigned_date) {
-        const assignedTime = new Date(task.assigned_date).getTime();
-        const nowTime = new Date().getTime();
-        const diffHours = (nowTime - assignedTime) / (1000 * 60 * 60);
-        slaStatus = diffHours <= 72 ? "In Progress" : "Overdue";
+    // 3. Apply Advanced Filters (In-Memory: Search & Date Range)
+    let finalTasks = tasks.filter(task => {
+      // Date Filter
+      if (startDate || endDate) {
+        const taskDate = task.assigned_date || task.assignedDate || (task.created_at ? task.created_at.split('T')[0] : null);
+        if (!taskDate) return false;
+        if (startDate && taskDate < startDate) return false;
+        if (endDate && taskDate > endDate) return false;
       }
 
-      // Escape function for CSV
+      // Search Filter (Fuzzy Match)
+      if (search) {
+        const s = search.toLowerCase();
+        const employee = users.find(u => u.id == task.assigned_to);
+        const empName = employee ? employee.name.toLowerCase() : "";
+        
+        return (
+          (task.title && task.title.toLowerCase().includes(s)) ||
+          (task.client_name && task.client_name.toLowerCase().includes(s)) ||
+          (task.pincode && String(task.pincode).includes(s)) ||
+          (task.notes && task.notes.toLowerCase().includes(s)) ||
+          (empName.includes(s))
+        );
+      }
+      return true;
+    });
+
+    console.log(`📊 Exporting ${finalTasks.length} filtered tasks`);
+
+    // 4. Generate CSV
+    let csv = "CaseID,ClientName,Employee,EmployeeID,Pincode,Status,AssignedDate,CompletedAt,TimeElapsed,MapURL,Address,Notes\n";
+
+    finalTasks.forEach(task => {
+      const employee = users.find(u => u.id == task.assigned_to);
+      const empName = employee ? employee.name : "Unassigned";
+      const empId = employee ? employee.employee_id : "";
+
+      // SLA Calculation
+      let slaStatus = "N/A";
+      if (task.status === "Pending" && task.assigned_date) {
+        const diff = (new Date() - new Date(task.assigned_date)) / (1000 * 60 * 60);
+        slaStatus = `${Math.floor(diff)}h`;
+      } else if (task.completed_at) {
+        slaStatus = "Done";
+      }
+
       const escape = (str) => {
         if (str === null || str === undefined) return "";
-        const strVal = String(str);
-        if (strVal.includes(",") || strVal.includes('"') || strVal.includes("\n")) {
-          return `"${strVal.replace(/"/g, '""')}"`;
-        }
-        return strVal;
+        return `"${String(str).replace(/"/g, '""')}"`; // Handle commas/quotes
       };
 
-      // Build row
       csv += [
         escape(task.title),
-        escape(task.client_name || ""),
-        escape(employeeName),
-        escape(employeeId),
-        escape(employeeEmail),
-        escape(task.assigned_date || ""),
+        escape(task.client_name),
+        escape(empName),
+        escape(empId),
+        escape(task.pincode),
         escape(task.status),
-        escape(task.pincode || ""),
-        task.latitude || "",
-        task.longitude || "",
-        escape(task.map_url || ""),
-        escape(task.address || ""),
-        escape(task.notes || ""),
-        task.created_at ? new Date(task.created_at).toISOString() : "",
-        task.completed_at ? new Date(task.completed_at).toISOString() : "",
-        task.verified_at ? new Date(task.verified_at).toISOString() : "",
+        escape(task.assigned_date),
+        escape(task.completed_at ? new Date(task.completed_at).toISOString() : ""),
         escape(slaStatus),
+        escape(task.map_url),
+        escape(task.address),
+        escape(task.notes)
       ].join(",") + "\n";
     });
 
-    console.log(`✅ Exported ${tasks.length} tasks to CSV`);
-
     res.header("Content-Type", "text/csv; charset=utf-8");
-    res.header(
-      "Content-Disposition",
-      `attachment; filename="validiant-tasks-export-${new Date().toISOString().split('T')[0]}.csv"`
-    );
-    return res.send(csv);
+    res.header("Content-Disposition", `attachment; filename="tasks-export-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+
   } catch (error) {
     console.error("❌ Export error:", error);
-    res.status(500).send("Export failed. Please try again.");
+    res.status(500).send("Export failed.");
   }
 });
 
@@ -4667,11 +4674,29 @@ function attachAllTasksFilterListeners() {
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
   html += "function exportTasks() {\n";
-  html += "  showToast('Preparing export...', 'info');\n";
-  html += "  window.location.href = '/api/export';\n";
+  html += "  // Read values from the 'All Tasks' filter bar\n";
+  html += "  const statusEl = document.getElementById('allTasksStatusFilter');\n";
+  html += "  const empEl = document.getElementById('allTasksEmployeeFilter');\n";
+  html += "  const pinEl = document.getElementById('allTasksPincodeFilter');\n";
+  html += "  const searchEl = document.getElementById('allTasksSearch');\n";
+  html += "  const fromEl = document.getElementById('allTasksFromDate');\n";
+  html += "  const toEl = document.getElementById('allTasksToDate');\n";
+  html += "\n";
+  html += "  const params = new URLSearchParams();\n";
+  html += "\n";
+  html += "  if (statusEl && statusEl.value !== 'all') params.append('status', statusEl.value);\n";
+  html += "  if (empEl && empEl.value !== 'all') params.append('employeeId', empEl.value);\n";
+  html += "  if (pinEl && pinEl.value.trim()) params.append('pincode', pinEl.value.trim());\n";
+  html += "  if (searchEl && searchEl.value.trim()) params.append('search', searchEl.value.trim());\n";
+  html += "  if (fromEl && fromEl.value) params.append('startDate', fromEl.value);\n";
+  html += "  if (toEl && toEl.value) params.append('endDate', toEl.value);\n";
+  html += "\n";
+  html += "  showToast('Preparing export with current filters...', 'info');\n";
+  html += "  window.location.href = '/api/export?' + params.toString();\n";
+  html += "\n";
   html += "  setTimeout(function() {\n";
-  html += "    showToast('Export downloaded successfully!', 'success');\n";
-  html += "  }, 1000);\n";
+  html += "    showToast('Download started!', 'success');\n";
+  html += "  }, 2000);\n";
   html += "}\n";
   html += "\n";
   html +=
