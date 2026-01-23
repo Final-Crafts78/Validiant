@@ -286,6 +286,32 @@ app.post("/api/users", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// 6.5 RESET PASSWORD (New Feature)
+app.post("/api/users/:id/reset-password", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId, adminName, newPassword } = req.body;
+    
+    // Generate temp password if not provided
+    const tempPassword = newPassword || Math.random().toString(36).slice(-8).toUpperCase();
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    const { error } = await supabase
+      .from("users")
+      .update({ password: hashedPassword, updated_at: new Date() })
+      .eq("id", id);
+    
+    if (error) throw error;
+    
+    await logActivity(adminId, adminName, "PASSWORD_RESET", null, `Reset password for user ID ${id}`, req);
+    
+    res.json({ success: true, tempPassword });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // 7. EDIT USER (New Feature)
 app.put("/api/users/:id", async (req, res) => {
   try {
@@ -745,9 +771,10 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
       return res.status(400).json({ success: false, message: "Excel file is empty." });
     }
 
-    let successCount = 0;
+        let successCount = 0;
     let errors = [];
-
+    const tasksToInsert = []; // Batch collection
+    
     for (let i = 0; i < rawData.length; i++) {
       const rawRow = rawData[i];
       const rowNumber = i + 2;
@@ -820,8 +847,8 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
           if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
         }
 
-        // 🟢 STEP 6: Insert into Database
-        const { error } = await supabase.from("tasks").insert([{
+        // 🟢 STEP 6: Collect for batch insert
+        tasksToInsert.push({
           title: String(title),
           pincode: pincodeStr,
           client_name: clientName || "Unknown Client",
@@ -833,15 +860,24 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
           status: taskStatus,
           assigned_to: assignedToId,
           assigned_date: assignedDate,
-          created_by: adminId || null
-        }]);
-
-        if (error) throw error;
+                  created_by: adminId || null
+        });
         successCount++;
 
       } catch (err) {
         errors.push(`Row ${rowNumber}: ${err.message}`);
       }
+    }
+
+        // 🔥 BATCH INSERT (All-or-nothing transaction)
+    if (tasksToInsert.length > 0) {
+      console.log(`📦 Batch inserting ${tasksToInsert.length} tasks...`);
+      const { error: batchError } = await supabase.from("tasks").insert(tasksToInsert);
+      if (batchError) {
+        console.error("❌ Batch insert failed:", batchError);
+        throw new Error("Database batch insert failed: " + batchError.message);
+      }
+      console.log(`✅ Batch insert successful!`);
     }
 
     // Cleanup & Response
@@ -2109,6 +2145,45 @@ app.get("/signin", (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SERVICE WORKER - Offline Support
+// ═══════════════════════════════════════════════════════════════════════════
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.send(`
+const CACHE_NAME = 'validiant-v1';
+const ASSETS_TO_CACHE = [
+  '/signin',
+  '/app.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  // Cache-first for static assets
+  if (event.request.url.includes('font-awesome') || event.request.url.includes('.css')) {
+    event.respondWith(
+      caches.match(event.request).then((response) => response || fetch(event.request))
+    );
+  }
+  // Network-first for API (with offline message)
+  else if (event.request.url.includes('/api/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => new Response(
+        JSON.stringify({ success: false, message: '📴 Offline - Changes will sync when online' }),
+        { headers: { 'Content-Type': 'application/json' } }
+      ))
+    );
+  }
+});
+  `);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FRONTEND - MAIN DASHBOARD APPLICATION (/app.js route)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2333,7 +2408,11 @@ app.get("/app.js", (req, res) => {
   html +=
     "@media (max-width: 900px) { .container { border-radius: 0; box-shadow: none; border-left: none; border-right: none; } .header { padding: 12px 12px 10px 12px; } .menu { padding: 8px 10px; } .content { padding: 12px 10px 16px 10px; } }";
   html +=
-    "@media (max-width: 640px) { .user-info { gap: 8px; } .user-chip span { max-width: 120px; } .menu { justify-content: flex-start; overflow-x: auto; } .menu::-webkit-scrollbar { height: 4px; } .menu::-webkit-scrollbar-thumb { background: rgba(55,65,81,0.9); border-radius: 999px; } }";
+    "@media (max-width: 640px) { .user-info { gap: 8px; } .user-chip span { max-width: 120px; } .menu { justify-content: flex-start; overflow-x: auto; } .menu::-webkit-scrollbar { height: 4px; } .menu::-webkit-scrollbar-thumb { background: rgba(55,65,81,0.9); border-radius: 999px; } ";
+  html += "/* iOS Touch Optimization */ ";
+  html += ".btn, .map-button, button { min-height: 44px; -webkit-tap-highlight-color: rgba(99, 102, 241, 0.2); touch-action: manipulation; } ";
+  html += ".content, .modal-content, table { -webkit-overflow-scrolling: touch; } ";
+  html += "input, select, textarea { font-size: 16px !important; } }";
 
   // NEW: ultra-smooth mobile layout for Admin > View All Tasks
   html +=
@@ -2585,8 +2664,17 @@ app.get("/app.js", (req, res) => {
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
-  html += "function resetSessionTimeout() {\n";
+    html += "function resetSessionTimeout() {\n";
   html += "  clearTimeout(sessionTimeout);\n";
+  html += "  \n";
+  html += "  // Warning at 13 minutes (2 min before expiry)\n";
+  html += "  setTimeout(function() {\n";
+  html += "    if (!sessionWarningShown) {\n";
+  html += "      showToast('⏰ Your session will expire in 2 minutes. Move your mouse to stay logged in.', 'warning');\n";
+  html += "      sessionWarningShown = true;\n";
+  html += "    }\n";
+  html += "  }, 780000); // 13 minutes\n";
+  html += "  \n";
   html += "  sessionTimeout = setTimeout(function() {\n";
   html += "    showToast('Session expired. Please login again.', 'error');\n";
   html += "    setTimeout(function() {\n";
@@ -2595,10 +2683,12 @@ app.get("/app.js", (req, res) => {
   html += "  }, 900000); // 15 minutes\n";
   html += "}\n";
   html += "\n";
+  html += "let sessionWarningShown = false;\n";
+  html += "\n";
   html += "resetSessionTimeout();\n";
-  html += "document.addEventListener('click', resetSessionTimeout);\n";
-  html += "document.addEventListener('keypress', resetSessionTimeout);\n";
-  html += "document.addEventListener('mousemove', resetSessionTimeout);\n";
+  html += "document.addEventListener('click', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
+  html += "document.addEventListener('keypress', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
+  html += "document.addEventListener('mousemove', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
   html += "\n";
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
@@ -2748,11 +2838,38 @@ app.get("/app.js", (req, res) => {
   html += "      if(btn) btn.innerHTML = '<i class=\"fas fa-save\"></i> Save';\n";
   html += "    }\n";
   html += "  })\n";
-  html += "  .catch(function(err) {\n";
+    html += "  .catch(function(err) {\n";
   html += "    console.error(err);\n";
   html += "    showToast('Error saving map update', 'error');\n";
   html += "    if(btn) btn.innerHTML = '<i class=\"fas fa-save\"></i> Save';\n";
   html += "  });\n";
+  html += "}\n";
+  html += "\n";
+  html += "// Attach change listeners to All Tasks filters\n";
+  html += "function attachAllTasksFilterListeners() {\n";
+  html += "  const statusEl = document.getElementById('allTasksStatusFilter');\n";
+  html += "  if (statusEl) statusEl.addEventListener('change', function() { loadAllTasks(); });\n";
+  html += "  \n";
+  html += "  const empEl = document.getElementById('allTasksEmployeeFilter');\n";
+  html += "  if (empEl) empEl.addEventListener('change', function() { loadAllTasks(); });\n";
+  html += "  \n";
+  html += "  const pinEl = document.getElementById('allTasksPincodeFilter');\n";
+  html += "  if (pinEl) pinEl.addEventListener('input', function() {\n";
+  html += "    const val = this.value.trim();\n";
+  html += "    if (val.length === 0 || val.length === 6) loadAllTasks();\n";
+  html += "  });\n";
+  html += "  \n";
+  html += "  const searchEl = document.getElementById('allTasksSearch');\n";
+  html += "  let searchTimeout;\n";
+  html += "  if (searchEl) searchEl.addEventListener('input', function() {\n";
+  html += "    clearTimeout(searchTimeout);\n";
+  html += "    searchTimeout = setTimeout(function() { loadAllTasks(); }, 500);\n";
+  html += "  });\n";
+  html += "  \n";
+  html += "  const fromDateEl = document.getElementById('allTasksFromDate');\n";
+  html += "  const toDateEl = document.getElementById('allTasksToDate');\n";
+  html += "  if (fromDateEl) fromDateEl.addEventListener('change', function() { loadAllTasks(); });\n";
+  html += "  if (toDateEl) toDateEl.addEventListener('change', function() { loadAllTasks(); });\n";
   html += "}\n";
   html += "\n";
   html += "function showLoading(containerId) {\n";
@@ -4661,6 +4778,74 @@ function attachAllTasksFilterListeners() {
   html +=
     "      html += '<button class=\"btn btn-danger btn-sm\" onclick=\\'deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')\\'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
   html += "      html += '</td>';\n";
+  // Password Reset Modal Function
+  html += "\n";
+  html += "function openResetPasswordModal(empId, empEmail) {\n";
+  html += "  const modal = document.createElement('div');\n";
+  html += "  modal.className = 'modal show';\n";
+  html += "  modal.setAttribute('data-type', 'reset-password');\n";
+  html += "  \n";
+  html += "  let modalHtml = '<div class=\"modal-content\">';\n";
+  html += "  modalHtml += '<h2><i class=\"fas fa-key\"></i> Reset Password</h2>';\n";
+  html += "  modalHtml += '<p style=\"color: #9ca3af; margin-bottom: 16px;\">Reset password for: <strong>' + escapeHtml(empEmail) + '</strong></p>';\n";
+  html += "  \n";
+  html += "  modalHtml += '<div class=\"form-group\">';\n";
+  html += "  modalHtml += '<label for=\"newPassword\"><i class=\"fas fa-lock\"></i> New Password (leave blank for auto-generate)</label>';\n";
+  html += "  modalHtml += '<input type=\"text\" id=\"newPassword\" class=\"search-box\" placeholder=\"Auto-generate if empty\" style=\"width: 100%;\">';\n";
+  html += "  modalHtml += '</div>';\n";
+  html += "  \n";
+  html += "  modalHtml += '<div style=\"display: flex; gap: 12px; margin-top: 20px;\">';\n";
+  html += "  modalHtml += '<button class=\"btn btn-primary\" onclick=\"submitPasswordReset(' + empId + ')\"><i class=\"fas fa-check\"></i> Reset Password</button>';\n";
+  html += "  modalHtml += '<button class=\"btn btn-secondary\" onclick=\"closeResetPasswordModal()\"><i class=\"fas fa-times\"></i> Cancel</button>';\n";
+  html += "  modalHtml += '</div>';\n";
+  html += "  modalHtml += '</div>';\n";
+  html += "  \n";
+  html += "  modal.innerHTML = modalHtml;\n";
+  html += "  document.body.appendChild(modal);\n";
+  html += "}\n";
+  html += "\n";
+  html += "function closeResetPasswordModal() {\n";
+  html += "  const modal = document.querySelector('.modal[data-type=\"reset-password\"]');\n";
+  html += "  if (modal) modal.remove();\n";
+  html += "}\n";
+  html += "\n";
+  html += "function submitPasswordReset(empId) {\n";
+  html += "  const newPassword = document.getElementById('newPassword').value.trim();\n";
+  html += "  const btn = event.target;\n";
+  html += "  btn.disabled = true;\n";
+  html += "  btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Resetting...';\n";
+  html += "  \n";
+  html += "  fetch('/api/users/' + empId + '/reset-password', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: { 'Content-Type': 'application/json' },\n";
+  html += "    body: JSON.stringify({\n";
+  html += "      adminId: currentUser.id,\n";
+  html += "      adminName: currentUser.name,\n";
+  html += "      newPassword: newPassword || null\n";
+  html += "    })\n";
+  html += "  })\n";
+  html += "  .then(function(res) { return res.json(); })\n";
+  html += "  .then(function(data) {\n";
+  html += "    if (data.success) {\n";
+  html += "      showToast('Password reset! New password: ' + data.tempPassword, 'success');\n";
+  html += "      closeResetPasswordModal();\n";
+  html += "      \n";
+  html += "      // Show password in alert for admin to share with employee\n";
+  html += "      alert('✅ Password Reset Successful!\\n\\nNew temporary password:\\n' + data.tempPassword + '\\n\\nPlease share this with the employee securely.');\n";
+  html += "    } else {\n";
+  html += "      showToast('Failed: ' + data.message, 'error');\n";
+  html += "      btn.disabled = false;\n";
+  html += "      btn.innerHTML = '<i class=\"fas fa-check\"></i> Reset Password';\n";
+  html += "    }\n";
+  html += "  })\n";
+  html += "  .catch(function(err) {\n";
+  html += "    console.error(err);\n";
+  html += "    showToast('Connection error', 'error');\n";
+  html += "    btn.disabled = false;\n";
+  html += "    btn.innerHTML = '<i class=\"fas fa-check\"></i> Reset Password';\n";
+  html += "  });\n";
+  html += "}\n";
+  html += "\n";
   html += "          html += '</tr>';\n";
   html += "        });\n";
   html += "        \n";
@@ -5259,13 +5444,30 @@ function attachAllTasksFilterListeners() {
   html += "    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Updating...';\n";
   html += "  }\n";
   html += "  \n";
-  html += "  fetch('/api/tasks/' + taskId + '/status', { \n"; // Note: Ensure your backend route matches this, or use the PUT /api/tasks/:id route you have
+  html += "  // 📍 Get GPS location if completing task\n";
+  html += "  if (newStatus === 'Completed' && navigator.geolocation) {\n";
+  html += "    navigator.geolocation.getCurrentPosition(function(position) {\n";
+  html += "      sendTaskUpdate(taskId, {\n";
+  html += "        status: newStatus,\n";
+  html += "        userId: currentUser.id,\n";
+  html += "        userName: currentUser.name,\n";
+  html += "        completedLat: position.coords.latitude,\n";
+  html += "        completedLng: position.coords.longitude\n";
+  html += "      }, btn, fromPanel);\n";
+  html += "    }, function(error) {\n";
+  html += "      console.warn('📍 Location unavailable:', error.message);\n";
+  html += "      sendTaskUpdate(taskId, { status: newStatus, userId: currentUser.id, userName: currentUser.name }, btn, fromPanel);\n";
+  html += "    }, { enableHighAccuracy: true, timeout: 5000 });\n";
+  html += "  } else {\n";
+  html += "    sendTaskUpdate(taskId, { status: newStatus, userId: currentUser.id, userName: currentUser.name }, btn, fromPanel);\n";
+  html += "  }\n";
+  html += "}\n";
+  html += "\n";
+  html += "function sendTaskUpdate(taskId, updateData, btn, fromPanel) {\n";
+  html += "  fetch('/api/tasks/' + taskId + '/status', {\n";
   html += "    method: 'PUT',\n";
   html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify({\n";
-  html += "      status: newStatus,\n";
-  html += "      userId: currentUser.id,\n";
-  html += "      userName: currentUser.name\n";
+  html += "    body: JSON.stringify(updateData)\n";
   html += "    })\n";
   html += "  })\n";
   html += "  .then(function(res) { return res.json(); })\n";
@@ -5491,6 +5693,16 @@ function attachAllTasksFilterListeners() {
   html += "\n";
   html += "// Initialize dashboard\n";
   html += "initMenu();\n";
+  html += "\n";
+  html += "\n";
+  html += "// 🔌 Service Worker Registration for Offline Support\n";
+  html += "if ('serviceWorker' in navigator) {\n";
+  html += "  window.addEventListener('load', function() {\n";
+  html += "    navigator.serviceWorker.register('/sw.js')\n";
+  html += "      .then(function(reg) { console.log('✅ Service Worker registered'); })\n";
+  html += "      .catch(function(err) { console.warn('⚠️ SW registration failed:', err); });\n";
+  html += "  });\n";
+  html += "}\n";
   html += "\n";
   html += "</script>";
   html += '<script src="/kyc_service.js"></script>';
