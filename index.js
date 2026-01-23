@@ -4970,7 +4970,13 @@ function attachAllTasksFilterListeners() {
   html += "      html += '  </div>';\n";
   html += "      html += '  <div style=\"margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;\">';\n";
   html += "      html += '    <span><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'N/A') + '</span>';\n";
-  html += "      html += '    <span style=\"color:#60a5fa\">Tap for details <i class=\"fas fa-chevron-right\" style=\"font-size:10px\"></i></span>';\n";
+  html += "      html += '    <div style=\"display:flex; gap:10px; align-items:center;\">';\n";
+  html += "      if (task.mapurl || task.map_url || task.mapUrl) {\n";
+  html += "         // Stop propagation prevents the panel from opening when clicking the map icon\n";
+  html += "         html += ' <a href=\"' + (task.mapurl || task.map_url || task.mapUrl) + '\" target=\"_blank\" onclick=\"event.stopPropagation()\" style=\"color:#38bdf8; font-size:16px;\"><i class=\"fas fa-location-arrow\"></i></a>';\n";
+  html += "      }\n";
+  html += "      html += '    <span style=\"color:#60a5fa\">Tap for details <i class=\"fas fa-chevron-right\" style=\"font-size:10px\"></i></span>';\n";    
+  html += "      html += '    </div>';\n";
   html += "      html += '  </div>';\n";
   html += "      html += '</div>';\n";
   html += "    });\n";
@@ -5224,31 +5230,36 @@ function attachAllTasksFilterListeners() {
     "  if (searchBox) searchBox.placeholder = 'Sorted by Pincode (Ascending)';\n";
   html += "}\n";
   html += "\n";
-  html += "function updateTaskStatus(taskId) {\n";
-  html +=
-    "  const newStatus = document.getElementById('status-' + taskId).value;\n";
-  html +=
-    "  const btn = document.querySelector('#status-' + taskId).nextElementSibling;\n";
+  html += "function updateTaskStatus(taskId, fromPanel) {\n";
+  html += "  // 🟢 FIX: Check which dropdown to read from (Panel vs List)\n";
+  html += "  var selectId = fromPanel ? 'panel-status-' + taskId : 'status-' + taskId;\n";
+  html += "  var selectEl = document.getElementById(selectId);\n";
+  html += "  \n";
+  html += "  if (!selectEl) {\n";
+  html += "    showToast('Error: Status dropdown not found', 'error');\n";
+  html += "    return;\n";
+  html += "  }\n";
+  html += "  \n";
+  html += "  const newStatus = selectEl.value;\n";
+  html += "  const btn = selectEl.nextElementSibling;\n"; // The button next to the select
+  html += "  \n";
   html += "  // FEATURE 1 PATCH: Prompt confirmation before status update\n";
   html += "  if (newStatus === 'Pending') {\n";
-  html +=
-    "    if (!confirm('Task status is still Pending! Please select the correct status when your work is done. Continue anyway?')) {\n";
-  html += "      btn.disabled = false;\n";
-  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "    if (!confirm('Task status is still Pending! Please select the correct status when your work is done. Continue anyway?')) {\n";
   html += "      return;\n";
   html += "    }\n";
   html += "  } else {\n";
-  html +=
-    "    if (!confirm('Are you sure you want to change status to \"' + newStatus + '\"?')) {\n";
-  html += "      btn.disabled = false;\n";
-  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "    if (!confirm('Are you sure you want to change status to \"' + newStatus + '\"?')) {\n";
   html += "      return;\n";
   html += "    }\n";
   html += "  }\n";
-  html += "  btn.disabled = true;\n";
-  html +=
-    "  btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Updating...';\n";
-  html += "  fetch('/api/tasks/' + taskId, {\n";
+  html += "  \n";
+  html += "  if(btn) {\n";
+  html += "    btn.disabled = true;\n";
+  html += "    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Updating...';\n";
+  html += "  }\n";
+  html += "  \n";
+  html += "  fetch('/api/tasks/' + taskId + '/status', { \n"; // Note: Ensure your backend route matches this, or use the PUT /api/tasks/:id route you have
   html += "    method: 'PUT',\n";
   html += "    headers: { 'Content-Type': 'application/json' },\n";
   html += "    body: JSON.stringify({\n";
@@ -5261,21 +5272,25 @@ function attachAllTasksFilterListeners() {
   html += "  .then(function(data) {\n";
   html += "    if (data.success) {\n";
   html += "      showToast('Status updated to ' + newStatus, 'success');\n";
+  html += "      if (fromPanel) closeTaskPanel();\n";
   html += "      loadTodayTasks();\n";
   html += "    } else {\n";
   html += "      showToast('Error updating status', 'error');\n";
-  html += "      btn.disabled = false;\n";
-  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "      if(btn) {\n";
+  html += "        btn.disabled = false;\n";
+  html += "        btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "      }\n";
   html += "    }\n";
   html += "  })\n";
   html += "  .catch(function(err) {\n";
   html += "    console.error('Error updating status:', err);\n";
   html += "    showToast('Connection error', 'error');\n";
-  html += "    btn.disabled = false;\n";
-  html += "    btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "    if(btn) {\n";
+  html += "      btn.disabled = false;\n";
+  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "    }\n";
   html += "  });\n";
   html += "}\n";
-  html += "\n";
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "// EMPLOYEE FUNCTIONS - TASK HISTORY (Feature #7)\n";
