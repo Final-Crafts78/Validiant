@@ -2413,7 +2413,19 @@ app.get("/app.js", (req, res) => {
       min-height: 44px;\
     }\
   }";
-
+  html += "    #taskDetailsPanel {\n";
+  html += "      position: fixed; bottom: 0; left: 0; right: 0; background: #fff; z-index: 2000;\n";
+  html += "      border-radius: 20px 20px 0 0; box-shadow: 0 -10px 40px rgba(0,0,0,0.3);\n";
+  html += "      transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);\n";
+  html += "      max-height: 85vh; overflow-y: auto; padding-bottom: 30px;\n";
+  html += "    }\n";
+  html += "    #taskDetailsPanel.active { transform: translateY(0); }\n";
+  html += "    #panelOverlay {\n";
+  html += "      position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6);\n";
+  html += "      z-index: 1999; opacity: 0; pointer-events: none; transition: opacity 0.3s;\n";
+  html += "    }\n";
+  html += "    #panelOverlay.active { opacity: 1; pointer-events: auto; }\n";
+  html += "    .panel-handle-bar { width: 50px; height: 5px; background: #e5e7eb; border-radius: 10px; margin: 15px auto; }\n";
   html += "</style>";
   html += "</head>";
   html += "<body>";
@@ -2448,7 +2460,11 @@ app.get("/app.js", (req, res) => {
   html += "</div>";
 
   html += "</div>"; // End container
-
+  html += '<div id="panelOverlay" onclick="closeTaskPanel()"></div>';
+  html += '<div id="taskDetailsPanel">';
+  html += '  <div class="panel-handle-bar" onclick="closeTaskPanel()"></div>';
+  html += '  <div id="panelContent" style="padding: 0 20px 20px 20px; color: #333;"></div>';
+  html += '</div>';
   // Now add the JavaScript (using string concatenation to avoid backtick issues)
   html += "<script>";
 
@@ -4847,6 +4863,54 @@ function attachAllTasksFilterListeners() {
   html += "  loadTodayTasks();\n";
   html += "}\n";
   html += "\n";
+  html += "function openTaskPanel(task) {\n";
+  html += "  var panel = document.getElementById('taskDetailsPanel');\n";
+  html += "  var overlay = document.getElementById('panelOverlay');\n";
+  html += "  var content = document.getElementById('panelContent');\n";
+  html += "  \n";
+  html += "  // Safe map URL check\n";
+  html += "  var mapLink = task.mapurl || task.map_url || task.mapUrl || '';\n";
+  html += "  \n";
+  html += "  var html = '';\n";
+  html += "  html += '<h2 style=\"margin-top:0; font-size:18px; color:#111827\">' + escapeHtml(task.title) + '</h2>';\n";
+  html += "  html += '<p style=\"color:#6b7280; font-size:13px; margin-bottom:15px\">' + escapeHtml(task.clientName || 'Unknown Client') + '</p>';\n";
+  html += "  \n";
+  html += "  html += '<div style=\"display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px\">';\n";
+  html += "  html += '  <div style=\"background:#f3f4f6; padding:12px; border-radius:12px\"><strong>Pincode</strong><br>' + escapeHtml(task.pincode) + '</div>';\n";
+  html += "  html += '  <div style=\"background:#f3f4f6; padding:12px; border-radius:12px\"><strong>Status</strong><br>' + escapeHtml(task.status) + '</div>';\n";
+  html += "  html += '</div>';\n";
+  html += "  \n";
+  html += "  if (mapLink) {\n";
+  html += "    html += '<a href=\"' + mapLink + '\" target=\"_blank\" class=\"btn btn-primary\" style=\"display:flex; width:100%; justify-content:center; padding:14px; margin-bottom:12px; font-size:14px\"><i class=\"fas fa-location-arrow\"></i> Navigate to Location</a>';\n";
+  html += "  }\n";
+  html += "  \n";
+  html += "  html += '<div style=\"background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:15px; margin-top:15px\">';\n";
+  html += "  html += '  <label style=\"font-size:12px; color:#6b7280; display:block; margin-bottom:8px\">UPDATE STATUS</label>';\n";
+  html += "  html += '  <div style=\"display:flex; gap:10px\">';\n";
+  html += "  html += '    <select id=\"panel-status-' + task.id + '\" style=\"flex:1; padding:10px; border-radius:8px; border:1px solid #d1d5db\">';\n";
+  html += "  html += '      <option value=\"Pending\">Pending</option>';\n";
+  html += "  html += '      <option value=\"Completed\">Completed</option>';\n";
+  html += "  html += '      <option value=\"Verified\">Verified</option>';\n";
+  html += "  html += '      <option value=\"Left Job\">Left Job</option>';\n";
+  html += "  html += '      <option value=\"Not Picking\">Not Picking</option>';\n";
+  html += "  html += '    </select>';\n";
+  html += "  html += '    <button class=\"btn btn-primary\" onclick=\"updateTaskStatus(' + task.id + ', true)\">Update</button>';\n";
+  html += "  html += '  </div>';\n";
+  html += "  html += '</div>';\n";
+  html += "  \n";
+  html += "  content.innerHTML = html;\n";
+  html += "  \n";
+  html += "  // Set current status in dropdown\n";
+  html += "  setTimeout(function() { document.getElementById('panel-status-' + task.id).value = task.status; }, 50);\n";
+  html += "  \n";
+  html += "  panel.classList.add('active');\n";
+  html += "  overlay.classList.add('active');\n";
+  html += "}\n";
+  html += "\n";
+  html += "function closeTaskPanel() {\n";
+  html += "  document.getElementById('taskDetailsPanel').classList.remove('active');\n";
+  html += "  document.getElementById('panelOverlay').classList.remove('active');\n";
+  html += "}\n";
   html += "function loadTodayTasks(searchTerm) {\n";
   html += "  // --- FIX 2: PRIVACY FIX ---\n";
   html += "  // Changed userId= to employeeId= so backend filters correctly\n";
@@ -4896,86 +4960,20 @@ function attachAllTasksFilterListeners() {
   html += "    html += '<div class=\"grid\">';\n";
   html += "    \n";
   html += "    tasks.forEach(function(task) {\n";
-  html +=
-    "      const statusClass = 'status-' + task.status.toLowerCase().replace(/ /g, '-');\n";
+  html += "      const statusClass = 'status-' + task.status.toLowerCase().replace(/ /g, '-');\n";
   html += "      \n";
-  html += "      html += '<div class=\"task-card\">';\n";
-  html +=
-    "      html += '<h3><i class=\"fas fa-clipboard-list\"></i> ' + escapeHtml(task.title) + '</h3>';\n";
-  html += " if (task.clientName) {\n";
-  html +=
-    " html += '<p><strong>Client:</strong> ' + escapeHtml(task.clientName) + '</p>';\n";
-  html += " }\n";
-  html += "      \n";
-  html += "      html += '<div class=\"pincode-highlight\">';\n";
-  html +=
-    "      html += '<i class=\"fas fa-map-pin\"></i> Pincode: ' + escapeHtml(task.pincode || 'N/A');\n";
-  html += "      html += '</div>';\n";
-  html += "      \n";
-  html += "      if (task.distance !== undefined) {\n";
-  html += "        html += '<div class=\"distance-indicator\">';\n";
-  html +=
-    "        html += '<i class=\"fas fa-route\"></i> Distance: ' + task.distance.toFixed(2) + ' km away';\n";
-  html += "        html += '</div>';\n";
-  html += "      }\n";
-  html += "      \n";
-  html +=
-    "      html += '<span class=\"status-badge ' + statusClass + '\">';\n";
-  html +=
-    "      html += '<i class=\"fas fa-circle\"></i> ' + escapeHtml(task.status);\n";
-  html += "      html += '</span>';\n";
-  html += "      \n";
-  html += "      if (task.notes) {\n";
-  html +=
-    "        html += '<p style=\"margin-top: 13px; color: #e5e7eb; font-size: 13px;\"><i class=\"fas fa-sticky-note\"></i> ' + escapeHtml(task.notes) + '</p>';\n";
-  html += "      }\n";
-  html += "      \n";
-  html += "      // Feature #8: MapURL visibility (CRITICAL)\n";
-  html += '        var taskMapUrl = task.mapurl || task.map_url || task.mapUrl;\n';
-  html += '        if (taskMapUrl) {\n';
-  html += '        html += \'<a href="\' + escapeHtml(taskMapUrl) + \'" target="_blank" rel="noopener noreferrer" class="map-button">\';\n';
-  html +=
-    "        html += '<i class=\"fas fa-location-arrow\"></i> Open Map';\n";
-  html += "        html += '</a>';\n";
-  html += "      } else {\n";
-  html +=
-    '        html += \'<div class="no-map"><i class="fas fa-map-marker-alt"></i> No map available for this task</div>\';\n';
-  html += "      }\n";
-  html += "      \n";
-  html += "      html += '<div class=\"action-buttons\">';\n";
-  html +=
-    "      html += '<select id=\"status-' + task.id + '\" style=\"flex: 2;\">';\n";
-  html +=
-    "      html += '<option value=\"Pending\"' + (task.status === 'Pending' ? ' selected' : '') + '>Select updated status</option>'; \n";
-  html +=
-    "      html += '<option value=\"Completed\"' + (task.status === 'Completed' ? ' selected' : '') + '>Completed</option>'; \n";
-  html +=
-    "      html += '<option value=\"Verified\"' + (task.status === 'Verified' ? ' selected' : '') + '>Verified</option>'; \n";
-  html +=
-    "      html += '<option value=\"Left Job\"' + (task.status === 'Left Job' ? ' selected' : '') + '>Left Job</option>'; \n";
-  html +=
-    "      html += '<option value=\"Not Sharing Info\"' + (task.status === 'Not Sharing Info' ? ' selected' : '') + '>Not Sharing Info</option>'; \n";
-  html +=
-    "      html += '<option value=\"Not Picking\"' + (task.status === 'Not Picking' ? ' selected' : '') + '>Not Picking</option>'; \n";
-  html +=
-    "      html += '<option value=\"Switch Off\"' + (task.status === 'Switch Off' ? ' selected' : '') + '>Switch Off</option>'; \n";
-  html +=
-    "      html += '<option value=\"Incorrect Number\"' + (task.status === 'Incorrect Number' ? ' selected' : '') + '>Incorrect Number</option>'; \n";
-  html +=
-    "      html += '<option value=\"Wrong Address\"' + (task.status === 'Wrong Address' ? ' selected' : '') + '>Wrong Address</option>'; \n";
-  html += "      html += '</select>'; \n";
-  html +=
-    '      html += \'<button class="btn btn-primary" onclick="updateTaskStatus(\' + task.id + \')" style="flex: 1;">\';\n';
-  html += "      html += '<i class=\"fas fa-save\"></i> Update';\n";
-  html += "      html += '</button>'; \n";
-  html += "      html += '</div>'; \n";
-  html += "      \n";
+  html += "      // 🟢 COMPACT CARD (Click to Open Panel)\n";
+  html += "      html += '<div class=\"task-card\" onclick=\\'openTaskPanel(' + JSON.stringify(task).replace(/'/g, \"&apos;\") + ')\\'>';\n";
+  html += "      html += '  <div style=\"display:flex; justify-content:space-between; align-items:center;\">';\n";
+  html += "      html += '    <h3 style=\"margin:0; font-size:15px; color:#e5e7eb;\"><i class=\"fas fa-clipboard-list\" style=\"color:#818cf8\"></i> ' + escapeHtml(task.title) + '</h3>';\n";
+  html += "      html += '    <span class=\"status-badge ' + statusClass + '\" style=\"font-size:10px\">' + escapeHtml(task.status) + '</span>';\n";
+  html += "      html += '  </div>';\n";
+  html += "      html += '  <div style=\"margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;\">';\n";
+  html += "      html += '    <span><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'N/A') + '</span>';\n";
+  html += "      html += '    <span style=\"color:#60a5fa\">Tap for details <i class=\"fas fa-chevron-right\" style=\"font-size:10px\"></i></span>';\n";
+  html += "      html += '  </div>';\n";
   html += "      html += '</div>';\n";
   html += "    });\n";
-  html += "    \n";
-  html += "    html += '</div>';\n";
-  html += "  }\n";
-  html += "  \n";
   html += "  document.getElementById('todayTasksList').innerHTML = html;\n";
   html += "}\n";
   html += "\n";
