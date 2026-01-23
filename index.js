@@ -2,139 +2,6 @@
  * ═══════════════════════════════════════════════════════════════════════════
  * VALIDIANT PRODUCTIVITY TRACKER - COMPLETE PRODUCTION EDITION v2.0
  * ═══════════════════════════════════════════════════════════════════════════
- *
- * COMPREHENSIVE FEATURE IMPLEMENTATION:
- *
- * ✅ Feature #1: Database Configuration with Auto-Recovery
- *    - Persistent storage at ./data/database.sqlite
- *    - Automatic corruption detection and rebuild
- *    - Detailed error logging with field-level validation
- *    - Proper relationships and constraints
- *
- * ✅ Feature #2: Keep-Alive System
- *    - Self-ping every 3 minutes to prevent Replit sleep
- *    - Health endpoint with uptime tracking
- *    - Ping count logging
- *    - Test endpoint for manual checks
- *
- * ✅ Feature #3: Bulk Task Upload - UNASSIGNED Workflow
- *    - POST /api/tasks/bulk-upload with multer
- *    - Accepts .xlsx and .xls files
- *    - NO employee required - creates tasks as Unassigned
- *    - Expected columns: CaseID/Title, Pincode (required), MapURL, Lat, Lng, Notes (optional)
- *    - Returns success/error count with detailed error messages
- *    - Auto-deletes uploaded file after processing
- *    - Frontend: Bulk Upload button, modal with instructions, progress bar
- *    - Template download (CSV without EmployeeEmail)
- *
- * ✅ Feature #4: Unassigned Tasks Management (Task Pool)
- *    - Dedicated admin menu item "Unassigned Tasks"
- *    - GET /api/tasks/unassigned - Returns all unassigned tasks
- *    - POST /api/tasks/:taskId/assign - Assign to employee
- *    - POST /api/tasks/:taskId/unassign - Remove assignment
- *    - PUT /api/tasks/:taskId/reassign - Change employee
- *    - Frontend: Grid view with pincode, MapURL, bulk operations
- *    - Search by Case ID or Pincode
- *    - Bulk selection with checkboxes
- *
- * ✅ Feature #5: Task Reassignment & Deassignment (Enhanced)
- *    - Three action buttons in View All Tasks: Reassign, Unassign, Delete
- *    - Reassign modal with employee dropdown
- *    - Unassign confirmation - returns to pool
- *    - Smooth workflow without breaking functionality
- *
- * ✅ Feature #6: Pincode Column & Search (Prominently Displayed)
- *    - Pincode in ALL task views (admin and employee)
- *    - Admin: View All Tasks, Unassigned Tasks, Assign Task form
- *    - Employee: Today's Tasks cards, Task History table
- *    - Real-time search/filter by pincode everywhere
- *    - Validation: 6 numeric digits
- *    - Shows count: "Showing X tasks matching pincode: XXXXXX"
- *
- * ✅ Feature #7: Employee Search Functionality (Enhanced)
- *    - Today's Tasks: Real-time search across Case ID, Pincode, Status, Notes
- *    - Task History: Search by Case ID, Date, Pincode, Status
- *    - Clear button to reset search
- *    - "No tasks found matching 'X'" message
- *    - Case-insensitive search
- *
- * ✅ Feature #8: MapURL Visibility for Employees (CRITICAL)
- *    - MapURL included in ALL employee API responses
- *    - Prominent "Open Location Map" button with map icon
- *    - Blue/green button, clearly visible in task cards
- *    - Opens in new tab (target="_blank", rel="noopener noreferrer")
- *    - Task History: Clickable "View Map" link
- *    - Visual indicator: "No map available" if missing
- *    - Admin Assign Task form: "Google Maps URL" field with validation
- *
- * ✅ Feature #9: Reassign Task Bug Fix
- *    - Fixed: empResponse.json() instead of response.json()
- *    - Proper employee list fetching in reassign modal
- *
- * ✅ Feature #10: Logout Function
- *    - Clears localStorage and sessionStorage
- *    - Confirmation dialog: "Are you sure you want to logout?"
- *    - Success toast before redirect
- *    - Redirects to login page
- *
- * ✅ Feature #11: Error Handling & Logging
- *    - Process-level handlers for unhandledRejection and uncaughtException
- *    - Detailed login error logging
- *    - Database sync error logging with field details
- *    - Try-catch blocks in all async routes
- *    - User-friendly error messages in frontend
- *
- * ✅ Feature #12: Required NPM Packages
- *    - express, body-parser, bcryptjs, sequelize, sqlite3, xlsx, multer
- *
- * ✅ Feature #13: Admin Account
- *    - Email: admin@validiant.com
- *    - Password: Admin@123 (bcrypt hashed)
- *    - Auto-created on server start
- *    - Password migration from plaintext to bcrypt
- *
- * ✅ Feature #14: File Structure
- *    - uploads/ directory for multer
- *    - data/ directory for database
- *    - database.sqlite with WAL mode
- *
- * ✅ Feature #15: Existing Features PRESERVED
- *    - Task assignment with GPS coordinates
- *    - Map URL extraction (auto-detect lat/lng)
- *    - Task status updates (Pending, Completed, Verified, etc.)
- *    - Pincode-based sorting
- *    - GPS location-based sorting (nearest first)
- *    - Employee management
- *    - CSV export with GPS data
- *    - Session management (15-minute timeout)
- *    - Professional Trello-inspired UI (gradients, animations, shadows)
- *    - bcrypt password encryption
- *    - Date/time handling
- *
- * ADDITIONAL ENHANCEMENTS:
- * ✅ Task Status Workflow Logic - Prevents invalid status transitions
- * ✅ Loading States & User Feedback - Spinners, progress bars, toast notifications
- * ✅ Date & Time Tracking - Full timestamp trail (created, assigned, completed, verified)
- * ✅ Advanced Filters & Sorting - Multi-criteria filtering in all views
- * ✅ Bulk Actions & Task Selection - Checkbox system, bulk assign/delete/unassign
- * ✅ Activity Log & Audit Trail - Track every action with timestamps
- * ✅ Keyboard Shortcuts - Power user features for common actions
- *
- * DESIGN PRESERVATION:
- * - Trello-inspired gradient backgrounds (blue-purple for admin, varied for employee)
- * - Card-based layouts with rounded corners and shadows
- * - Smooth animations and transitions
- * - Color scheme: Blue (#3B82F6), Purple (#8B5CF6), Green (#10B981), Indigo (#6366F1)
- * - Font Awesome icons throughout
- * - Responsive grid layouts
- * - Toast notifications (colorful, animated, top-right)
- * - Modal designs (centered, backdrop blur, rounded-2xl)
- * - Button styles with gradients and hover effects
- * - Sort by Nearest Location (GPS-based) - PRESERVED
- * - Sort by Pincode Proximity - PRESERVED
- *
- * ═══════════════════════════════════════════════════════════════════════════
- */
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPORTS & DEPENDENCIES
@@ -150,19 +17,6 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DIRECTORY SETUP - Ensure required directories exist
-// ═══════════════════════════════════════════════════════════════════════════
-
-if (!fs.existsSync("./uploads")) {
-  fs.mkdirSync("./uploads");
-  console.log("✅ Created uploads/ directory");
-}
-
-if (!fs.existsSync("./data")) {
-  fs.mkdirSync("./data");
-  console.log("✅ Created data/ directory");
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MULTER CONFIGURATION - File upload handling
@@ -677,46 +531,31 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK (Fixed - Handles mapUrl and coordinate extraction)
+// 2. CREATE TASK (Fixed - With Logging)
 app.post("/api/tasks", async (req, res) => {
   try {
     const { 
-      title, 
-      pincode, 
-      address, 
-      mapUrl,        // Add this
-      map_url,       // Alternative naming
-      notes, 
-      createdBy, 
-      assignedTo, 
-      clientName,
-      latitude,      // Manual coordinates
-      longitude 
+      title, pincode, address, mapUrl, map_url, notes, 
+      createdBy, createdByName, // 1. Added createdByName
+      assignedTo, clientName, latitude, longitude 
     } = req.body;
 
-    // Handle map URL from either field name
+    // Handle map URL and Coordinates
     const finalMapUrl = mapUrl || map_url || null;
-    
-    // Use map URL as address if no address provided
     const finalAddress = address || finalMapUrl || null;
-
-    // Extract coordinates from map URL if not manually provided
+    
     let finalLat = latitude;
     let finalLng = longitude;
     
     if (finalMapUrl && (!finalLat || !finalLng)) {
       const coords = extractCoordinates(finalMapUrl);
-      if (coords) {
-        finalLat = coords.latitude;
-        finalLng = coords.longitude;
-      }
+      if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
     }
 
     let initialStatus = "Unassigned";
     let finalAssignee = null;
     let assignedDate = null;
 
-    // Strict check to ensure we only assign if a real ID is provided
     if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
       initialStatus = "Pending";
       finalAssignee = assignedTo;
@@ -726,58 +565,85 @@ app.post("/api/tasks", async (req, res) => {
     const { data, error } = await supabase
       .from("tasks")
       .insert([{
-        title,
-        pincode,
-        address: finalAddress,
-        map_url: finalMapUrl,
-        latitude: finalLat,
-        longitude: finalLng,
-        notes,
-        client_name: clientName,
-        status: initialStatus,
-        assigned_to: finalAssignee,
-        assigned_date: assignedDate,
+        title, pincode, address: finalAddress, map_url: finalMapUrl,
+        latitude: finalLat, longitude: finalLng, notes,
+        client_name: clientName, status: initialStatus,
+        assigned_to: finalAssignee, assigned_date: assignedDate,
         created_by: createdBy,
       }])
       .select();
 
     if (error) throw error;
 
-    console.log(`✅ Task created: ${title} | Map: ${finalMapUrl ? 'Yes' : 'No'} | Assigned: ${finalAssignee ? 'Yes' : 'No'}`);
+    // 2. LOG ACTIVITY
+    const actionDetails = finalAssignee ? `Created & Assigned to ID ${finalAssignee}` : "Created in Unassigned Pool";
+    await logActivity(createdBy, createdByName || "Admin", "TASK_CREATED", data[0].id, actionDetails, req);
 
+    console.log(`✅ Task created: ${title}`);
     res.json({ success: true, task: data[0] });
+
   } catch (err) {
     console.error("❌ Create Task Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 3. UPDATE TASK
+// 3. UPDATE TASK (Fixed - With Logging)
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, pincode, address, notes, status, assignedTo, clientName } = req.body;
+    const { 
+      title, pincode, address, notes, status, assignedTo, clientName, mapUrl,
+      userId, userName // 1. Capture user info from frontend
+    } = req.body;
 
     const updateData = { updated_at: new Date() };
+    let actionType = "TASK_UPDATED";
+    let actionDetails = "Task details updated";
+
+    // Build update object and determine log action
     if (title) updateData.title = title;
     if (pincode) updateData.pincode = pincode;
     if (address) updateData.address = address;
     if (clientName) updateData.client_name = clientName;
     if (notes) updateData.notes = notes;
-    if (status) updateData.status = status;
+    
+    if (mapUrl) {
+      updateData.map_url = mapUrl;
+      actionType = "MAP_UPDATED";
+      actionDetails = "Map URL added/changed";
+    }
+
+    if (status) {
+      updateData.status = status;
+      actionType = `TASK_${status.toUpperCase().replace(/\s+/g, '_')}`; // e.g., TASK_COMPLETED
+      actionDetails = `Status changed to ${status}`;
+      
+      if (status === 'Completed') updateData.completed_at = new Date();
+      if (status === 'Verified') updateData.verified_at = new Date();
+    }
     
     if (assignedTo) {
         updateData.assigned_to = assignedTo;
         if (status === "Unassigned") updateData.status = "Pending";
+        actionType = "TASK_REASSIGNED";
     }
 
     const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
     if (error) throw error;
+
+    // 2. LOG ACTIVITY
+    if (userId) {
+      await logActivity(userId, userName || "Unknown", actionType, id, actionDetails, req);
+    }
+
     res.json({ success: true, message: "Updated" });
   } catch (err) {
+    console.error("Update Error:", err);
     res.status(500).json({ success: false, message: "Failed" });
   }
 });
+
 // 2. GET UNASSIGNED TASKS
 app.get("/api/tasks/unassigned", async (req, res) => {
   try {
@@ -794,18 +660,21 @@ app.get("/api/tasks/unassigned", async (req, res) => {
   }
 });
 
-// 3. DELETE TASK (New Route - Fixes "Error deleting task")
+// 3. DELETE TASK (Fixed - With Logging)
 app.delete("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const { adminId, adminName } = req.query; // 1. Get User Info from Query Params
     
     // Delete from Supabase
-    const { error } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
 
     if (error) throw error;
+
+    // 2. LOG ACTIVITY
+    if (adminId) {
+      await logActivity(adminId, adminName || "Admin", "TASK_DELETED", id, `Task #${id} deleted`, req);
+    }
 
     res.json({ success: true, message: "Task deleted successfully" });
   } catch (err) {
@@ -813,6 +682,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to delete task" });
   }
 });
+
 // 4. KYC REQUESTS (Fixes "Loading KYC data...")
 app.get("/api/kyc/list", async (req, res) => {
   try {
@@ -5002,9 +4872,6 @@ function attachAllTasksFilterListeners() {
   html += "// ENHANCED: Route Optimization (Greedy Nearest Neighbor)\n";
   html +=
     "// Sorts tasks to minimize travel distance from one task to the next\n";
-  // EDIT: Search for "function reapplyDistanceSorting" (approx line 1264)
-  // Replace the ENTIRE function block with this string-wrapped version:
-
   html += "function reapplyDistanceSorting(tasks, userLat, userLng) {\n";
   html += "  if (!userLat || !userLng) return tasks;\n";
   html += "  \n";
