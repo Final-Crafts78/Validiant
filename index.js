@@ -1172,7 +1172,7 @@ app.post("/api/contact", async (req, res) => {
 
     console.log(`✅ Contact form submitted by ${email}`);
 
-    // Send email notification to admin
+// Send email notification to admin
 if (emailTransporter) {
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1192,16 +1192,16 @@ if (emailTransporter) {
   `;
 
   await sendEmail(
-    process.env.EMAIL_USER, // Send to yourself
+    process.env.EMAIL_USER,
     `New Contact Form: ${name} from ${company || 'Direct'}`,
     emailHtml
   );
 }
 
-    res.json({
-      success: true,
-      message: "Thank you! We'll get back to you soon.",
-    });
+res.json({ 
+  success: true, 
+  message: "Thank you! We'll get back to you soon." 
+});
   } catch (err) {
     console.error("❌ Contact form error:", err);
     res.status(500).json({
