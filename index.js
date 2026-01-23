@@ -4102,6 +4102,7 @@ function attachAllTasksFilterListeners() {
   html += "      const finalTasks = applyAllTasksDateFilter(allAdminTasks);\n";
   html += "      updateAllTasksFilterChips();\n";
   html += "      displayAllTasks(finalTasks);\n";
+  html += "    attachAllTasksFilterListeners();
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading tasks:', err);\n";
