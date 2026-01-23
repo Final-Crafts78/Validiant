@@ -2483,7 +2483,7 @@ app.get("/app.js", (req, res) => {
   html += "let allHistoryTasks = [];\n";
   html += "let selectedTaskIds = [];\n";
   html += "let allAdminTasks = [];\n";
-  html += "let allUnassignedTasks = [];
+  html += "let allUnassignedTasks = [];\n";
   html += "let allEmployees = [];\n";
   html += "// Persistent sorting state for Sort by Nearest\n";
   html += "let isNearestSortActive = false;\n";
