@@ -1173,30 +1173,30 @@ app.post("/api/contact", async (req, res) => {
     console.log(`✅ Contact form submitted by ${email}`);
 
     // Send email notification to admin
-    if (emailTransporter) {
-      const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #6366f1;">🔔 New Contact Form Submission</h2>
-          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
-            ${company ? `<p><strong>Company:</strong> ${company}</p>` : ''}
-            <p><strong>Message:</strong></p>
-            <p style="background: white; padding: 15px; border-radius: 4px;">${message}</p>
-          </div>
-          <p style="color: #6b7280; font-size: 14px;">
-            Submitted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-          </p>
-        </div>
-      `;
+if (emailTransporter) {
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #6366f1;">New Contact Form Submission</h2>
+      <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
+        ${company ? `<p><strong>Company:</strong> ${company}</p>` : ''}
+        <p><strong>Message:</strong></p>
+        <p style="background: white; padding: 15px; border-radius: 4px;">${message}</p>
+      </div>
+      <p style="color: #6b7280; font-size: 14px;">
+        Submitted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+      </p>
+    </div>
+  `;
 
-      await sendEmail(
-        process.env.EMAIL_USER, // Send to yourself
-        `🔔 New Contact Form: ${name} from ${company || 'Direct'}`,
-        emailHtml
-      );
-    }
+  await sendEmail(
+    process.env.EMAIL_USER, // Send to yourself
+    `New Contact Form: ${name} from ${company || 'Direct'}`,
+    emailHtml
+  );
+}
 
     res.json({
       success: true,
