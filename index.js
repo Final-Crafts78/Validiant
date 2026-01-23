@@ -286,6 +286,34 @@ app.post("/api/users", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+// 7. EDIT USER (New Feature)
+app.put("/api/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, employeeId, phone, password, adminId, adminName } = req.body;
+
+    const updateData = {
+      name, 
+      email, 
+      employee_id: employeeId, 
+      phone, 
+      updated_at: new Date()
+    };
+
+    // Only hash and update password if a new one is provided
+    if (password && password.trim() !== "") {
+       updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    const { error } = await supabase.from("users").update(updateData).eq("id", id);
+    if (error) throw error;
+
+    await logActivity(adminId, adminName, "USER_UPDATED", null, `Updated Employee: ${name}`, req);
+    res.json({ success: true, message: "Employee updated successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // DELETE EMPLOYEE (WITH ADMIN PASSWORD CHECK)
 app.delete("/api/users/:id", async (req, res) => {
@@ -700,180 +728,139 @@ app.get("/api/kyc/list", async (req, res) => {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. BULK UPLOAD (Excel/CSV Task Import - Supabase Version)
-// ═══════════════════════════════════════════════════════════════════════════
+// 5. BULK UPLOAD TASKS (Merged: Fuzzy Matching + Auto-Assign + Validation)
 app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded. Please select an Excel file.",
-      });
+      return res.status(400).json({ success: false, message: "No file uploaded." });
     }
 
-    console.log("📤 Processing bulk upload:", req.file.originalname);
     const { adminId, adminName } = req.body;
-
-    // Read Excel file
     const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+    const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    if (data.length === 0) {
+    if (rawData.length === 0) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({
-        success: false,
-        message: "Excel file is empty or invalid format.",
-      });
+      return res.status(400).json({ success: false, message: "Excel file is empty." });
     }
 
-    console.log(`📊 Found ${data.length} rows in Excel file`);
-
     let successCount = 0;
-    let errorCount = 0;
-    const errors = [];
+    let errors = [];
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNumber = i + 2; // Excel row number
+    for (let i = 0; i < rawData.length; i++) {
+      const rawRow = rawData[i];
+      const rowNumber = i + 2;
 
       try {
-        // Extract case ID/title
-        const caseId = row.RequestID || row["Request ID"] || row.CaseID || row.Title || row.title || row.caseId;
-        const clientName = row["Individual Name"] || row.IndividualName || row["Client Name"] || row.ClientName || row.clientName || row["client name"] || null;
-        const pincode = row.Pincode || row.pincode || row.PINCODE;
+        // 🟢 STEP 1: Normalize Headers (The New "Fuzzy" Feature)
+        const row = {};
+        Object.keys(rawRow).forEach(key => {
+          const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+          row[cleanKey] = rawRow[key];
+        });
 
-        // Validate required fields
-        if (!caseId) {
-          errors.push(`Row ${rowNumber}: CaseID/Title is required`);
-          errorCount++;
+        // 🟢 STEP 2: Extract Fields using Multiple Variations
+        const title = row.requestid || row.caseid || row.title || row.id || row.trackingid;
+        const pincode = row.pincode || row.pin || row.zip || row.postalcode;
+        const clientName = row.individualname || row.clientname || row.client || row.name;
+        const mapUrl = row.mapurl || row.map || row.link || row.googlemap || row.url;
+        const notes = row.notes || row.note || row.remarks;
+        const address = row.address || row.location;
+        
+        // Employee Fields for Auto-Assign
+        const empIdRaw = row.employeeid || row.empid || row.id;
+        const empEmailRaw = row.employeeemail || row.email || row.mail;
+
+        // 🟢 STEP 3: Strict Validation (From your original code)
+        if (!title) {
+          errors.push(`Row ${rowNumber}: Case ID/Title is missing`);
           continue;
         }
-
         if (!pincode) {
-          errors.push(`Row ${rowNumber}: Pincode is required`);
-          errorCount++;
+          errors.push(`Row ${rowNumber}: Pincode is missing`);
           continue;
         }
-
-        // Validate pincode format
+        
         const pincodeStr = String(pincode).trim();
         if (!/^[0-9]{6}$/.test(pincodeStr)) {
-          errors.push(`Row ${rowNumber}: Pincode must be exactly 6 digits (got: ${pincodeStr})`);
-          errorCount++;
+          errors.push(`Row ${rowNumber}: Invalid Pincode (must be 6 digits)`);
           continue;
         }
 
-        // Check for employee assignment
+        // 🟢 STEP 4: Employee Auto-Assignment Logic (Restored)
         let assignedToId = null;
         let assignedDate = null;
         let taskStatus = "Unassigned";
 
-        const empIdRaw = row.EmployeeID || row.employeeId || row.EMPLOYEEID || row["Employee ID"] || row["Employee Id"] || row["employee id"];
-        const empEmailRaw = row.EmployeeEmail || row.employeeEmail || row.EMPLOYEEEMAIL || row["Employee Email"] || row["employee email"];
-
-        // Try to find employee in Supabase
         if (empIdRaw || empEmailRaw) {
-          let employeeQuery = supabase.from("users").select("id, name, employee_id, email").eq("role", "employee").eq("is_active", true);
+           let query = supabase.from("users").select("id").eq("role", "employee").eq("is_active", true);
+           
+           if (empIdRaw) query = query.eq("employee_id", String(empIdRaw).trim());
+           else if (empEmailRaw) query = query.eq("email", String(empEmailRaw).trim().toLowerCase());
 
-          if (empIdRaw) {
-            employeeQuery = employeeQuery.eq("employee_id", String(empIdRaw).trim());
-          } else if (empEmailRaw) {
-            employeeQuery = employeeQuery.eq("email", String(empEmailRaw).trim().toLowerCase());
-          }
-
-          const { data: emp, error: empError } = await employeeQuery.single();
-
-          if (emp && !empError) {
-            assignedToId = emp.id;
-            assignedDate = new Date().toISOString().split('T')[0];
-            taskStatus = "Pending";
-          } else {
-            const identifier = empIdRaw || empEmailRaw;
-            errors.push(`Row ${rowNumber}: Employee '${identifier}' not found or inactive, creating task as unassigned.`);
-          }
+           const { data: emp } = await query.single();
+           
+           if (emp) {
+             assignedToId = emp.id;
+             assignedDate = new Date().toISOString().split('T')[0];
+             taskStatus = "Pending";
+           } else {
+             // Optional: Log that employee wasn't found, but still create task
+             // errors.push(`Row ${rowNumber}: Employee not found, added to Unassigned pool.`);
+           }
         }
 
-        // Extract optional fields
-        const mapUrl = row.MapURL || row.mapUrl || row.mapurl || null;
-        let latitude = row.Latitude || row.latitude || row.lat || null;
-        let longitude = row.Longitude || row.longitude || row.lng || null;
-        const notes = row.Notes || row.notes || null;
-        const address = row.Address || row.address || null;
+        // 🟢 STEP 5: Coordinate Extraction
+        let finalLat = row.latitude || row.lat;
+        let finalLng = row.longitude || row.lng || row.long;
 
-        // Try to extract coordinates from MapURL if not provided
-        if (mapUrl && !latitude && !longitude) {
+        if (mapUrl && (!finalLat || !finalLng)) {
           const coords = extractCoordinates(mapUrl);
-          if (coords) {
-            latitude = coords.latitude;
-            longitude = coords.longitude;
-          }
+          if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
         }
 
-        // Create task in Supabase
-        const { data: task, error: taskError } = await supabase
-          .from("tasks")
-          .insert([{
-            title: String(caseId).trim(),
-            pincode: pincodeStr,
-            client_name: clientName ? String(clientName).trim() : null,
-            map_url: mapUrl || null,
-            address: address || null,
-            latitude: latitude ? parseFloat(latitude) : null,
-            longitude: longitude ? parseFloat(longitude) : null,
-            assigned_to: assignedToId,
-            assigned_date: assignedDate,
-            notes: notes ? String(notes).trim() : null,
-            status: taskStatus,
-          }])
-          .select();
+        // 🟢 STEP 6: Insert into Database
+        const { error } = await supabase.from("tasks").insert([{
+          title: String(title),
+          pincode: pincodeStr,
+          client_name: clientName || "Unknown Client",
+          map_url: mapUrl || null,
+          address: address || null,
+          latitude: finalLat || null,
+          longitude: finalLng || null,
+          notes: notes || null,
+          status: taskStatus,
+          assigned_to: assignedToId,
+          assigned_date: assignedDate,
+          created_by: adminId || null
+        }]);
 
-        if (taskError) throw taskError;
-
+        if (error) throw error;
         successCount++;
+
       } catch (err) {
-        console.error(`❌ Error processing row ${rowNumber}:`, err.message);
         errors.push(`Row ${rowNumber}: ${err.message}`);
-        errorCount++;
       }
     }
 
-    // Delete uploaded file
+    // Cleanup & Response
     fs.unlinkSync(req.file.path);
-
-    console.log(`✅ Bulk upload completed: ${successCount} success, ${errorCount} errors`);
-
-    // Log activity
-    await logActivity(
-      adminId,
-      adminName,
-      "BULK_UPLOAD_COMPLETED",
-      null,
-      null,
-      req
-    );
-
-    res.json({
-      success: true,
-      message: `${successCount} tasks uploaded successfully`,
-      successCount: successCount,
-      errorCount: errorCount,
-      errors: errors.length > 0 ? errors.slice(0, 20) : null, // Limit to first 20 errors
-      hasMoreErrors: errors.length > 20,
+    
+    await logActivity(adminId, adminName, "BULK_UPLOAD", null, `Uploaded ${successCount} tasks`, req);
+    
+    res.json({ 
+      success: true, 
+      message: `${successCount} tasks uploaded successfully.`, 
+      successCount, 
+      errors: errors.slice(0, 20), 
+      hasMoreErrors: errors.length > 20 
     });
-  } catch (error) {
-    console.error("❌ Bulk upload error:", error);
 
-    // Clean up uploaded file on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
-    res.status(500).json({
-      success: false,
-      message: `Bulk upload failed: ${error.message}`,
-    });
+  } catch (err) {
+    console.error("Bulk Upload Error:", err);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -2481,6 +2468,7 @@ app.get("/app.js", (req, res) => {
   html += "let selectedTaskIds = [];\n";
   html += "let allAdminTasks = [];\n";
   html += "let allUnassignedTasks = [];
+  html += "let allEmployees = [];\n";
   html += "// Persistent sorting state for Sort by Nearest\n";
   html += "let isNearestSortActive = false;\n";
   html += "let savedEmployeeLocation = null; // { latitude, longitude }\n";
@@ -4276,23 +4264,121 @@ function attachAllTasksFilterListeners() {
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
   html += "function showEmployees() {\n";
-  html +=
-    "  let html = '<h2><i class=\"fas fa-users\"></i> Manage Employees</h2>';\n";
-  html += "  \n";
-  html +=
-    '  html += \'<button class="btn btn-primary" onclick="showAddEmployee()" style="margin-bottom: 25px;">\';\n';
-  html += "  html += '<i class=\"fas fa-user-plus\"></i> Add New Employee';\n";
-  html += "  html += '</button>';\n";
-  html += "  \n";
-  html += "  html += '<div id=\"employeeList\">';\n";
-  html +=
-    '  html += \'<div class="loading-spinner show"><i class="fas fa-spinner"></i>Loading employees...</div>\';\n';
-  html += "  html += '</div>';\n";
-  html += "  \n";
-  html += "  document.getElementById('content').innerHTML = html;\n";
-  html += "  loadEmployees();\n";
+  html += "  fetch('/api/users')\n";
+  html += "    .then(function(res) { return res.json(); })\n";
+  html += "    .then(function(users) {\n";
+  html += "      allEmployees = users; // 🟢 Store globally\n";
+  html += "      var container = document.getElementById('employeesList');\n";
+  html += "      \n";
+  html += "      if (users.length === 0) {\n";
+  html += "        container.innerHTML = '<p>No employees found.</p>';\n";
+  html += "        return;\n";
+  html += "      }\n";
+  html += "      \n";
+  html += "      var html = '<table class=\"table\">';\n";
+  html += "      html += '<thead><tr><th>Name</th><th>ID</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>';\n";
+  html += "      html += '<tbody>';\n";
+  html += "      \n";
+  html += "      users.forEach(function(u) {\n";
+  html += "        html += '<tr>';\n";
+  html += "        html += '<td>' + escapeHtml(u.name) + '</td>';\n";
+  html += "        html += '<td>' + escapeHtml(u.employeeId || '-') + '</td>';\n";
+  html += "        html += '<td>' + escapeHtml(u.email) + '</td>';\n";
+  html += "        html += '<td>' + escapeHtml(u.phone || '-') + '</td>';\n";
+  html += "        html += '<td>' + (u.isActive ? '<span class=\"status-pill status-verified\">Active</span>' : '<span class=\"status-pill status-unassigned\">Inactive</span>') + '</td>';\n";
+  html += "        html += '<td>';\n";
+  html += "        \n";
+  html += "        // 🟢 Edit Button\n";
+  html += "        html += '<button class=\"btn btn-secondary btn-sm\" onclick=\"showEditEmployeeModal(' + u.id + ')\" style=\"margin-right:5px;\"><i class=\"fas fa-edit\"></i> Edit</button>';\n";
+  html += "        \n";
+  html += "        // Delete Button\n";
+  html += "        html += '<button class=\"btn btn-danger btn-sm\" onclick=\"deleteEmployee(' + u.id + ')\"><i class=\"fas fa-trash\"></i></button>';\n";
+  html += "        \n";
+  html += "        html += '</td>';\n";
+  html += "        html += '</tr>';\n";
+  html += "      });\n";
+  html += "      \n";
+  html += "      html += '</tbody></table>';\n";
+  html += "      container.innerHTML = html;\n";
+  html += "    });\n";
   html += "}\n";
+  html += "function showEditEmployeeModal(userId) {\n";
+  html += "  var user = allEmployees.find(function(u) { return u.id === userId; });\n";
+  html += "  if (!user) return;\n";
   html += "\n";
+  html += "  var modal = document.createElement('div');\n";
+  html += "  modal.className = 'modal show';\n";
+  html += "  \n";
+  html += "  var content = document.createElement('div');\n";
+  html += "  content.className = 'modal-content';\n";
+  html += "  \n";
+  html += "  var h2 = document.createElement('h2');\n";
+  html += "  h2.innerHTML = '<i class=\"fas fa-user-edit\"></i> Edit Employee';\n";
+  html += "  content.appendChild(h2);\n";
+  html += "  \n";
+  html += "  // Form Generation Helper\n";
+  html += "  function createInput(label, id, value, type = 'text', placeholder = '') {\n";
+  html += "    var div = document.createElement('div'); div.className = 'form-group';\n";
+  html += "    div.innerHTML = '<label>' + label + '</label><input type=\"' + type + '\" id=\"' + id + '\" value=\"' + (value || '') + '\" class=\"search-box\" style=\"width:100%\" placeholder=\"' + placeholder + '\">';\n";
+  html += "    return div;\n";
+  html += "  }\n";
+  html += "  \n";
+  html += "  content.appendChild(createInput('Full Name', 'editEmpName', user.name));\n";
+  html += "  content.appendChild(createInput('Email', 'editEmpEmail', user.email, 'email'));\n";
+  html += "  content.appendChild(createInput('Employee ID', 'editEmpId', user.employeeId));\n";
+  html += "  content.appendChild(createInput('Phone', 'editEmpPhone', user.phone, 'tel'));\n";
+  html += "  content.appendChild(createInput('New Password (Optional)', 'editEmpPass', '', 'password', 'Leave blank to keep current'));\n";
+  html += "  \n";
+  html += "  // Buttons\n";
+  html += "  var btnRow = document.createElement('div');\n";
+  html += "  btnRow.style.marginTop = '20px';\n";
+  html += "  btnRow.style.display = 'flex';\n";
+  html += "  btnRow.style.gap = '10px';\n";
+  html += "  \n";
+  html += "  var saveBtn = document.createElement('button');\n";
+  html += "  saveBtn.className = 'btn btn-primary';\n";
+  html += "  saveBtn.innerText = 'Save Changes';\n";
+  html += "  saveBtn.onclick = function() { saveEmployeeUpdate(userId, modal); };\n";
+  html += "  \n";
+  html += "  var cancelBtn = document.createElement('button');\n";
+  html += "  cancelBtn.className = 'btn btn-secondary';\n";
+  html += "  cancelBtn.innerText = 'Cancel';\n";
+  html += "  cancelBtn.onclick = function() { document.body.removeChild(modal); };\n";
+  html += "  \n";
+  html += "  btnRow.appendChild(saveBtn);\n";
+  html += "  btnRow.appendChild(cancelBtn);\n";
+  html += "  content.appendChild(btnRow);\n";
+  html += "  \n";
+  html += "  modal.appendChild(content);\n";
+  html += "  document.body.appendChild(modal);\n";
+  html += "}\n";
+
+  html += "function saveEmployeeUpdate(userId, modal) {\n";
+  html += "  var name = document.getElementById('editEmpName').value;\n";
+  html += "  var email = document.getElementById('editEmpEmail').value;\n";
+  html += "  var empId = document.getElementById('editEmpId').value;\n";
+  html += "  var phone = document.getElementById('editEmpPhone').value;\n";
+  html += "  var pass = document.getElementById('editEmpPass').value;\n";
+  html += "  \n";
+  html += "  fetch('/api/users/' + userId, {\n";
+  html += "    method: 'PUT',\n";
+  html += "    headers: { 'Content-Type': 'application/json' },\n";
+  html += "    body: JSON.stringify({\n";
+  html += "      name: name, email: email, employeeId: empId, phone: phone, password: pass,\n";
+  html += "      adminId: currentUser.id, adminName: currentUser.name\n";
+  html += "    })\n";
+  html += "  })\n";
+  html += "  .then(function(r) { return r.json(); })\n";
+  html += "  .then(function(data) {\n";
+  html += "    if (data.success) {\n";
+  html += "      showToast('Employee updated successfully', 'success');\n";
+  html += "      document.body.removeChild(modal);\n";
+  html += "      showEmployees(); // Refresh list\n";
+  html += "    } else {\n";
+  html += "      showToast('Error: ' + data.message, 'error');\n";
+  html += "    }\n";
+  html += "  });\n";
+  html += "}\n";
   html += "function openResetPasswordModal(empId, empEmail) {\n";
   html += "  const modal = document.createElement('div');\n";
   html += "  modal.className = 'modal show';\n";
