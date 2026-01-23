@@ -190,7 +190,8 @@ if (!fs.existsSync("uploads")) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+const HOST = '0.0.0.0';
 
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
@@ -205,7 +206,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 // DATABASE CONFIGURATION - SUPABASE (v3.0)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4240,8 +4240,8 @@ function attachAllTasksFilterListeners() {
   html += "      const finalTasks = applyAllTasksDateFilter(allAdminTasks);\n";
   html += "      updateAllTasksFilterChips();\n";
   html += "      displayAllTasks(finalTasks);\n";
-  html += "    attachAllTasksFilterListeners();
-  html += "    })\n";
+  html += "    attachAllTasksFilterListeners();\n";
+  html += "    });\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading tasks:', err);\n";
   html +=
