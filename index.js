@@ -46,6 +46,10 @@ const upload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+// Ensure upload directory exists
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPRESS APP SETUP
@@ -4853,12 +4857,12 @@ function attachAllTasksFilterListeners() {
   html += "        html += '</tbody></table>';\n";
   html += "      }\n";
   html += "      \n";
-  html += "      document.getElementById('employeeList').innerHTML = html;\n";
+  html += "      document.getElementById('employeesList').innerHTML = html;\n";
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading employees:', err);\n";
   html +=
-    "      document.getElementById('employeeList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Employees</h3><p>Please try again.</p></div>';\n";
+    "      document.getElementById('employeesList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Employees</h3><p>Please try again.</p></div>';\n";
   html += "      showToast('Failed to load employees', 'error');\n";
   html += "    });\n";
   html += "}\n";
@@ -5469,7 +5473,6 @@ function attachAllTasksFilterListeners() {
   html += "    method: 'PUT',\n";
   html += "    headers: { 'Content-Type': 'application/json' },\n";
   html += "    body: JSON.stringify(updateData)\n";
-  html += "    })\n";
   html += "  })\n";
   html += "  .then(function(res) { return res.json(); })\n";
   html += "  .then(function(data) {\n";
