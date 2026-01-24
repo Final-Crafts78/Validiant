@@ -3205,10 +3205,58 @@ async function confirmStatusUpdate(taskId) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Start the app once DOM is ready
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('✓ Dashboard loaded, initializing...');
+  console.log('Current user:', currentUser);
+  
+  // Verify user is authenticated
+  if (!currentUser || !currentUser.role) {
+    console.error('❌ No user found, redirecting to signin...');
+    window.location.href = 'signin.html';
+    return;
+  }
+  
+  // Update user info in header
+  const userName = document.getElementById('userName');
+  const userRole = document.getElementById('userRole');
+  const userInitials = document.getElementById('userInitials');
+  
+  if (userName) {
+    userName.innerHTML = `<i class="fas fa-user-circle"></i> ${escapeHtml(currentUser.name)}`;
+    console.log('✓ User name updated:', currentUser.name);
+  } else {
+    console.error('❌ userName element not found');
+  }
+  
+  if (userRole) {
+    userRole.textContent = currentUser.role;
+    console.log('✓ User role updated:', currentUser.role);
+  } else {
+    console.error('❌ userRole element not found');
+  }
+  
+  if (userInitials) {
+    const initials = currentUser.name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+    userInitials.textContent = initials;
+    console.log('✓ User initials updated:', initials);
+  } else {
+    console.error('❌ userInitials element not found');
+  }
+  
+  // Initialize the menu and default view
+  console.log('✓ Calling initMenu() for role:', currentUser.role);
   initMenu();
   
-  // If we have a hash (e.g., #tasks), we could route there, 
-  // but for now we rely on the initMenu() default views.
+  console.log('✓ Dashboard initialization complete!');
 });
+
 
