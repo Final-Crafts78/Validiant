@@ -2791,28 +2791,6 @@ function showActivityLog() {
     list.innerHTML = html;
   });
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// BULK SELECTION FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-function toggleSelectAll(checkbox) {
-  const checkboxes = document.querySelectorAll('.taskCheckbox');
-  checkboxes.forEach(cb => cb.checked = checkbox.checked);
-  updateBulkActions();
-}
-
-
-function clearSelection() {
-  const checkboxes = document.querySelectorAll('.taskCheckbox');
-  checkboxes.forEach(cb => cb.checked = false);
-  const selectAll = document.getElementById('selectAllTasks');
-  if (selectAll) selectAll.checked = false;
-  updateBulkActions();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// REASSIGN TASK MODAL
-// ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 // REASSIGN TASK MODAL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3233,3 +3211,4 @@ document.addEventListener('DOMContentLoaded', () => {
   // If we have a hash (e.g., #tasks), we could route there, 
   // but for now we rely on the initMenu() default views.
 });
+
