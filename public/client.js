@@ -283,20 +283,33 @@ function initMenu() {
     console.log('Creating', buttons.length, 'menu buttons...');
     
     buttons.forEach((btn, index) => {
-      const button = document.createElement('button');
-      button.className = `menu-item`;
-      button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
-      if (btn.style) button.setAttribute('style', btn.style);
-      
-      button.onclick = function() {
-        console.log('Menu clicked:', btn.text);
-        cleanupCurrentView();
-        window[btn.action]();
-      };
-      
-      menu.appendChild(button);
-      console.log(`✓ Button ${index + 1} created:`, btn.text);
+  const button = document.createElement('button');
+  button.className = `menu-item`;
+  button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
+  button.setAttribute('data-view', btn.action); // Add identifier
+  if (btn.style) button.setAttribute('style', btn.style);
+  
+  button.onclick = function() {
+    console.log('Menu clicked:', btn.text);
+    
+    // Remove active class from all menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.classList.remove('active');
     });
+    
+    // Add active class to clicked item
+    this.classList.add('active');
+    
+    cleanupCurrentView();
+    window[btn.action]();
+  };
+  
+  menu.appendChild(button);
+  console.log(`✓ Button ${index + 1} created:`, btn.text);
+});
+
+// Set first button as active by default
+menu.querySelector('.menu-item')?.classList.add('active');
     
     console.log('✓ All admin menu buttons created');
     console.log('Calling showAssignTask()...');
@@ -1591,18 +1604,29 @@ function showUnassignedTasks() {
 
 function loadUnassignedTasks() {
   const term = document.getElementById('unassignedSearch') ? document.getElementById('unassignedSearch').value : '';
-  const url = `/api/tasks/unassigned` + (term ? `?search=${encodeURIComponent(term)}` : '');
-
+  
+  // Add timestamp to prevent caching
+  const timestamp = new Date().getTime();
+  const url = `/api/tasks/unassigned${term ? `?search=${encodeURIComponent(term)}&` : '?'}t=${timestamp}`;
+  
+  console.log('🔄 Fetching unassigned tasks...');
+  
   fetch(url)
     .then(res => res.json())
     .then(tasks => {
+      console.log('✓ Received', tasks.length, 'tasks');
       allUnassignedTasks = tasks;
-      fetch('/api/users').then(r => r.json()).then(employees => {
-        displayUnassignedList(tasks, employees);
-      });
+      
+      // Fetch employees
+      return fetch(`/api/users?t=${timestamp}`);
+    })
+    .then(r => r.json())
+    .then(employees => {
+      console.log('✓ Received', employees.length, 'employees');
+      displayUnassignedList(allUnassignedTasks, employees);
     })
     .catch(err => {
-      console.error(err);
+      console.error('❌ Error loading tasks:', err);
       showToast('Failed to load tasks', 'error');
     });
 }
@@ -3347,6 +3371,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
