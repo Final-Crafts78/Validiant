@@ -1250,20 +1250,32 @@ function displayAllTasksList(tasks) {
     const assignedTo = t.assignedToName 
       ? `<span class="employee-name">${escapeHtml(t.assignedToName)}</span>` 
       : `<span class="unassigned-label">Unassigned</span>`;
-    
-    // Map URL display logic
-    let mapDisplay = '';
-    if (t.mapurl || t.mapUrl) {
-      const mapLink = t.mapurl || t.mapUrl;
-      mapDisplay = `
-        <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
-          <i class="fas fa-map-marker-alt"></i> View
-        </a>
-      `;
-    } else {
-      mapDisplay = `<span class="no-map">No map</span>`;
-    }
 
+    // Map URL display logic with edit button
+let mapDisplay;
+const mapLink = t.map_url || t.mapUrl || t.mapurl;  // ← Added map_url first!
+
+if (mapLink && mapLink.trim() !== '') {
+  mapDisplay = `
+    <div class="map-actions">
+      <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
+        <i class="fas fa-map-marker-alt"></i> View
+      </a>
+      <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink).replace(/'/g, "\\'")}', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Edit Map URL">
+        <i class="fas fa-pen"></i>
+      </button>
+    </div>
+  `;
+} else {
+  mapDisplay = `
+    <div class="map-actions">
+      <span class="no-map">No map</span>
+      <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Add Map URL">
+        <i class="fas fa-plus"></i>
+      </button>
+    </div>
+  `;
+}
     html += `
       <tr class="task-row">
         <td class="checkbox-col">
@@ -1860,13 +1872,22 @@ function showEditMapModalClean(taskId, currentMapUrl, taskTitle) {
 
 // Save function for map URL
 function saveEditedMapUrl(taskId) {
-  const url = document.getElementById('editMapUrl').value.trim();
+  const input = document.getElementById('editMapUrl');
+  
+  if (!input) {
+    console.error('❌ editMapUrl input not found!');
+    return;
+  }
+  
+  const url = input.value.trim();
+  
+  console.log('Saving map URL for task', taskId, ':', url);
   
   fetch(`/api/tasks/${taskId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      mapUrl: url,
+      map_url: url,  // ← Use map_url to match database column
       userId: currentUser.id,
       userName: currentUser.name
     })
@@ -1876,11 +1897,14 @@ function saveEditedMapUrl(taskId) {
       if (data.success) {
         showToast('✓ Map URL updated successfully!', 'success');
         closeAllModals();
+        
         // Refresh the current view
         if (document.getElementById('unassignedTasksList')) {
+          console.log('Refreshing unassigned tasks...');
           loadUnassignedTasks();
         }
         if (document.getElementById('allTasksList')) {
+          console.log('Refreshing all tasks...');
           loadAllTasks();
         }
       } else {
@@ -1888,7 +1912,7 @@ function saveEditedMapUrl(taskId) {
       }
     })
     .catch(err => {
-      console.error(err);
+      console.error('Error updating map URL:', err);
       showToast('Connection error. Please try again.', 'error');
     });
 }
@@ -3297,6 +3321,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
