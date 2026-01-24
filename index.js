@@ -4851,7 +4851,7 @@ function attachAllTasksFilterListeners() {
   html += "function loadTodayTasks(searchTerm) {\n";
   html += "  // --- FIX 2: PRIVACY FIX ---\n";
   html += "  // Changed userId= to employeeId= so backend filters correctly\n";
-  html += "  const url = '/api/tasks?role=employee&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
+  html += "  const url = '/api/tasks?role=employee&status=Pending&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
   html += "  \n";
   html += "  fetch(url)\n";
   html += "    .then(function(res) { return res.json(); })\n";
