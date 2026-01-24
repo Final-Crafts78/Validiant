@@ -239,7 +239,7 @@ function logout(isAuto = false) {
 
 // Loading Helper
 function showLoading(msg = 'Loading...') {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   if (content) {
     content.innerHTML = `<div class="loading-spinner show" style="justify-content:center; padding:50px;"><i class="fas fa-spinner fa-spin"></i> ${msg}</div>`;
   }
@@ -346,7 +346,7 @@ function initMenu() {
 function showAssignTask() {
   cleanupCurrentView(); // Clear any lingering modals/forms
   
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   let html = `
     <div class="page-header">
       <div>
@@ -761,7 +761,7 @@ function showAssignTask() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showTodayTasks() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   
   let html = `
     <h2><i class="fas fa-tasks"></i> Today's Tasks</h2>
@@ -1031,7 +1031,7 @@ function sortByPincode() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showTaskHistory() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   content.innerHTML = `
     <h2><i class="fas fa-history"></i> Task History</h2>
     <div class="filter-section">
@@ -1072,7 +1072,7 @@ function loadTaskHistory() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showAllTasks() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   
   let html = `
     <h2><i class="fas fa-list"></i> All Tasks</h2>
@@ -1558,7 +1558,7 @@ function displayAllTasksList(tasks) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showUnassignedTasks() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   content.innerHTML = `
     <h2><i class="fas fa-inbox"></i> Unassigned Tasks Pool</h2>
     <div class="filter-section">
@@ -1918,7 +1918,7 @@ function assignTaskToEmployee(taskId) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showEmployees() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   content.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2><i class="fas fa-users"></i> Employees</h2>
@@ -2726,7 +2726,7 @@ function confirmResetPassword(userId) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showAnalyticsDashboard() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   content.innerHTML = `
     <h2><i class="fas fa-chart-pie"></i> Analytics Dashboard</h2>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
@@ -2804,7 +2804,7 @@ function exportTasks() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showActivityLog() {
-  const content = document.getElementById('content');
+  const content = document.getElementById('mainContainer');
   content.innerHTML = `
     <h2><i class="fas fa-history"></i> Activity Log</h2>
     <div id="activityLogList"><div class="loading-spinner show">Loading...</div></div>
@@ -3297,6 +3297,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
