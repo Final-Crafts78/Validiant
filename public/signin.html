@@ -553,7 +553,7 @@
       signinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Signing in...</span>';
 
       try {
-        const response = await fetch('/api/auth/signin', {
+        const response = await fetch('/signin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -596,3 +596,4 @@
   </script>
 </body>
 </html>
+
