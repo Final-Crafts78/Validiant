@@ -113,14 +113,115 @@ function showToast(message, type) {
     warning: 'fa-exclamation-triangle'
   };
   const icon = icons[type] || icons.info;
-  const colorClass = `toast-${type}`; // Maps to CSS classes like .toast-success
-
-  toast.innerHTML = `<i class="fas ${icon} toast-icon"></i> <span>${escapeHtml(message)}</span>`;
+  const colorClass = `toast-${type}`;
+  toast.innerHTML = `<i class="fas ${icon} toast-icon"></i><span>${escapeHtml(message)}</span>`;
   toast.className = `toast show ${colorClass}`;
-
   setTimeout(() => {
     toast.classList.remove('show');
   }, 4000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENHANCED MODAL SYSTEM - Matches Old UI
+// ═══════════════════════════════════════════════════════════════════════════
+
+function createModal(title, content, options = {}) {
+  // Remove any existing modals first
+  closeAllModals();
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-container ${options.size || 'medium'}">
+      <div class="modal-header">
+        <h3><i class="fas ${options.icon || 'fa-edit'}"></i> ${title}</h3>
+        <button class="modal-close" onclick="closeAllModals()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        ${content}
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Smooth fade-in
+  setTimeout(() => modal.classList.add('show'), 10);
+  
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeAllModals();
+  });
+  
+  // Close on ESC key
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      closeAllModals();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+  
+  return modal;
+}
+
+function closeAllModals() {
+  const modals = document.querySelectorAll('.modal-overlay, .modal.show');
+  modals.forEach(modal => {
+    modal.classList.remove('show');
+    setTimeout(() => modal.remove(), 300);
+  });
+}
+
+// Clean up function - called when switching menus
+function cleanupCurrentView() {
+  closeAllModals();
+  
+  // Clear any active filters
+  isNearestSortActive = false;
+  savedEmployeeLocation = null;
+  
+  // Remove any temporary elements
+  const tempElements = document.querySelectorAll('.temp-edit-section, .inline-edit-form');
+  tempElements.forEach(el => el.remove());
+}
+
+// Helper to update bulk action panel visibility
+function updateBulkActions() {
+  const checkboxes = document.querySelectorAll('.task-checkbox:checked, .taskCheckbox:checked');
+  const bulkPanel = document.getElementById('bulkActions');
+  const countSpan = document.getElementById('selectedCount');
+  
+  if (bulkPanel) {
+    if (checkboxes.length > 0) {
+      bulkPanel.style.display = 'flex';
+      if (countSpan) countSpan.textContent = checkboxes.length;
+    } else {
+      bulkPanel.style.display = 'none';
+    }
+  }
+}
+
+// Helper for select all checkbox
+function toggleSelectAll(checkbox) {
+  const allCheckboxes = document.querySelectorAll('.task-checkbox, .taskCheckbox');
+  allCheckboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+  updateBulkActions();
+}
+
+// Helper to clear selection
+function clearSelection() {
+  const allCheckboxes = document.querySelectorAll('.task-checkbox, .taskCheckbox');
+  allCheckboxes.forEach(cb => {
+    cb.checked = false;
+  });
+  const selectAll = document.getElementById('selectAllTasks');
+  if (selectAll) selectAll.checked = false;
+  updateBulkActions();
 }
 
 // Optimized Logout
@@ -151,123 +252,367 @@ function showLoading(msg = 'Loading...') {
 function initMenu() {
   const menu = document.getElementById('menu');
   if (!menu) return;
-
+  
   // Clear existing menu
   menu.innerHTML = '';
-
+  
   if (currentUser.role === 'admin') {
     // ADMIN MENU
     const buttons = [
-      { icon: 'fa-plus-circle', text: 'Assign Task', action: 'showAssignTask()', class: 'btn-primary' },
-      { icon: 'fa-inbox', text: 'Unassigned Pool', action: 'showUnassignedTasks()', class: 'btn-primary' },
-      { icon: 'fa-list', text: 'All Tasks', action: 'showAllTasks()', class: 'btn-primary' },
-      { icon: 'fa-users', text: 'Employees', action: 'showEmployees()', class: 'btn-primary' },
-      { icon: 'fa-history', text: 'Activity Log', action: 'showActivityLog()', class: 'btn-primary' },
-      { icon: 'fa-chart-pie', text: 'Analytics', action: 'showAnalyticsDashboard()', class: 'btn-info' },
-      { icon: 'fa-download', text: 'Export CSV', action: 'exportTasks()', class: 'btn-success' },
-      { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'showKYCDashboard()', class: 'btn-primary', style: 'background:#8b5cf6; border-color:#7c3aed;' }
+      { icon: 'fa-plus-circle', text: 'Assign Task', action: 'showAssignTask', class: 'btn-primary' },
+      { icon: 'fa-inbox', text: 'Unassigned Pool', action: 'showUnassignedTasks', class: 'btn-primary' },
+      { icon: 'fa-list', text: 'All Tasks', action: 'showAllTasks', class: 'btn-primary' },
+      { icon: 'fa-users', text: 'Employees', action: 'showEmployees', class: 'btn-primary' },
+      { icon: 'fa-history', text: 'Activity Log', action: 'showActivityLog', class: 'btn-primary' },
+      { icon: 'fa-chart-pie', text: 'Analytics', action: 'showAnalyticsDashboard', class: 'btn-info' },
+      { icon: 'fa-download', text: 'Export CSV', action: 'exportTasks', class: 'btn-success' },
+      { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'showKYCDashboard', class: 'btn-primary', style: 'background:#8b5cf6; border-color:#7c3aed;' }
     ];
-
+    
     buttons.forEach(btn => {
-      menu.innerHTML += `<button class="btn ${btn.class}" onclick="${btn.action}" style="${btn.style || ''}"><i class="fas ${btn.icon}"></i> ${btn.text}</button>`;
+      menu.innerHTML += `
+        <button class="btn ${btn.class}" onclick="cleanupCurrentView(); ${btn.action}()" style="${btn.style || ''}">
+          <i class="fas ${btn.icon}"></i> ${btn.text}
+        </button>
+      `;
     });
-
+    
     // Default view for Admin
     showAssignTask();
-
   } else {
     // EMPLOYEE MENU
     const buttons = [
-      { icon: 'fa-tasks', text: 'Today\'s Tasks', action: 'showTodayTasks()', class: 'btn-primary' },
-      { icon: 'fa-history', text: 'Task History', action: 'showTaskHistory()', class: 'btn-primary' }
+      { icon: 'fa-tasks', text: 'Today\'s Tasks', action: 'showTodayTasks', class: 'btn-primary' },
+      { icon: 'fa-history', text: 'Task History', action: 'showTaskHistory', class: 'btn-primary' }
     ];
-
+    
     buttons.forEach(btn => {
-      menu.innerHTML += `<button class="btn ${btn.class}" onclick="${btn.action}"><i class="fas ${btn.icon}"></i> ${btn.text}</button>`;
+      menu.innerHTML += `
+        <button class="btn ${btn.class}" onclick="cleanupCurrentView(); ${btn.action}()">
+          <i class="fas ${btn.icon}"></i> ${btn.text}
+        </button>
+      `;
     });
-
+    
     // Default view for Employee
     showTodayTasks();
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 7. ADMIN: ASSIGN TASK FORM (Feature #1)
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showAssignTask() {
-  const content = document.getElementById('content');
+  cleanupCurrentView(); // Clear any lingering modals/forms
   
+  const content = document.getElementById('content');
   let html = `
-    <h2><i class="fas fa-tasks"></i> Assign New Task</h2>
-    <button class="btn btn-success" onclick="showBulkUpload()" style="margin-bottom: 25px;">
-      <i class="fas fa-file-excel"></i> Bulk Upload Tasks (Excel)
-    </button>
-
-    <form id="taskForm" class="panel">
-      <div class="form-group">
-        <label for="caseId"><i class="fas fa-id-card"></i> Case ID / Title *</label>
-        <input type="text" id="caseId" required placeholder="Enter case ID or title" maxlength="500">
+    <div class="page-header">
+      <div>
+        <h2><i class="fas fa-tasks"></i> Assign New Task</h2>
+        <p style="color: #9CA3AF; font-size: 13px; margin-top: 5px;">
+          Create a new task and assign it to an employee or leave it unassigned
+        </p>
       </div>
-
-      <div class="form-group">
-        <label for="clientName"><i class="fas fa-user-tie"></i> Client Name (Optional)</label>
-        <input type="text" id="clientName" placeholder="Enter client name" maxlength="200">
-      </div>
-
-      <div class="form-group">
-        <label for="pincode"><i class="fas fa-map-pin"></i> Pincode *</label>
-        <input type="text" id="pincode" required placeholder="6-digit pincode" maxlength="6" pattern="[0-9]{6}">
-      </div>
-
-      <div class="form-group">
-        <label for="mapUrl"><i class="fas fa-map-marked-alt"></i> Google Maps URL (Optional)</label>
-        <input type="url" id="mapUrl" placeholder="Paste Google Maps link (coordinates extracted automatically)">
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-        <div class="form-group">
-          <label for="latitude"><i class="fas fa-globe"></i> Latitude</label>
-          <input type="number" id="latitude" step="any" placeholder="Auto-filled">
-        </div>
-        <div class="form-group">
-          <label for="longitude"><i class="fas fa-globe"></i> Longitude</label>
-          <input type="number" id="longitude" step="any" placeholder="Auto-filled">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="employee"><i class="fas fa-user"></i> Assign to Employee</label>
-        <select id="employee">
-          <option value="">-- Leave Unassigned --</option>
-          <option disabled>Loading employees...</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="notes"><i class="fas fa-sticky-note"></i> Notes</label>
-        <textarea id="notes" rows="3" placeholder="Additional instructions..."></textarea>
-      </div>
-
-      <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:10px;">
-        <i class="fas fa-check"></i> Create Task
+      <button class="btn btn-success" onclick="showBulkUpload()">
+        <i class="fas fa-file-excel"></i> Bulk Upload Tasks
       </button>
-    </form>
+    </div>
+    
+    <div class="form-container">
+      <form id="taskForm" class="modern-form">
+        <div class="form-grid">
+          <!-- Left Column -->
+          <div class="form-section">
+            <h4 class="section-title">
+              <i class="fas fa-info-circle"></i> Task Information
+            </h4>
+            
+            <div class="form-group">
+              <label for="caseId">
+                <i class="fas fa-id-card"></i> Case ID / Title <span class="required">*</span>
+              </label>
+              <input 
+                type="text" 
+                id="caseId" 
+                required 
+                placeholder="Enter case ID or title"
+                maxlength="500"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="clientName">
+                <i class="fas fa-user-tie"></i> Client Name
+              </label>
+              <input 
+                type="text" 
+                id="clientName" 
+                placeholder="Enter client name (optional)"
+                maxlength="200"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="pincode">
+                <i class="fas fa-map-pin"></i> Pincode <span class="required">*</span>
+              </label>
+              <input 
+                type="text" 
+                id="pincode" 
+                required 
+                placeholder="6-digit pincode"
+                maxlength="6"
+                pattern="[0-9]{6}"
+                class="form-input"
+              />
+              <small class="form-hint">Enter valid 6-digit Indian pincode</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="notes">
+                <i class="fas fa-sticky-note"></i> Notes
+              </label>
+              <textarea 
+                id="notes" 
+                rows="3" 
+                placeholder="Additional instructions or notes..."
+                class="form-input"
+              ></textarea>
+            </div>
+          </div>
+          
+          <!-- Right Column -->
+          <div class="form-section">
+            <h4 class="section-title">
+              <i class="fas fa-map-marked-alt"></i> Location Details
+            </h4>
+            
+            <div class="form-group">
+              <label for="mapUrl">
+                <i class="fas fa-link"></i> Google Maps URL
+              </label>
+              <input 
+                type="url" 
+                id="mapUrl" 
+                placeholder="Paste Google Maps link (coordinates extracted automatically)"
+                class="form-input"
+              />
+              <small class="form-hint">
+                <i class="fas fa-lightbulb"></i> Coordinates will be auto-extracted from Maps URL
+              </small>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="latitude">
+                  <i class="fas fa-globe"></i> Latitude
+                </label>
+                <input 
+                  type="number" 
+                  id="latitude" 
+                  step="any" 
+                  placeholder="Auto-filled"
+                  class="form-input"
+                  readonly
+                />
+              </div>
+              
+              <div class="form-group">
+                <label for="longitude">
+                  <i class="fas fa-globe"></i> Longitude
+                </label>
+                <input 
+                  type="number" 
+                  id="longitude" 
+                  step="any" 
+                  placeholder="Auto-filled"
+                  class="form-input"
+                  readonly
+                />
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="employee">
+                <i class="fas fa-user"></i> Assign to Employee
+              </label>
+              <select id="employee" class="form-input">
+                <option value="">-- Leave Unassigned --</option>
+                <option disabled>Loading employees...</option>
+              </select>
+              <small class="form-hint">Leave unassigned to add task to pool</small>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-lg">
+            <i class="fas fa-check"></i> Create Task
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="showAllTasks()">
+            <i class="fas fa-times"></i> Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+    
+    <style>
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #1F2937;
+      }
+      
+      .form-container {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid #1F2937;
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      }
+      
+      .modern-form {
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+      
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 30px;
+      }
+      
+      .form-section {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      .section-title {
+        color: #E5E7EB;
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #374151;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .section-title i {
+        color: #6366F1;
+      }
+      
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .form-group label {
+        color: #E5E7EB;
+        font-size: 13px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      
+      .form-group label i {
+        color: #9CA3AF;
+        font-size: 12px;
+      }
+      
+      .required {
+        color: #EF4444;
+        font-weight: bold;
+      }
+      
+      .form-input {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid #374151;
+        border-radius: 10px;
+        color: #E5E7EB;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        outline: none;
+      }
+      
+      .form-input:focus {
+        border-color: #6366F1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        background: rgba(15, 23, 42, 0.95);
+      }
+      
+      .form-input::placeholder {
+        color: #6B7280;
+      }
+      
+      .form-input[readonly] {
+        background: rgba(31, 41, 55, 0.5);
+        cursor: not-allowed;
+        color: #9CA3AF;
+      }
+      
+      .form-hint {
+        color: #9CA3AF;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      
+      .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        padding-top: 20px;
+        border-top: 1px solid #1F2937;
+      }
+      
+      @media (max-width: 768px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .page-header {
+          flex-direction: column;
+          gap: 15px;
+        }
+      }
+    </style>
   `;
-
+  
   content.innerHTML = html;
-
-  // 1. Populate Employees Dropdown
+  
+  // 1. Load employees into dropdown
   fetch('/api/users')
     .then(r => r.json())
     .then(users => {
       const select = document.getElementById('employee');
-      if(select) {
+      if (select) {
         select.innerHTML = '<option value="">-- Leave Unassigned --</option>';
         users.forEach(u => {
           const option = document.createElement('option');
           option.value = u.id;
-          option.textContent = `${escapeHtml(u.name)} (${u.employeeId || 'No ID'})`;
+          option.textContent = `${escapeHtml(u.name)} ${u.employeeId ? '(' + u.employeeId + ')' : '(No ID)'}`;
           select.appendChild(option);
         });
       }
@@ -276,79 +621,100 @@ function showAssignTask() {
       console.error('Error loading employees:', err);
       showToast('Failed to load employees', 'error');
     });
-
-  // 2. Map URL Auto-Extractor Listener
-  document.getElementById('mapUrl').addEventListener('input', function() {
-    const url = this.value;
-    if (url) {
-      // Try to find @lat,lng
-      const latMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-      if (latMatch) {
-        document.getElementById('latitude').value = latMatch[1];
-        document.getElementById('longitude').value = latMatch[2];
-      } else {
-        // Try to find ?q=lat,lng
+  
+  // 2. Map URL auto-coordinate extraction
+  const mapUrlInput = document.getElementById('mapUrl');
+  if (mapUrlInput) {
+    mapUrlInput.addEventListener('input', function() {
+      const url = this.value;
+      const latInput = document.getElementById('latitude');
+      const lngInput = document.getElementById('longitude');
+      
+      if (url) {
+        // Try to find @lat,lng pattern
+        const latMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+        if (latMatch) {
+          latInput.value = latMatch[1];
+          lngInput.value = latMatch[2];
+          latInput.removeAttribute('readonly');
+          lngInput.removeAttribute('readonly');
+          return;
+        }
+        
+        // Try to find ?q=lat,lng pattern
         const qMatch = url.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
         if (qMatch) {
-          document.getElementById('latitude').value = qMatch[1];
-          document.getElementById('longitude').value = qMatch[2];
+          latInput.value = qMatch[1];
+          lngInput.value = qMatch[2];
+          latInput.removeAttribute('readonly');
+          lngInput.removeAttribute('readonly');
         }
       }
-    }
-  });
-
-  // 3. Handle Form Submission
-  document.getElementById('taskForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const pincode = document.getElementById('pincode').value;
-    if (!/^[0-9]{6}$/.test(pincode)) {
-      showToast('Pincode must be exactly 6 digits', 'error');
-      return;
-    }
-
-    const btn = e.target.querySelector('button[type="submit"]');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-
-    const formData = {
-      title: document.getElementById('caseId').value,
-      clientName: document.getElementById('clientName').value || null,
-      pincode: pincode,
-      mapUrl: document.getElementById('mapUrl').value || null,
-      latitude: parseFloat(document.getElementById('latitude').value) || null,
-      longitude: parseFloat(document.getElementById('longitude').value) || null,
-      assignedTo: document.getElementById('employee').value ? parseInt(document.getElementById('employee').value) : null,
-      notes: document.getElementById('notes').value || null,
-      createdBy: currentUser.id,
-      createdByName: currentUser.name
-    };
-
-    fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
-    })
-    .then(res => res.json())
-    .then(data => {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      
-      if (data.success) {
-        showToast(formData.assignedTo ? 'Task assigned successfully!' : 'Task created as unassigned!', 'success');
-        document.getElementById('taskForm').reset();
-      } else {
-        showToast(data.message || 'Error creating task', 'error');
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      showToast('Connection error. Please try again.', 'error');
     });
-  });
+  }
+  
+  // 3. Form submission handler
+  const taskForm = document.getElementById('taskForm');
+  if (taskForm) {
+    taskForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const pincode = document.getElementById('pincode').value;
+      if (!/^[0-9]{6}$/.test(pincode)) {
+        showToast('Pincode must be exactly 6 digits', 'error');
+        return;
+      }
+      
+      const btn = e.target.querySelector('button[type="submit"]');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+      
+      const formData = {
+        title: document.getElementById('caseId').value,
+        clientName: document.getElementById('clientName').value || null,
+        pincode: pincode,
+        mapUrl: document.getElementById('mapUrl').value || null,
+        latitude: parseFloat(document.getElementById('latitude').value) || null,
+        longitude: parseFloat(document.getElementById('longitude').value) || null,
+        assignedTo: document.getElementById('employee').value ? parseInt(document.getElementById('employee').value) : null,
+        notes: document.getElementById('notes').value || null,
+        createdBy: currentUser.id,
+        createdByName: currentUser.name
+      };
+      
+      fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          
+          if (data.success) {
+            showToast(
+              formData.assignedTo 
+                ? '✓ Task assigned successfully!' 
+                : '✓ Task created as unassigned!', 
+              'success'
+            );
+            document.getElementById('taskForm').reset();
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            showToast(data.message || 'Error creating task', 'error');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          showToast('Connection error. Please try again.', 'error');
+        });
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -799,54 +1165,352 @@ function updateFilterChips() {
 
 function displayAllTasksList(tasks) {
   const list = document.getElementById('allTasksList');
+  
   if (tasks.length === 0) {
-    list.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No Tasks Found</h3></div>';
+    list.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-inbox" style="font-size: 3rem; color: #6B7280; margin-bottom: 15px;"></i>
+        <h3 style="color: #9CA3AF;">No Tasks Found</h3>
+        <p style="color: #6B7280; font-size: 13px;">Try adjusting your filters or create a new task</p>
+      </div>
+    `;
     return;
   }
 
-  let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px;"><i class="fas fa-info-circle"></i> Found ${tasks.length} tasks</p>`;
-  html += '<table class="table"><thead><tr><th><input type="checkbox" id="selectAllTasks" onchange="toggleSelectAll(this)" title="Select all"></th><th>Case ID</th><th>Client</th><th>Employee</th><th>Pincode</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-
-
-  tasks.forEach(t => {
-    const statusClass = 'status-' + t.status.toLowerCase().replace(/ /g, '-');
-    const assignedTo = t.assignedToName || '<span style="color:#9ca3af;font-style:italic">Unassigned</span>';
-    
-        html += `<tr>
-      <td><input type="checkbox" class="taskCheckbox" value="${t.id}" onchange="updateBulkActions()"></td>
-      <td><strong>${escapeHtml(t.title)}</strong></td>
-      <td>${escapeHtml(t.clientName)}</td>
-      <td>${assignedTo}</td>
-      <td><span class="pincode-highlight">${escapeHtml(t.pincode)}</span></td>
-      <td><span class="status-badge ${statusClass}">${escapeHtml(t.status)}</span></td>
-      <td>
-        <div class="action-buttons" style="display:flex; gap:5px;">
-          <button class="btn btn-warning btn-sm" onclick="openReassignModal(${t.id})" title="Reassign"><i class="fas fa-sync-alt"></i></button>
-          <button class="btn btn-secondary btn-sm" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/'/g, "\\'")}', '${escapeHtml(t.clientName)}')" title="Unassign"><i class="fas fa-times"></i></button>
-          <button class="btn btn-danger btn-sm" onclick="deleteTask(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
-        </div>
-      </td>
-    </tr>`;
-  });
-  html += '</tbody></table>';
-    // Bulk action panel
-  html += `
-    <div id="bulkActions" style="display:none;margin-top:20px;padding:15px;background:#F3F4F6;border-radius:10px;border:2px solid #E5E7EB">
-      <span style="font-weight:bold;color:#374151">
-        <i class="fas fa-check-square"></i> 
-        <span id="selectedCount">0</span> task(s) selected
-      </span>
-      <button onclick="bulkAssignTasks()" style="margin-left:15px;padding:8px 15px;background:#3B82F6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">
-        <i class="fas fa-user-plus"></i> Bulk Assign
-      </button>
-      <button onclick="bulkDeleteTasks()" style="margin-left:10px;padding:8px 15px;background:#EF4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">
-        <i class="fas fa-trash"></i> Bulk Delete
-      </button>
-      <button onclick="clearSelection()" style="margin-left:10px;padding:8px 15px;background:#6B7280;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">
-        <i class="fas fa-times"></i> Clear
-      </button>
+  let html = `
+    <div class="table-header-info">
+      <div class="info-badge">
+        <i class="fas fa-tasks"></i>
+        <span>Found <strong>${tasks.length}</strong> ${tasks.length === 1 ? 'task' : 'tasks'}</span>
+      </div>
     </div>
   `;
+  
+  html += `
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="checkbox-col">
+              <input type="checkbox" id="selectAllTasks" onchange="toggleSelectAll(this)" title="Select all">
+            </th>
+            <th class="case-id-col">Case ID</th>
+            <th class="client-col">Client</th>
+            <th class="employee-col">Employee</th>
+            <th class="pincode-col">Pincode</th>
+            <th class="map-col">Map URL</th>
+            <th class="status-col">Status</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  tasks.forEach(t => {
+    const statusClass = `status-${t.status.toLowerCase().replace(/ /g, '-')}`;
+    const assignedTo = t.assignedToName 
+      ? `<span class="employee-name">${escapeHtml(t.assignedToName)}</span>` 
+      : `<span class="unassigned-label">Unassigned</span>`;
+    
+    // Map URL display logic
+    let mapDisplay = '';
+    if (t.mapurl || t.mapUrl) {
+      const mapLink = t.mapurl || t.mapUrl;
+      mapDisplay = `
+        <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
+          <i class="fas fa-map-marker-alt"></i> View
+        </a>
+      `;
+    } else {
+      mapDisplay = `<span class="no-map">No map</span>`;
+    }
+
+    html += `
+      <tr class="task-row">
+        <td class="checkbox-col">
+          <input type="checkbox" class="task-checkbox" value="${t.id}" onchange="updateBulkActions()">
+        </td>
+        <td class="case-id-col">
+          <strong class="case-id">${escapeHtml(t.title)}</strong>
+        </td>
+        <td class="client-col">${escapeHtml(t.clientName || '-')}</td>
+        <td class="employee-col">${assignedTo}</td>
+        <td class="pincode-col">
+          <span class="pincode-badge">${escapeHtml(t.pincode)}</span>
+        </td>
+        <td class="map-col">${mapDisplay}</td>
+        <td class="status-col">
+          <span class="status-badge ${statusClass}">${escapeHtml(t.status)}</span>
+        </td>
+        <td class="actions-col">
+          <div class="action-buttons">
+            <button class="btn-icon btn-warning" onclick="openReassignModal(${t.id})" title="Reassign">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/'/g, "\\'")}', '${escapeHtml(t.clientName || '')}')
+" title="Unassign">
+              <i class="fas fa-times"></i>
+            </button>
+            <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Bulk action panel
+  html += `
+    <div id="bulkActions" class="bulk-actions-panel">
+      <div class="bulk-info">
+        <i class="fas fa-check-square"></i>
+        <span id="selectedCount">0</span> tasks selected
+      </div>
+      <div class="bulk-buttons">
+        <button onclick="bulkAssignTasks()" class="btn btn-primary btn-sm">
+          <i class="fas fa-user-plus"></i> Bulk Assign
+        </button>
+        <button onclick="bulkDeleteTasks()" class="btn btn-danger btn-sm">
+          <i class="fas fa-trash"></i> Bulk Delete
+        </button>
+        <button onclick="clearSelection()" class="btn btn-secondary btn-sm">
+          <i class="fas fa-times"></i> Clear
+        </button>
+      </div>
+    </div>
+  `;
+  
+  html += `
+    <style>
+      .table-header-info {
+        margin-bottom: 15px;
+      }
+      .info-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 8px 16px;
+        border-radius: 8px;
+        color: #A5B4FC;
+        font-size: 13px;
+      }
+      .info-badge strong {
+        color: #C7D2FE;
+      }
+      
+      .table-wrapper {
+        overflow-x: auto;
+        border-radius: 12px;
+        border: 1px solid #1F2937;
+        background: rgba(15, 23, 42, 0.6);
+      }
+      
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      
+      .data-table thead {
+        background: rgba(31, 41, 55, 0.8);
+        border-bottom: 2px solid #374151;
+      }
+      
+      .data-table th {
+        padding: 14px 12px;
+        text-align: left;
+        color: #E5E7EB;
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      
+      .data-table tbody tr {
+        border-bottom: 1px solid #1F2937;
+        transition: background 0.2s ease;
+      }
+      
+      .data-table tbody tr:hover {
+        background: rgba(99, 102, 241, 0.05);
+      }
+      
+      .data-table td {
+        padding: 12px;
+        color: #D1D5DB;
+        vertical-align: middle;
+      }
+      
+      .checkbox-col {
+        width: 40px;
+        text-align: center;
+      }
+      
+      .case-id-col {
+        min-width: 150px;
+      }
+      
+      .client-col {
+        min-width: 120px;
+      }
+      
+      .employee-col {
+        min-width: 130px;
+      }
+      
+      .pincode-col {
+        width: 100px;
+        text-align: center;
+      }
+      
+      .map-col {
+        width: 100px;
+        text-align: center;
+      }
+      
+      .status-col {
+        width: 120px;
+        text-align: center;
+      }
+      
+      .actions-col {
+        width: 130px;
+      }
+      
+      .case-id {
+        color: #E5E7EB;
+        font-weight: 500;
+      }
+      
+      .employee-name {
+        color: #A5B4FC;
+      }
+      
+      .unassigned-label {
+        color: #9CA3AF;
+        font-style: italic;
+        font-size: 12px;
+      }
+      
+      .pincode-badge {
+        background: rgba(139, 92, 246, 0.2);
+        color: #C4B5FD;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-weight: 500;
+        font-family: 'Courier New', monospace;
+      }
+      
+      .map-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #3B82F6;
+        text-decoration: none;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+      }
+      
+      .map-link:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: #60A5FA;
+      }
+      
+      .no-map {
+        color: #6B7280;
+        font-size: 12px;
+      }
+      
+      .action-buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+      }
+      
+      .btn-icon {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+      }
+      
+      .btn-icon.btn-warning {
+        background: rgba(245, 158, 11, 0.2);
+        color: #FCD34D;
+      }
+      
+      .btn-icon.btn-warning:hover {
+        background: rgba(245, 158, 11, 0.3);
+        transform: translateY(-1px);
+      }
+      
+      .btn-icon.btn-secondary {
+        background: rgba(107, 114, 128, 0.2);
+        color: #D1D5DB;
+      }
+      
+      .btn-icon.btn-secondary:hover {
+        background: rgba(107, 114, 128, 0.3);
+        transform: translateY(-1px);
+      }
+      
+      .btn-icon.btn-danger {
+        background: rgba(239, 68, 68, 0.2);
+        color: #FCA5A5;
+      }
+      
+      .btn-icon.btn-danger:hover {
+        background: rgba(239, 68, 68, 0.3);
+        transform: translateY(-1px);
+      }
+      
+      .bulk-actions-panel {
+        display: none;
+        margin-top: 20px;
+        padding: 15px 20px;
+        background: rgba(31, 41, 55, 0.8);
+        border: 1px solid #374151;
+        border-radius: 10px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      
+      .bulk-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #E5E7EB;
+        font-weight: 500;
+      }
+      
+      .bulk-info i {
+        color: #6366F1;
+      }
+      
+      .bulk-buttons {
+        display: flex;
+        gap: 10px;
+      }
+    </style>
+  `;
+
   list.innerHTML = html;
 }
 
@@ -894,33 +1558,300 @@ function loadUnassignedTasks() {
 
 function displayUnassignedList(tasks, employees) {
   const list = document.getElementById('unassignedTasksList');
+  
   if (tasks.length === 0) {
-    list.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>All Clear!</h3><p>No unassigned tasks.</p></div>';
+    list.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-check-circle" style="font-size: 3rem; color: #10B981; margin-bottom: 15px;"></i>
+        <h3 style="color: #E5E7EB;">All Clear!</h3>
+        <p style="color: #9CA3AF; font-size: 14px;">No unassigned tasks in the pool</p>
+      </div>
+    `;
     return;
   }
 
-  let html = `<p style="color:#e5e7eb; margin-bottom:14px;">Found ${tasks.length} unassigned task(s)</p>`;
-  html += '<table class="table"><thead><tr><th>Case ID</th><th>Pincode</th><th>Map URL</th><th>Actions</th></tr></thead><tbody>';
+  let html = `
+    <div class="table-header-info">
+      <div class="info-badge">
+        <i class="fas fa-inbox"></i>
+        <span>Found <strong>${tasks.length}</strong> unassigned ${tasks.length === 1 ? 'task' : 'tasks'}</span>
+      </div>
+    </div>
+  `;
+  
+  html += `
+    <div class="table-wrapper">
+      <table class="data-table unassigned-table">
+        <thead>
+          <tr>
+            <th class="case-col">Task Details</th>
+            <th class="pincode-col">Pincode</th>
+            <th class="map-col">Location</th>
+            <th class="assign-col">Assign To</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
 
   tasks.forEach(t => {
-    const mapLink = t.mapUrl || t.map_url ? `<a href="${t.mapUrl || t.map_url}" target="_blank" style="color:#3b82f6;">View Map</a>` : '<span style="color:#9ca3af;">No map</span>';
+    const mapLink = (t.mapUrl || t.mapurl);
     
     // Employee Dropdown for Quick Assign
-    let empOptions = '<option value="">Select Employee</option>';
-    employees.forEach(e => { empOptions += `<option value="${e.id}">${escapeHtml(e.name)}</option>`; });
+    let empOptions = '<option value="">Choose Employee</option>';
+    employees.forEach(e => {
+      empOptions += `<option value="${e.id}">${escapeHtml(e.name)}</option>`;
+    });
 
-    html += `<tr>
-      <td><strong>${escapeHtml(t.title)}</strong><br><small style="color:#9ca3af">${escapeHtml(t.clientName)}</small></td>
-      <td><span class="pincode-highlight">${escapeHtml(t.pincode)}</span></td>
-      <td>${mapLink} <button class="btn btn-secondary btn-sm" onclick="showEditMapModal(${t.id})"><i class="fas fa-pen"></i></button></td>
-      <td style="display:flex; gap:8px;">
-        <select id="emp-${t.id}" style="padding:8px; border-radius:8px;">${empOptions}</select>
-        <button class="btn btn-success btn-sm" onclick="assignTaskToEmployee(${t.id})"><i class="fas fa-user-check"></i> Assign</button>
-      </td>
-    </tr>`;
+    html += `
+      <tr class="task-row">
+        <td class="case-col">
+          <div class="task-info">
+            <strong class="case-id">${escapeHtml(t.title)}</strong>
+            ${t.clientName ? `<small class="client-name">${escapeHtml(t.clientName)}</small>` : ''}
+          </div>
+        </td>
+        <td class="pincode-col">
+          <span class="pincode-badge">${escapeHtml(t.pincode)}</span>
+        </td>
+        <td class="map-col">
+          <div class="map-actions">
+            ${mapLink 
+              ? `<a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Maps">
+                   <i class="fas fa-map-marker-alt"></i> View
+                 </a>` 
+              : `<span class="no-map">No map</span>`
+            }
+            <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink || '')}', '${escapeHtml(t.title).replace(/'/g, "\\'")}')
+" title="Edit Map URL">
+              <i class="fas fa-pen"></i>
+            </button>
+          </div>
+        </td>
+        <td class="assign-col">
+          <select id="emp-${t.id}" class="assign-select">
+            ${empOptions}
+          </select>
+        </td>
+        <td class="actions-col">
+          <button class="btn btn-success btn-sm" onclick="assignTaskToEmployee(${t.id})">
+            <i class="fas fa-user-check"></i> Assign
+          </button>
+        </td>
+      </tr>
+    `;
   });
-  html += '</tbody></table>';
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+  
+  html += `
+    <style>
+      .unassigned-table .case-col {
+        min-width: 200px;
+      }
+      
+      .unassigned-table .pincode-col {
+        width: 110px;
+        text-align: center;
+      }
+      
+      .unassigned-table .map-col {
+        width: 140px;
+      }
+      
+      .unassigned-table .assign-col {
+        width: 200px;
+      }
+      
+      .unassigned-table .actions-col {
+        width: 120px;
+        text-align: center;
+      }
+      
+      .task-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      
+      .task-info .case-id {
+        color: #E5E7EB;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      
+      .task-info .client-name {
+        color: #9CA3AF;
+        font-size: 12px;
+      }
+      
+      .map-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: center;
+      }
+      
+      .btn-edit {
+        background: rgba(139, 92, 246, 0.2);
+        color: #C4B5FD;
+      }
+      
+      .btn-edit:hover {
+        background: rgba(139, 92, 246, 0.3);
+        transform: translateY(-1px);
+      }
+      
+      .assign-select {
+        width: 100%;
+        padding: 8px 10px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid #374151;
+        border-radius: 8px;
+        color: #E5E7EB;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .assign-select:focus {
+        border-color: #6366F1;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+      
+      .assign-select option {
+        background: #0F172A;
+        color: #E5E7EB;
+      }
+    </style>
+  `;
+
   list.innerHTML = html;
+}
+
+// NEW: Clean Modal for Map Editing (Centered, Professional)
+function showEditMapModalClean(taskId, currentMapUrl, taskTitle) {
+  const content = `
+    <div class="edit-map-form">
+      <div class="form-info">
+        <i class="fas fa-info-circle"></i>
+        <span>Editing map URL for: <strong>${escapeHtml(taskTitle)}</strong></span>
+      </div>
+      
+      <div class="form-group">
+        <label for="editMapUrl">
+          <i class="fas fa-link"></i> Google Maps URL
+        </label>
+        <input 
+          type="url" 
+          id="editMapUrl" 
+          class="form-input" 
+          placeholder="Paste Google Maps link here"
+          value="${escapeHtml(currentMapUrl)}"
+        />
+        <small class="form-hint">
+          <i class="fas fa-lightbulb"></i> Right-click on location in Google Maps and copy link
+        </small>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="saveEditedMapUrl(${taskId})">
+          <i class="fas fa-save"></i> Save Changes
+        </button>
+        <button class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </div>
+    
+    <style>
+      .edit-map-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      .form-info {
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 8px;
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #A5B4FC;
+        font-size: 13px;
+      }
+      
+      .form-info i {
+        color: #6366F1;
+        font-size: 16px;
+      }
+      
+      .form-info strong {
+        color: #C7D2FE;
+      }
+      
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        padding-top: 10px;
+        border-top: 1px solid #1F2937;
+      }
+    </style>
+  `;
+  
+  createModal('Edit Map URL', content, { icon: 'fa-map-marked-alt', size: 'medium' });
+  
+  // Focus on input
+  setTimeout(() => {
+    const input = document.getElementById('editMapUrl');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 100);
+}
+
+// Save function for map URL
+function saveEditedMapUrl(taskId) {
+  const url = document.getElementById('editMapUrl').value.trim();
+  
+  fetch(`/api/tasks/${taskId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      mapUrl: url,
+      userId: currentUser.id,
+      userName: currentUser.name
+    })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast('✓ Map URL updated successfully!', 'success');
+        closeAllModals();
+        // Refresh the current view
+        if (document.getElementById('unassignedTasksList')) {
+          loadUnassignedTasks();
+        }
+        if (document.getElementById('allTasksList')) {
+          loadAllTasks();
+        }
+      } else {
+        showToast(data.message || 'Update failed', 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Connection error. Please try again.', 'error');
+    });
 }
 
 function assignTaskToEmployee(taskId) {
@@ -987,27 +1918,119 @@ function showEmployees() {
 }
 
 function showAddEmployee() {
-  const modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2><i class="fas fa-user-plus"></i> Add Employee</h2>
-      <form id="addEmpForm">
-        <div class="form-group"><label>Name</label><input type="text" id="newEmpName" required></div>
-        <div class="form-group"><label>Employee ID</label><input type="text" id="newEmpId" required></div>
-        <div class="form-group"><label>Email</label><input type="email" id="newEmpEmail" required></div>
-        <div class="form-group"><label>Phone</label><input type="tel" id="newEmpPhone"></div>
-        <div class="form-group"><label>Password</label><input type="password" id="newEmpPass" value="123456" required></div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-          <button type="submit" class="btn btn-primary">Create</button>
-          <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+  const content = `
+    <form id="addEmpForm" class="employee-form">
+      <div class="form-grid-2col">
+        <div class="form-group">
+          <label for="newEmpName">
+            <i class="fas fa-user"></i> Full Name <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="newEmpName" 
+            class="form-input" 
+            required 
+            placeholder="Enter full name"
+          />
         </div>
-      </form>
-    </div>`;
-  document.body.appendChild(modal);
-
-  document.getElementById('addEmpForm').addEventListener('submit', (e) => {
+        
+        <div class="form-group">
+          <label for="newEmpId">
+            <i class="fas fa-id-badge"></i> Employee ID <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="newEmpId" 
+            class="form-input" 
+            required 
+            placeholder="e.g., EMP001"
+          />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="newEmpEmail">
+          <i class="fas fa-envelope"></i> Email <span class="required">*</span>
+        </label>
+        <input 
+          type="email" 
+          id="newEmpEmail" 
+          class="form-input" 
+          required 
+          placeholder="employee@company.com"
+        />
+      </div>
+      
+      <div class="form-group">
+        <label for="newEmpPhone">
+          <i class="fas fa-phone"></i> Phone Number
+        </label>
+        <input 
+          type="tel" 
+          id="newEmpPhone" 
+          class="form-input" 
+          placeholder="+91 XXXXX XXXXX"
+        />
+      </div>
+      
+      <div class="form-group">
+        <label for="newEmpPass">
+          <i class="fas fa-lock"></i> Password <span class="required">*</span>
+        </label>
+        <input 
+          type="password" 
+          id="newEmpPass" 
+          class="form-input" 
+          value="123456" 
+          required
+        />
+        <small class="form-hint">
+          <i class="fas fa-info-circle"></i> Default password: 123456 (can be changed later)
+        </small>
+      </div>
+      
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-user-plus"></i> Create Employee
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </form>
+    
+    <style>
+      .employee-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      
+      .form-grid-2col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      
+      @media (max-width: 600px) {
+        .form-grid-2col {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  `;
+  
+  createModal('Add New Employee', content, { icon: 'fa-user-plus', size: 'medium' });
+  
+  // Form submission
+  document.getElementById('addEmpForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1018,10 +2041,25 @@ function showAddEmployee() {
         phone: document.getElementById('newEmpPhone').value,
         password: document.getElementById('newEmpPass').value
       })
-    }).then(res => res.json()).then(data => {
-      if(data.success) { showToast('Employee created!', 'success'); modal.remove(); showEmployees(); }
-      else { showToast(data.message, 'error'); }
-    });
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          showToast('✓ Employee created successfully!', 'success');
+          closeAllModals();
+          showEmployees(); // Refresh list
+        } else {
+          showToast(data.message || 'Failed to create employee', 'error');
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        showToast('Connection error. Please try again.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      });
   });
 }
 
@@ -1087,21 +2125,6 @@ function confirmReassign(taskId) {
   });
 }
 
-function showEditMapModal(taskId) {
-  const modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2><i class="fas fa-map-marked-alt"></i> Edit Map Link</h2>
-      <input type="url" id="newMapUrl" placeholder="Paste new Google Maps URL" style="width:100%; padding:10px; margin:15px 0;">
-      <div style="display:flex; gap:10px; justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveMapUrl(${taskId})">Save</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
 function saveMapUrl(taskId) {
   const url = document.getElementById('newMapUrl').value;
   fetch(`/api/tasks/${taskId}`, {
@@ -1138,69 +2161,296 @@ function deleteTask(taskId) {
     });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 16. BULK UPLOAD MODAL (Feature #3)
-// ═══════════════════════════════════════════════════════════════════════════
-
 function showBulkUpload() {
-  const modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2><i class="fas fa-file-upload"></i> Bulk Upload Tasks</h2>
-      <p style="color:#666; font-size:13px; margin-bottom:15px;">
-        Upload an Excel file (.xlsx) with columns: <strong>CaseID, Pincode, ClientName, MapURL, Notes</strong>.
-      </p>
-      
-      <form id="bulkForm">
-        <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" required style="margin-bottom:15px;">
-        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+  const content = `
+    <div class="bulk-upload-container">
+      <div class="upload-instructions">
+        <div class="instruction-card">
+          <i class="fas fa-file-excel" style="font-size: 2.5rem; color: #10B981; margin-bottom: 10px;"></i>
+          <h4 style="margin: 10px 0;">Upload Excel/CSV File</h4>
+          <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6;">
+            Upload tasks in bulk with <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong> format.
+            All tasks will be added to the <strong>Unassigned Pool</strong>.
+          </p>
+        </div>
         
-        <div style="display:flex; gap:10px; margin-top:15px;">
-          <button type="submit" class="btn btn-success">Upload</button>
-          <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+        <div class="instruction-card">
+          <i class="fas fa-table" style="font-size: 2.5rem; color: #6366F1; margin-bottom: 10px;"></i>
+          <h4 style="margin: 10px 0;">Required Columns</h4>
+          <div style="text-align: left; margin-top: 15px;">
+            <div class="column-info"><span class="required">*</span> <strong>CaseID</strong> or <strong>Title</strong></div>
+            <div class="column-info"><span class="required">*</span> <strong>Pincode</strong> (6 digits)</div>
+            <div class="column-info"><span class="optional">○</span> ClientName / IndividualName</div>
+            <div class="column-info"><span class="optional">○</span> MapURL</div>
+            <div class="column-info"><span class="optional">○</span> Latitude, Longitude</div>
+            <div class="column-info"><span class="optional">○</span> Notes</div>
+          </div>
+        </div>
+        
+        <div class="instruction-card">
+          <i class="fas fa-download" style="font-size: 2.5rem; color: #8B5CF6; margin-bottom: 10px;"></i>
+          <h4 style="margin: 10px 0;">Need a Template?</h4>
+          <button class="btn btn-outline" onclick="downloadBulkUploadTemplate()" style="margin-top: 10px;">
+            <i class="fas fa-file-download"></i> Download Sample Template
+          </button>
+        </div>
+      </div>
+      
+      <form id="bulkUploadForm" class="upload-form-section">
+        <div class="file-drop-zone" id="fileDropZone">
+          <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #6366F1; margin-bottom: 15px;"></i>
+          <h4 style="margin: 10px 0; color: #E5E7EB;">Drag & Drop File Here</h4>
+          <p style="color: #9CA3AF; font-size: 13px; margin-bottom: 15px;">or click to browse</p>
+          <input type="file" id="bulkExcelFile" accept=".xlsx,.xls,.csv" required style="display: none;" />
+          <button type="button" class="btn btn-primary" onclick="document.getElementById('bulkExcelFile').click()">
+            <i class="fas fa-folder-open"></i> Choose File
+          </button>
+          <div id="selectedFileName" style="margin-top: 15px; color: #10B981; font-weight: 500;"></div>
+        </div>
+        
+        <div class="progress-container" id="uploadProgressContainer" style="display: none;">
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" id="uploadProgressBar"></div>
+          </div>
+          <p id="uploadProgressText" style="text-align: center; color: #9CA3AF; font-size: 13px; margin-top: 10px;">
+            Uploading... 0%
+          </p>
+        </div>
+        
+        <div class="upload-actions">
+          <button type="submit" class="btn btn-success btn-lg" id="bulkUploadBtn" disabled>
+            <i class="fas fa-upload"></i> Upload Tasks
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeAllModals()">
+            <i class="fas fa-times"></i> Cancel
+          </button>
         </div>
       </form>
-    </div>`;
-  document.body.appendChild(modal);
-
-  document.getElementById('bulkForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData();
-    const file = document.getElementById('excelFile').files[0];
-    formData.append('excelFile', file);
-    formData.append('adminId', currentUser.id);
-    formData.append('adminName', currentUser.name);
-
-    const btn = e.target.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.innerHTML = 'Uploading...';
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/tasks/bulk-upload', true);
+    </div>
     
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const percent = (e.loaded / e.total) * 100;
-        document.querySelector('.progress-fill').style.width = percent + '%';
+    <style>
+      .bulk-upload-container {
+        display: grid;
+        gap: 25px;
       }
-    };
-
-    xhr.onload = function() {
-      if (xhr.status === 200) {
-        const res = JSON.parse(xhr.responseText);
-        showToast(res.message, 'success');
-        modal.remove();
-        showUnassignedTasks(); // Redirect to pool
-      } else {
-        showToast('Upload failed', 'error');
-        btn.disabled = false;
-        btn.innerHTML = 'Upload';
+      .upload-instructions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
       }
-    };
-
-    xhr.send(formData);
+      .instruction-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid #1F2937;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+      }
+      .instruction-card:hover {
+        border-color: #6366F1;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+      }
+      .column-info {
+        padding: 6px 0;
+        color: #E5E7EB;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .required {
+        color: #EF4444;
+        font-weight: bold;
+      }
+      .optional {
+        color: #9CA3AF;
+      }
+      .file-drop-zone {
+        background: rgba(15, 23, 42, 0.8);
+        border: 2px dashed #374151;
+        border-radius: 16px;
+        padding: 40px 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+      .file-drop-zone:hover {
+        border-color: #6366F1;
+        background: rgba(99, 102, 241, 0.1);
+      }
+      .file-drop-zone.dragover {
+        border-color: #10B981;
+        background: rgba(16, 185, 129, 0.1);
+      }
+      .upload-form-section {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .progress-container {
+        padding: 20px;
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 12px;
+        border: 1px solid #1F2937;
+      }
+      .progress-bar-wrapper {
+        width: 100%;
+        height: 8px;
+        background: #1F2937;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10B981, #6366F1);
+        width: 0%;
+        transition: width 0.3s ease;
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+      }
+      .upload-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+      .btn-outline {
+        background: transparent;
+        border: 1px solid #6366F1;
+        color: #A5B4FC;
+        padding: 8px 16px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+      }
+      .btn-outline:hover {
+        background: rgba(99, 102, 241, 0.2);
+        border-color: #818CF8;
+        color: #C7D2FE;
+      }
+    </style>
+  `;
+  
+  createModal('Bulk Upload Tasks', content, { icon: 'fa-file-upload', size: 'large' });
+  
+  // File selection handler
+  const fileInput = document.getElementById('bulkExcelFile');
+  const uploadBtn = document.getElementById('bulkUploadBtn');
+  const fileNameDisplay = document.getElementById('selectedFileName');
+  const dropZone = document.getElementById('fileDropZone');
+  
+  fileInput.addEventListener('change', function() {
+    if (this.files.length > 0) {
+      const fileName = this.files[0].name;
+      fileNameDisplay.innerHTML = `<i class="fas fa-check-circle"></i> ${escapeHtml(fileName)}`;
+      uploadBtn.disabled = false;
+    }
   });
+  
+  // Drag & Drop handlers
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+  });
+  
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      fileInput.dispatchEvent(new Event('change'));
+    }
+  });
+  
+  // Form submission
+  document.getElementById('bulkUploadForm').addEventListener('submit', handleBulkUploadSubmit);
+}
+
+// Template Download Function
+function downloadBulkUploadTemplate() {
+  const csvContent = `CaseID,Pincode,ClientName,MapURL,Latitude,Longitude,Notes
+CASE001,560001,ABC Company,https://maps.google.com/?q=12.9716,77.5946,12.9716,77.5946,Sample task 1
+CASE002,560002,XYZ Corp,https://maps.google.com/?q=12.9844,77.5908,12.9844,77.5908,Sample task 2
+CASE003,560003,Test Client,,,,"Leave MapURL empty if not available"`;
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `Validiant_Bulk_Upload_Template_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  showToast('Template downloaded successfully!', 'success');
+}
+
+// Form Submit Handler
+function handleBulkUploadSubmit(e) {
+  e.preventDefault();
+  
+  const fileInput = document.getElementById('bulkExcelFile');
+  const file = fileInput.files[0];
+  
+  if (!file) {
+    showToast('Please select a file', 'error');
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('excelFile', file);
+  formData.append('adminId', currentUser.id);
+  formData.append('adminName', currentUser.name);
+  
+  const uploadBtn = document.getElementById('bulkUploadBtn');
+  const progressContainer = document.getElementById('uploadProgressContainer');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressText = document.getElementById('uploadProgressText');
+  
+  uploadBtn.disabled = true;
+  uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+  progressContainer.style.display = 'block';
+  
+  const xhr = new XMLHttpRequest();
+  
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = percent + '%';
+      progressText.textContent = `Uploading... ${percent}%`;
+    }
+  };
+  
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      const response = JSON.parse(xhr.responseText);
+      if (response.success) {
+        showToast(`✓ ${response.successCount} tasks uploaded successfully!`, 'success');
+        closeAllModals();
+        // Redirect to unassigned pool
+        setTimeout(() => showUnassignedTasks(), 500);
+      } else {
+        showToast(response.message || 'Upload failed', 'error');
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
+        progressContainer.style.display = 'none';
+      }
+    } else {
+      showToast('Upload failed. Please try again.', 'error');
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
+      progressContainer.style.display = 'none';
+    }
+  };
+  
+  xhr.onerror = function() {
+    showToast('Network error. Please try again.', 'error');
+    uploadBtn.disabled = false;
+    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
+    progressContainer.style.display = 'none';
+  };
+  
+  xhr.open('POST', '/api/tasks/bulk-upload', true);
+  xhr.send(formData);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1210,64 +2460,199 @@ function showBulkUpload() {
 function showEditEmployeeModal(empId) {
   // Find employee data
   const emp = allEmployees.find(u => u.id === empId);
-  if (!emp) return;
-
-  const modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2><i class="fas fa-user-edit"></i> Edit Employee</h2>
-      <form id="editEmpForm">
-        <div class="form-group"><label>Name</label><input type="text" id="editName" value="${escapeHtml(emp.name)}" required></div>
-        <div class="form-group"><label>Employee ID</label><input type="text" id="editEmpId" value="${escapeHtml(emp.employeeId)}" required></div>
-        <div class="form-group"><label>Email</label><input type="email" id="editEmail" value="${escapeHtml(emp.email)}" required></div>
-        <div class="form-group"><label>Phone</label><input type="tel" id="editPhone" value="${escapeHtml(emp.phone || '')}"></div>
-        <button type="submit" class="btn btn-primary" style="margin-top:15px; width:100%">Save Changes</button>
-      </form>
-      <button class="btn btn-secondary" onclick="this.closest('.modal').remove()" style="margin-top:10px; width:100%">Cancel</button>
-    </div>`;
-  document.body.appendChild(modal);
-
-  document.getElementById('editEmpForm').addEventListener('submit', (e) => {
+  
+  if (!emp) {
+    showToast('Employee not found', 'error');
+    return;
+  }
+  
+  const content = `
+    <form id="editEmpForm" class="employee-form">
+      <div class="form-grid-2col">
+        <div class="form-group">
+          <label for="editName">
+            <i class="fas fa-user"></i> Full Name <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="editName" 
+            class="form-input" 
+            value="${escapeHtml(emp.name)}" 
+            required
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="editEmpId">
+            <i class="fas fa-id-badge"></i> Employee ID <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="editEmpId" 
+            class="form-input" 
+            value="${escapeHtml(emp.employeeId || '')}" 
+            required
+          />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="editEmail">
+          <i class="fas fa-envelope"></i> Email <span class="required">*</span>
+        </label>
+        <input 
+          type="email" 
+          id="editEmail" 
+          class="form-input" 
+          value="${escapeHtml(emp.email)}" 
+          required
+        />
+      </div>
+      
+      <div class="form-group">
+        <label for="editPhone">
+          <i class="fas fa-phone"></i> Phone Number
+        </label>
+        <input 
+          type="tel" 
+          id="editPhone" 
+          class="form-input" 
+          value="${escapeHtml(emp.phone || '')}"
+        />
+      </div>
+      
+      <div class="form-info">
+        <i class="fas fa-info-circle"></i>
+        <span>Leave password field empty to keep current password</span>
+      </div>
+      
+      <div class="form-group">
+        <label for="editPassword">
+          <i class="fas fa-lock"></i> New Password (Optional)
+        </label>
+        <input 
+          type="password" 
+          id="editPassword" 
+          class="form-input" 
+          placeholder="Leave blank to keep current"
+        />
+      </div>
+      
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Changes
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </form>
+  `;
+  
+  createModal('Edit Employee', content, { icon: 'fa-user-edit', size: 'medium' });
+  
+  // Form submission
+  document.getElementById('editEmpForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    
+    const updateData = {
+      name: document.getElementById('editName').value,
+      employeeId: document.getElementById('editEmpId').value,
+      email: document.getElementById('editEmail').value,
+      phone: document.getElementById('editPhone').value,
+      adminId: currentUser.id,
+      adminName: currentUser.name
+    };
+    
+    const newPassword = document.getElementById('editPassword').value;
+    if (newPassword && newPassword.trim() !== '') {
+      updateData.password = newPassword;
+    }
+    
     fetch(`/api/users/${empId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: document.getElementById('editName').value,
-        employeeId: document.getElementById('editEmpId').value,
-        email: document.getElementById('editEmail').value,
-        phone: document.getElementById('editPhone').value,
-        adminId: currentUser.id,
-        adminName: currentUser.name
+      body: JSON.stringify(updateData)
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          showToast('✓ Employee updated successfully!', 'success');
+          closeAllModals();
+          showEmployees(); // Refresh list
+        } else {
+          showToast(data.message || 'Update failed', 'error');
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
       })
-    }).then(res => res.json()).then(data => {
-      if(data.success) { showToast('Employee updated', 'success'); modal.remove(); showEmployees(); }
-    });
+      .catch(err => {
+        console.error(err);
+        showToast('Connection error. Please try again.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      });
   });
 }
 
 function openResetPasswordModal(userId, email) {
-  const modal = document.createElement('div');
-  modal.className = 'modal show';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2><i class="fas fa-key"></i> Reset Password</h2>
-      <p>Reset password for <strong>${escapeHtml(email)}</strong>?</p>
+  const content = `
+    <div class="reset-password-form">
+      <div class="form-info">
+        <i class="fas fa-key"></i>
+        <span>Reset password for: <strong>${escapeHtml(email)}</strong></span>
+      </div>
+      
       <div class="form-group">
-        <label>New Password (Optional)</label>
-        <input type="text" id="newPassInput" placeholder="Leave blank for auto-generated">
+        <label for="newPassInput">
+          <i class="fas fa-lock"></i> New Password
+        </label>
+        <input 
+          type="text" 
+          id="newPassInput" 
+          class="form-input" 
+          placeholder="Leave blank for auto-generated password"
+        />
+        <small class="form-hint">
+          <i class="fas fa-lightbulb"></i> If left empty, a random password will be generated
+        </small>
       </div>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn btn-warning" onclick="confirmResetPassword(${userId})">Reset Password</button>
-        <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+      
+      <div class="modal-actions">
+        <button class="btn btn-warning" onclick="confirmResetPassword(${userId})">
+          <i class="fas fa-key"></i> Reset Password
+        </button>
+        <button class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
       </div>
-    </div>`;
-  document.body.appendChild(modal);
+    </div>
+    
+    <style>
+      .reset-password-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+    </style>
+  `;
+  
+  createModal('Reset Password', content, { icon: 'fa-key', size: 'medium' });
 }
 
 function confirmResetPassword(userId) {
   const newPass = document.getElementById('newPassInput').value;
+  
+  const btn = event.target;
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
+  
   fetch(`/api/users/${userId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1276,12 +2661,25 @@ function confirmResetPassword(userId) {
       adminId: currentUser.id,
       adminName: currentUser.name
     })
-  }).then(res => res.json()).then(data => {
-    if(data.success) {
-      alert(`Password Reset Successful!\n\nNew Password: ${data.tempPassword}`);
-      document.querySelector('.modal').remove();
-    }
-  });
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        // Show password in alert
+        alert(`✓ Password Reset Successful!\n\nNew Password: ${data.tempPassword}\n\nPlease save this password and share with the employee.`);
+        closeAllModals();
+      } else {
+        showToast(data.message || 'Reset failed', 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Connection error. Please try again.', 'error');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1403,18 +2801,6 @@ function toggleSelectAll(checkbox) {
   updateBulkActions();
 }
 
-function updateBulkActions() {
-  const selected = document.querySelectorAll('.taskCheckbox:checked');
-  const bulkDiv = document.getElementById('bulkActions');
-  const countSpan = document.getElementById('selectedCount');
-  
-  if (selected.length > 0) {
-    bulkDiv.style.display = 'block';
-    countSpan.textContent = selected.length;
-  } else {
-    bulkDiv.style.display = 'none';
-  }
-}
 
 function clearSelection() {
   const checkboxes = document.querySelectorAll('.taskCheckbox');
@@ -1427,132 +2813,206 @@ function clearSelection() {
 // ═══════════════════════════════════════════════════════════════════════════
 // REASSIGN TASK MODAL
 // ═══════════════════════════════════════════════════════════════════════════
-async function openReassignModal(taskId) {
-  try {
-    const response = await fetch('/api/users');
-    const employees = await response.json();
-    
-    if (employees.length === 0) {
-      showToast('No employees available', 'warning');
-      return;
-    }
-    
-    let employeeOptions = '';
-    employees.forEach(emp => {
-      employeeOptions += `<option value="${emp.id}">${emp.name} (${emp.employeeId || emp.employee_id})</option>`;
-    });
-    
-    const modalHtml = `
-      <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center" id="reassignModal" onclick="if(event.target.id==='reassignModal') document.getElementById('reassignModal').remove()">
-        <div style="background:white;padding:30px;border-radius:15px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)" onclick="event.stopPropagation()">
-          <h3 style="margin-top:0;color:#1F2937"><i class="fas fa-exchange-alt"></i> Reassign Task</h3>
-          <label style="display:block;margin-bottom:5px;font-weight:bold;color:#374151">Select New Employee:</label>
-          <select id="newEmployeeSelect" style="width:100%;padding:12px;border:2px solid #E5E7EB;border-radius:8px;margin-bottom:20px;font-size:14px">
-            ${employeeOptions}
-          </select>
-          <div style="display:flex;gap:10px">
-            <button onclick="confirmReassign(${taskId})" style="flex:1;padding:12px;background:#3B82F6;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:bold">
-              <i class="fas fa-check"></i> Reassign
-            </button>
-            <button onclick="document.getElementById('reassignModal').remove()" style="flex:1;padding:12px;background:#6B7280;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:bold">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-          </div>
-        </div>
+// ═══════════════════════════════════════════════════════════════════════════
+// REASSIGN TASK MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openReassignModal(taskId) {
+  const content = `
+    <div class="reassign-form">
+      <div class="form-info">
+        <i class="fas fa-info-circle"></i>
+        <span>Select a new employee to assign this task</span>
       </div>
-    `;
+      
+      <div class="form-group">
+        <label for="reassignEmp">
+          <i class="fas fa-user"></i> Choose Employee
+        </label>
+        <select id="reassignEmp" class="form-input">
+          <option value="">Loading employees...</option>
+        </select>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="confirmReassign(${taskId})">
+          <i class="fas fa-check"></i> Reassign Task
+        </button>
+        <button class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </div>
     
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-  } catch (err) {
-    showToast('Failed to load employees', 'error');
-  }
+    <style>
+      .reassign-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+    </style>
+  `;
+  
+  createModal('Reassign Task', content, { icon: 'fa-sync-alt', size: 'medium' });
+  
+  // Load employees
+  fetch('/api/users')
+    .then(r => r.json())
+    .then(users => {
+      const sel = document.getElementById('reassignEmp');
+      if (sel) {
+        sel.innerHTML = '<option value="">Select Employee</option>';
+        users.forEach(u => {
+          sel.innerHTML += `<option value="${u.id}">${escapeHtml(u.name)}</option>`;
+        });
+      }
+    })
+    .catch(err => {
+      showToast('Failed to load employees', 'error');
+    });
 }
 
-async function confirmReassign(taskId) {
-  const newEmployeeId = document.getElementById('newEmployeeSelect').value;
+function confirmReassign(taskId) {
+  const empId = document.getElementById('reassignEmp').value;
   
-  try {
-    const response = await fetch(`/api/tasks/${taskId}/reassign`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        newEmployeeId: parseInt(newEmployeeId),
-        userId: currentUser.id,
-        userName: currentUser.name
-      })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      showToast(result.message, 'success');
-      document.getElementById('reassignModal').remove();
-      // Refresh the task list
-      if (typeof loadAllTasks === 'function') loadAllTasks();
-      if (typeof fetchAndDisplayTasks === 'function') fetchAndDisplayTasks();
-    } else {
-      showToast(result.message || 'Reassignment failed', 'error');
-    }
-  } catch (err) {
-    showToast('Error reassigning task', 'error');
+  if (!empId) {
+    showToast('Please select an employee', 'error');
+    return;
   }
+  
+  fetch(`/api/tasks/${taskId}/assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      employeeId: parseInt(empId),
+      adminId: currentUser.id,
+      adminName: currentUser.name
+    })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast('✓ Task reassigned successfully!', 'success');
+        closeAllModals();
+        // Refresh current view
+        if (document.getElementById('allTasksList')) loadAllTasks();
+        if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+      } else {
+        showToast(data.message || 'Reassignment failed', 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Connection error. Please try again.', 'error');
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UNASSIGN TASK MODAL
 // ═══════════════════════════════════════════════════════════════════════════
+
 function openUnassignModal(taskId, taskTitle, clientName) {
   const displayTitle = taskTitle || 'this task';
   const displayClient = clientName ? ` (${clientName})` : '';
   
-  const modalHtml = `
-    <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center" id="unassignModal" onclick="if(event.target.id==='unassignModal') document.getElementById('unassignModal').remove()">
-      <div style="background:white;padding:30px;border-radius:15px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0;color:#DC2626"><i class="fas fa-user-slash"></i> Unassign Task</h3>
-        <p style="color:#374151;line-height:1.6">
-          Move task <strong>"${escapeHtml(displayTitle)}"</strong>${escapeHtml(displayClient)} back to the unassigned pool?
-        </p>
-        <div style="display:flex;gap:10px;margin-top:20px">
-          <button onclick="confirmUnassign(${taskId})" style="flex:1;padding:12px;background:#F59E0B;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:bold">
-            <i class="fas fa-check"></i> Unassign
-          </button>
-          <button onclick="document.getElementById('unassignModal').remove()" style="flex:1;padding:12px;background:#6B7280;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:bold">
-            <i class="fas fa-times"></i> Cancel
-          </button>
+  const content = `
+    <div class="unassign-form">
+      <div class="warning-box">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+          <h4 style="margin: 0 0 8px 0; color: #FCD34D;">Move task back to unassigned pool?</h4>
+          <p style="margin: 0; color: #D1D5DB; font-size: 13px;">
+            Task: <strong>"${escapeHtml(displayTitle)}"</strong>${escapeHtml(displayClient)}
+          </p>
         </div>
       </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-warning" onclick="confirmUnassign(${taskId})">
+          <i class="fas fa-check"></i> Yes, Unassign
+        </button>
+        <button class="btn btn-secondary" onclick="closeAllModals()">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
     </div>
+    
+    <style>
+      .unassign-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      .warning-box {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 10px;
+        padding: 20px;
+        display: flex;
+        gap: 15px;
+        align-items: flex-start;
+      }
+      
+      .warning-box i {
+        color: #FCD34D;
+        font-size: 24px;
+        flex-shrink: 0;
+      }
+    </style>
   `;
   
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  createModal('Unassign Task', content, { icon: 'fa-times-circle', size: 'medium' });
 }
 
-async function confirmUnassign(taskId) {
-  try {
-    const response = await fetch(`/api/tasks/${taskId}/unassign`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: currentUser.id,
-        userName: currentUser.name
-      })
+function confirmUnassign(taskId) {
+  fetch(`/api/tasks/${taskId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      assignedTo: null,
+      status: 'Unassigned',
+      userId: currentUser.id,
+      userName: currentUser.name
+    })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast('✓ Task moved to unassigned pool', 'success');
+        closeAllModals();
+        if (document.getElementById('allTasksList')) loadAllTasks();
+      } else {
+        showToast(data.message || 'Unassignment failed', 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Connection error. Please try again.', 'error');
     });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      showToast(result.message, 'success');
-      document.getElementById('unassignModal').remove();
-      // Refresh the task list
-      if (typeof loadAllTasks === 'function') loadAllTasks();
-      if (typeof fetchAndDisplayTasks === 'function') fetchAndDisplayTasks();
-    } else {
-      showToast(result.message || 'Unassign failed', 'error');
-    }
-  } catch (err) {
-    showToast('Error unassigning task', 'error');
-  }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY MAP EDIT MODAL (kept for backward compatibility - redirects to new one)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function showEditMapModal(taskId) {
+  // Find the task to get its current map URL and title
+  fetch(`/api/tasks?roleadmin`)
+    .then(r => r.json())
+    .then(tasks => {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        showEditMapModalClean(taskId, task.mapurl || task.mapUrl || '', task.title || 'Unknown Task');
+      } else {
+        showEditMapModalClean(taskId, '', 'Task');
+      }
+    })
+    .catch(err => {
+      showEditMapModalClean(taskId, '', 'Task');
+    });
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BULK ASSIGN TASKS
