@@ -136,7 +136,6 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPORTS & DEPENDENCIES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -151,6 +150,19 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DIRECTORY SETUP - Ensure required directories exist
+// ═══════════════════════════════════════════════════════════════════════════
+
+if (!fs.existsSync("./uploads")) {
+  fs.mkdirSync("./uploads");
+  console.log("✅ Created uploads/ directory");
+}
+
+if (!fs.existsSync("./data")) {
+  fs.mkdirSync("./data");
+  console.log("✅ Created data/ directory");
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MULTER CONFIGURATION - File upload handling
@@ -180,18 +192,13 @@ const upload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 },
 });
-// Ensure upload directory exists
-if (!fs.existsSync("uploads")) {
-  fs.mkdirSync("uploads");
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPRESS APP SETUP
 // ═══════════════════════════════════════════════════════════════════════════
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const HOST = '0.0.0.0';
+const PORT = process.env.PORT || 3000;
 
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
@@ -206,6 +213,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 // DATABASE CONFIGURATION - SUPABASE (v3.0)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -421,60 +429,6 @@ app.post("/api/users", async (req, res) => {
 
   } catch (err) {
     console.error("Create User Error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 6.5 RESET PASSWORD (New Feature)
-app.post("/api/users/:id/reset-password", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminId, adminName, newPassword } = req.body;
-    
-    // Generate temp password if not provided
-    const tempPassword = newPassword || Math.random().toString(36).slice(-8).toUpperCase();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    
-    const { error } = await supabase
-      .from("users")
-      .update({ password: hashedPassword, updated_at: new Date() })
-      .eq("id", id);
-    
-    if (error) throw error;
-    
-    await logActivity(adminId, adminName, "PASSWORD_RESET", null, `Reset password for user ID ${id}`, req);
-    
-    res.json({ success: true, tempPassword });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// 7. EDIT USER (New Feature)
-app.put("/api/users/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, employeeId, phone, password, adminId, adminName } = req.body;
-
-    const updateData = {
-      name, 
-      email, 
-      employee_id: employeeId, 
-      phone, 
-      updated_at: new Date()
-    };
-
-    // Only hash and update password if a new one is provided
-    if (password && password.trim() !== "") {
-       updateData.password = await bcrypt.hash(password, 10);
-    }
-
-    const { error } = await supabase.from("users").update(updateData).eq("id", id);
-    if (error) throw error;
-
-    await logActivity(adminId, adminName, "USER_UPDATED", null, `Updated Employee: ${name}`, req);
-    res.json({ success: true, message: "Employee updated successfully" });
-  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -723,31 +677,46 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// 2. CREATE TASK (Fixed - With Logging)
+// 2. CREATE TASK (Fixed - Handles mapUrl and coordinate extraction)
 app.post("/api/tasks", async (req, res) => {
   try {
     const { 
-      title, pincode, address, mapUrl, map_url, notes, 
-      createdBy, createdByName, // 1. Added createdByName
-      assignedTo, clientName, latitude, longitude 
+      title, 
+      pincode, 
+      address, 
+      mapUrl,        // Add this
+      map_url,       // Alternative naming
+      notes, 
+      createdBy, 
+      assignedTo, 
+      clientName,
+      latitude,      // Manual coordinates
+      longitude 
     } = req.body;
 
-    // Handle map URL and Coordinates
+    // Handle map URL from either field name
     const finalMapUrl = mapUrl || map_url || null;
-    const finalAddress = address || finalMapUrl || null;
     
+    // Use map URL as address if no address provided
+    const finalAddress = address || finalMapUrl || null;
+
+    // Extract coordinates from map URL if not manually provided
     let finalLat = latitude;
     let finalLng = longitude;
     
     if (finalMapUrl && (!finalLat || !finalLng)) {
       const coords = extractCoordinates(finalMapUrl);
-      if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+      if (coords) {
+        finalLat = coords.latitude;
+        finalLng = coords.longitude;
+      }
     }
 
     let initialStatus = "Unassigned";
     let finalAssignee = null;
     let assignedDate = null;
 
+    // Strict check to ensure we only assign if a real ID is provided
     if (assignedTo && assignedTo !== "Unassigned" && assignedTo !== "") {
       initialStatus = "Pending";
       finalAssignee = assignedTo;
@@ -757,85 +726,58 @@ app.post("/api/tasks", async (req, res) => {
     const { data, error } = await supabase
       .from("tasks")
       .insert([{
-        title, pincode, address: finalAddress, map_url: finalMapUrl,
-        latitude: finalLat, longitude: finalLng, notes,
-        client_name: clientName, status: initialStatus,
-        assigned_to: finalAssignee, assigned_date: assignedDate,
+        title,
+        pincode,
+        address: finalAddress,
+        map_url: finalMapUrl,
+        latitude: finalLat,
+        longitude: finalLng,
+        notes,
+        client_name: clientName,
+        status: initialStatus,
+        assigned_to: finalAssignee,
+        assigned_date: assignedDate,
         created_by: createdBy,
       }])
       .select();
 
     if (error) throw error;
 
-    // 2. LOG ACTIVITY
-    const actionDetails = finalAssignee ? `Created & Assigned to ID ${finalAssignee}` : "Created in Unassigned Pool";
-    await logActivity(createdBy, createdByName || "Admin", "TASK_CREATED", data[0].id, actionDetails, req);
+    console.log(`✅ Task created: ${title} | Map: ${finalMapUrl ? 'Yes' : 'No'} | Assigned: ${finalAssignee ? 'Yes' : 'No'}`);
 
-    console.log(`✅ Task created: ${title}`);
     res.json({ success: true, task: data[0] });
-
   } catch (err) {
     console.error("❌ Create Task Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 3. UPDATE TASK (Fixed - With Logging)
+// 3. UPDATE TASK
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      title, pincode, address, notes, status, assignedTo, clientName, mapUrl,
-      userId, userName // 1. Capture user info from frontend
-    } = req.body;
+    const { title, pincode, address, notes, status, assignedTo, clientName } = req.body;
 
     const updateData = { updated_at: new Date() };
-    let actionType = "TASK_UPDATED";
-    let actionDetails = "Task details updated";
-
-    // Build update object and determine log action
     if (title) updateData.title = title;
     if (pincode) updateData.pincode = pincode;
     if (address) updateData.address = address;
     if (clientName) updateData.client_name = clientName;
     if (notes) updateData.notes = notes;
-    
-    if (mapUrl) {
-      updateData.map_url = mapUrl;
-      actionType = "MAP_UPDATED";
-      actionDetails = "Map URL added/changed";
-    }
-
-    if (status) {
-      updateData.status = status;
-      actionType = `TASK_${status.toUpperCase().replace(/\s+/g, '_')}`; // e.g., TASK_COMPLETED
-      actionDetails = `Status changed to ${status}`;
-      
-      if (status === 'Completed') updateData.completed_at = new Date();
-      if (status === 'Verified') updateData.verified_at = new Date();
-    }
+    if (status) updateData.status = status;
     
     if (assignedTo) {
         updateData.assigned_to = assignedTo;
         if (status === "Unassigned") updateData.status = "Pending";
-        actionType = "TASK_REASSIGNED";
     }
 
     const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
     if (error) throw error;
-
-    // 2. LOG ACTIVITY
-    if (userId) {
-      await logActivity(userId, userName || "Unknown", actionType, id, actionDetails, req);
-    }
-
     res.json({ success: true, message: "Updated" });
   } catch (err) {
-    console.error("Update Error:", err);
     res.status(500).json({ success: false, message: "Failed" });
   }
 });
-
 // 2. GET UNASSIGNED TASKS
 app.get("/api/tasks/unassigned", async (req, res) => {
   try {
@@ -852,21 +794,18 @@ app.get("/api/tasks/unassigned", async (req, res) => {
   }
 });
 
-// 3. DELETE TASK (Fixed - With Logging)
+// 3. DELETE TASK (New Route - Fixes "Error deleting task")
 app.delete("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { adminId, adminName } = req.query; // 1. Get User Info from Query Params
     
     // Delete from Supabase
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", id);
 
     if (error) throw error;
-
-    // 2. LOG ACTIVITY
-    if (adminId) {
-      await logActivity(adminId, adminName || "Admin", "TASK_DELETED", id, `Task #${id} deleted`, req);
-    }
 
     res.json({ success: true, message: "Task deleted successfully" });
   } catch (err) {
@@ -874,7 +813,6 @@ app.delete("/api/tasks/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to delete task" });
   }
 });
-
 // 4. KYC REQUESTS (Fixes "Loading KYC data...")
 app.get("/api/kyc/list", async (req, res) => {
   try {
@@ -892,250 +830,274 @@ app.get("/api/kyc/list", async (req, res) => {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. BULK UPLOAD TASKS (Merged: Fuzzy Matching + Auto-Assign + Validation)
+// 5. BULK UPLOAD (Excel/CSV Task Import - Supabase Version)
+// ═══════════════════════════════════════════════════════════════════════════
 app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded." });
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded. Please select an Excel file.",
+      });
     }
 
+    console.log("📤 Processing bulk upload:", req.file.originalname);
     const { adminId, adminName } = req.body;
+
+    // Read Excel file
     const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
-    const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
 
-    if (rawData.length === 0) {
+    if (data.length === 0) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ success: false, message: "Excel file is empty." });
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty or invalid format.",
+      });
     }
 
-        let successCount = 0;
-    let errors = [];
-    const tasksToInsert = []; // Batch collection
-    
-    for (let i = 0; i < rawData.length; i++) {
-      const rawRow = rawData[i];
-      const rowNumber = i + 2;
+    console.log(`📊 Found ${data.length} rows in Excel file`);
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2; // Excel row number
 
       try {
-        // 🟢 STEP 1: Normalize Headers (The New "Fuzzy" Feature)
-        const row = {};
-        Object.keys(rawRow).forEach(key => {
-          const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-          row[cleanKey] = rawRow[key];
-        });
+        // Extract case ID/title
+        const caseId = row.RequestID || row["Request ID"] || row.CaseID || row.Title || row.title || row.caseId;
+        const clientName = row["Individual Name"] || row.IndividualName || row["Client Name"] || row.ClientName || row.clientName || row["client name"] || null;
+        const pincode = row.Pincode || row.pincode || row.PINCODE;
 
-        // 🟢 STEP 2: Extract Fields using Multiple Variations
-        const title = row.requestid || row.caseid || row.title || row.id || row.trackingid;
-        const pincode = row.pincode || row.pin || row.zip || row.postalcode;
-        const clientName = row.individualname || row.clientname || row.client || row.name;
-        const mapUrl = row.mapurl || row.map || row.link || row.googlemap || row.url;
-        const notes = row.notes || row.note || row.remarks;
-        const address = row.address || row.location;
-        
-        // Employee Fields for Auto-Assign
-        const empIdRaw = row.employeeid || row.empid || row.id;
-        const empEmailRaw = row.employeeemail || row.email || row.mail;
-
-        // 🟢 STEP 3: Strict Validation (From your original code)
-        if (!title) {
-          errors.push(`Row ${rowNumber}: Case ID/Title is missing`);
+        // Validate required fields
+        if (!caseId) {
+          errors.push(`Row ${rowNumber}: CaseID/Title is required`);
+          errorCount++;
           continue;
         }
+
         if (!pincode) {
-          errors.push(`Row ${rowNumber}: Pincode is missing`);
+          errors.push(`Row ${rowNumber}: Pincode is required`);
+          errorCount++;
           continue;
         }
-        
+
+        // Validate pincode format
         const pincodeStr = String(pincode).trim();
         if (!/^[0-9]{6}$/.test(pincodeStr)) {
-          errors.push(`Row ${rowNumber}: Invalid Pincode (must be 6 digits)`);
+          errors.push(`Row ${rowNumber}: Pincode must be exactly 6 digits (got: ${pincodeStr})`);
+          errorCount++;
           continue;
         }
 
-        // 🟢 STEP 4: Employee Auto-Assignment Logic (Restored)
+        // Check for employee assignment
         let assignedToId = null;
         let assignedDate = null;
         let taskStatus = "Unassigned";
 
+        const empIdRaw = row.EmployeeID || row.employeeId || row.EMPLOYEEID || row["Employee ID"] || row["Employee Id"] || row["employee id"];
+        const empEmailRaw = row.EmployeeEmail || row.employeeEmail || row.EMPLOYEEEMAIL || row["Employee Email"] || row["employee email"];
+
+        // Try to find employee in Supabase
         if (empIdRaw || empEmailRaw) {
-           let query = supabase.from("users").select("id").eq("role", "employee").eq("is_active", true);
-           
-           if (empIdRaw) query = query.eq("employee_id", String(empIdRaw).trim());
-           else if (empEmailRaw) query = query.eq("email", String(empEmailRaw).trim().toLowerCase());
+          let employeeQuery = supabase.from("users").select("id, name, employee_id, email").eq("role", "employee").eq("is_active", true);
 
-           const { data: emp } = await query.single();
-           
-           if (emp) {
-             assignedToId = emp.id;
-             assignedDate = new Date().toISOString().split('T')[0];
-             taskStatus = "Pending";
-           } else {
-             // Optional: Log that employee wasn't found, but still create task
-             // errors.push(`Row ${rowNumber}: Employee not found, added to Unassigned pool.`);
-           }
+          if (empIdRaw) {
+            employeeQuery = employeeQuery.eq("employee_id", String(empIdRaw).trim());
+          } else if (empEmailRaw) {
+            employeeQuery = employeeQuery.eq("email", String(empEmailRaw).trim().toLowerCase());
+          }
+
+          const { data: emp, error: empError } = await employeeQuery.single();
+
+          if (emp && !empError) {
+            assignedToId = emp.id;
+            assignedDate = new Date().toISOString().split('T')[0];
+            taskStatus = "Pending";
+          } else {
+            const identifier = empIdRaw || empEmailRaw;
+            errors.push(`Row ${rowNumber}: Employee '${identifier}' not found or inactive, creating task as unassigned.`);
+          }
         }
 
-        // 🟢 STEP 5: Coordinate Extraction
-        let finalLat = row.latitude || row.lat;
-        let finalLng = row.longitude || row.lng || row.long;
+        // Extract optional fields
+        const mapUrl = row.MapURL || row.mapUrl || row.mapurl || null;
+        let latitude = row.Latitude || row.latitude || row.lat || null;
+        let longitude = row.Longitude || row.longitude || row.lng || null;
+        const notes = row.Notes || row.notes || null;
+        const address = row.Address || row.address || null;
 
-        if (mapUrl && (!finalLat || !finalLng)) {
+        // Try to extract coordinates from MapURL if not provided
+        if (mapUrl && !latitude && !longitude) {
           const coords = extractCoordinates(mapUrl);
-          if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+          if (coords) {
+            latitude = coords.latitude;
+            longitude = coords.longitude;
+          }
         }
 
-        // 🟢 STEP 6: Collect for batch insert
-        tasksToInsert.push({
-          title: String(title),
-          pincode: pincodeStr,
-          client_name: clientName || "Unknown Client",
-          map_url: mapUrl || null,
-          address: address || null,
-          latitude: finalLat || null,
-          longitude: finalLng || null,
-          notes: notes || null,
-          status: taskStatus,
-          assigned_to: assignedToId,
-          assigned_date: assignedDate,
-                  created_by: adminId || null
-        });
+        // Create task in Supabase
+        const { data: task, error: taskError } = await supabase
+          .from("tasks")
+          .insert([{
+            title: String(caseId).trim(),
+            pincode: pincodeStr,
+            client_name: clientName ? String(clientName).trim() : null,
+            map_url: mapUrl || null,
+            address: address || null,
+            latitude: latitude ? parseFloat(latitude) : null,
+            longitude: longitude ? parseFloat(longitude) : null,
+            assigned_to: assignedToId,
+            assigned_date: assignedDate,
+            notes: notes ? String(notes).trim() : null,
+            status: taskStatus,
+          }])
+          .select();
+
+        if (taskError) throw taskError;
+
         successCount++;
-
       } catch (err) {
+        console.error(`❌ Error processing row ${rowNumber}:`, err.message);
         errors.push(`Row ${rowNumber}: ${err.message}`);
+        errorCount++;
       }
     }
 
-        // 🔥 BATCH INSERT (All-or-nothing transaction)
-    if (tasksToInsert.length > 0) {
-      console.log(`📦 Batch inserting ${tasksToInsert.length} tasks...`);
-      const { error: batchError } = await supabase.from("tasks").insert(tasksToInsert);
-      if (batchError) {
-        console.error("❌ Batch insert failed:", batchError);
-        throw new Error("Database batch insert failed: " + batchError.message);
-      }
-      console.log(`✅ Batch insert successful!`);
-    }
-
-    // Cleanup & Response
+    // Delete uploaded file
     fs.unlinkSync(req.file.path);
-    
-    await logActivity(adminId, adminName, "BULK_UPLOAD", null, `Uploaded ${successCount} tasks`, req);
-    
-    res.json({ 
-      success: true, 
-      message: `${successCount} tasks uploaded successfully.`, 
-      successCount, 
-      errors: errors.slice(0, 20), 
-      hasMoreErrors: errors.length > 20 
-    });
 
-  } catch (err) {
-    console.error("Bulk Upload Error:", err);
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ success: false, message: err.message });
+    console.log(`✅ Bulk upload completed: ${successCount} success, ${errorCount} errors`);
+
+    // Log activity
+    await logActivity(
+      adminId,
+      adminName,
+      "BULK_UPLOAD_COMPLETED",
+      null,
+      null,
+      req
+    );
+
+    res.json({
+      success: true,
+      message: `${successCount} tasks uploaded successfully`,
+      successCount: successCount,
+      errorCount: errorCount,
+      errors: errors.length > 0 ? errors.slice(0, 20) : null, // Limit to first 20 errors
+      hasMoreErrors: errors.length > 20,
+    });
+  } catch (error) {
+    console.error("❌ Bulk upload error:", error);
+
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: `Bulk upload failed: ${error.message}`,
+    });
   }
 });
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 6. CSV EXPORT (Fixed - Respects Filters & Date Range)
+// 6. CSV EXPORT (Download Tasks with Full Details - Supabase Version)
+// ═══════════════════════════════════════════════════════════════════════════
 app.get("/api/export", async (req, res) => {
   try {
-    const { status, employeeId, pincode, search, startDate, endDate } = req.query;
-    console.log("📥 Exporting tasks with filters:", req.query);
+    console.log("📥 Exporting tasks to CSV...");
 
-    // 1. Build Query (Database Level Filters)
-    let query = supabase
+    // Fetch all tasks
+    const { data: tasks, error: tasksError } = await supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (status && status !== "all") query = query.eq("status", status);
-    if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
-    if (pincode) query = query.eq("pincode", pincode);
-
-    const { data: tasks, error: tasksError } = await query;
     if (tasksError) throw tasksError;
 
-    // 2. Fetch Users (for names)
-    const { data: users } = await supabase.from("users").select("id, name, email, employee_id");
+    // Fetch all users to join employee names
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id, name, email, employee_id");
 
-    // 3. Apply Advanced Filters (In-Memory: Search & Date Range)
-    let finalTasks = tasks.filter(task => {
-      // Date Filter
-      if (startDate || endDate) {
-        const taskDate = task.assigned_date || task.assignedDate || (task.created_at ? task.created_at.split('T')[0] : null);
-        if (!taskDate) return false;
-        if (startDate && taskDate < startDate) return false;
-        if (endDate && taskDate > endDate) return false;
-      }
+    if (usersError) throw usersError;
 
-      // Search Filter (Fuzzy Match)
-      if (search) {
-        const s = search.toLowerCase();
-        const employee = users.find(u => u.id == task.assigned_to);
-        const empName = employee ? employee.name.toLowerCase() : "";
-        
-        return (
-          (task.title && task.title.toLowerCase().includes(s)) ||
-          (task.client_name && task.client_name.toLowerCase().includes(s)) ||
-          (task.pincode && String(task.pincode).includes(s)) ||
-          (task.notes && task.notes.toLowerCase().includes(s)) ||
-          (empName.includes(s))
-        );
-      }
-      return true;
-    });
+    // CSV Header
+    let csv = "CaseID,ClientName,Employee,EmployeeID,Email,AssignedDate,Status,Pincode,Latitude,Longitude,MapURL,Address,Notes,CreatedAt,CompletedAt,VerifiedAt,SLAStatus\n";
 
-    console.log(`📊 Exporting ${finalTasks.length} filtered tasks`);
-
-    // 4. Generate CSV
-    let csv = "CaseID,ClientName,Employee,EmployeeID,Pincode,Status,AssignedDate,CompletedAt,TimeElapsed,MapURL,Address,Notes\n";
-
-    finalTasks.forEach(task => {
+    // Build CSV rows
+    tasks.forEach(task => {
+      // Find employee
       const employee = users.find(u => u.id == task.assigned_to);
-      const empName = employee ? employee.name : "Unassigned";
-      const empId = employee ? employee.employee_id : "";
+      const employeeName = employee ? employee.name : "Unassigned";
+      const employeeId = employee ? employee.employee_id : "";
+      const employeeEmail = employee ? employee.email : "";
 
-      // SLA Calculation
+      // Calculate SLA status
       let slaStatus = "N/A";
-      if (task.status === "Pending" && task.assigned_date) {
-        const diff = (new Date() - new Date(task.assigned_date)) / (1000 * 60 * 60);
-        slaStatus = `${Math.floor(diff)}h`;
-      } else if (task.completed_at) {
-        slaStatus = "Done";
+      if (task.completed_at && task.assigned_date) {
+        const assignedTime = new Date(task.assigned_date).getTime();
+        const completedTime = new Date(task.completed_at).getTime();
+        const diffHours = (completedTime - assignedTime) / (1000 * 60 * 60);
+        slaStatus = diffHours <= 72 ? "On Time" : "Overdue";
+      } else if (task.status === "Pending" && task.assigned_date) {
+        const assignedTime = new Date(task.assigned_date).getTime();
+        const nowTime = new Date().getTime();
+        const diffHours = (nowTime - assignedTime) / (1000 * 60 * 60);
+        slaStatus = diffHours <= 72 ? "In Progress" : "Overdue";
       }
 
+      // Escape function for CSV
       const escape = (str) => {
         if (str === null || str === undefined) return "";
-        return `"${String(str).replace(/"/g, '""')}"`; // Handle commas/quotes
+        const strVal = String(str);
+        if (strVal.includes(",") || strVal.includes('"') || strVal.includes("\n")) {
+          return `"${strVal.replace(/"/g, '""')}"`;
+        }
+        return strVal;
       };
 
+      // Build row
       csv += [
         escape(task.title),
-        escape(task.client_name),
-        escape(empName),
-        escape(empId),
-        escape(task.pincode),
+        escape(task.client_name || ""),
+        escape(employeeName),
+        escape(employeeId),
+        escape(employeeEmail),
+        escape(task.assigned_date || ""),
         escape(task.status),
-        escape(task.assigned_date),
-        escape(task.completed_at ? new Date(task.completed_at).toISOString() : ""),
+        escape(task.pincode || ""),
+        task.latitude || "",
+        task.longitude || "",
+        escape(task.map_url || ""),
+        escape(task.address || ""),
+        escape(task.notes || ""),
+        task.created_at ? new Date(task.created_at).toISOString() : "",
+        task.completed_at ? new Date(task.completed_at).toISOString() : "",
+        task.verified_at ? new Date(task.verified_at).toISOString() : "",
         escape(slaStatus),
-        escape(task.map_url),
-        escape(task.address),
-        escape(task.notes)
       ].join(",") + "\n";
     });
 
-    res.header("Content-Type", "text/csv; charset=utf-8");
-    res.header("Content-Disposition", `attachment; filename="tasks-export-${new Date().toISOString().split('T')[0]}.csv"`);
-    res.send(csv);
+    console.log(`✅ Exported ${tasks.length} tasks to CSV`);
 
+    res.header("Content-Type", "text/csv; charset=utf-8");
+    res.header(
+      "Content-Disposition",
+      `attachment; filename="validiant-tasks-export-${new Date().toISOString().split('T')[0]}.csv"`
+    );
+    return res.send(csv);
   } catch (error) {
     console.error("❌ Export error:", error);
-    res.status(500).send("Export failed.");
+    res.status(500).send("Export failed. Please try again.");
   }
 });
 
@@ -1172,36 +1134,36 @@ app.post("/api/contact", async (req, res) => {
 
     console.log(`✅ Contact form submitted by ${email}`);
 
-// Send email notification to admin
-if (emailTransporter) {
-  const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #6366f1;">New Contact Form Submission</h2>
-      <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
-        ${company ? `<p><strong>Company:</strong> ${company}</p>` : ''}
-        <p><strong>Message:</strong></p>
-        <p style="background: white; padding: 15px; border-radius: 4px;">${message}</p>
-      </div>
-      <p style="color: #6b7280; font-size: 14px;">
-        Submitted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-      </p>
-    </div>
-  `;
+    // Send email notification to admin
+    if (emailTransporter) {
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #6366f1;">🔔 New Contact Form Submission</h2>
+          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
+            ${company ? `<p><strong>Company:</strong> ${company}</p>` : ''}
+            <p><strong>Message:</strong></p>
+            <p style="background: white; padding: 15px; border-radius: 4px;">${message}</p>
+          </div>
+          <p style="color: #6b7280; font-size: 14px;">
+            Submitted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+          </p>
+        </div>
+      `;
 
-  await sendEmail(
-    process.env.EMAIL_USER,
-    `New Contact Form: ${name} from ${company || 'Direct'}`,
-    emailHtml
-  );
-}
+      await sendEmail(
+        process.env.EMAIL_USER, // Send to yourself
+        `🔔 New Contact Form: ${name} from ${company || 'Direct'}`,
+        emailHtml
+      );
+    }
 
-res.json({ 
-  success: true, 
-  message: "Thank you! We'll get back to you soon." 
-});
+    res.json({
+      success: true,
+      message: "Thank you! We'll get back to you soon.",
+    });
   } catch (err) {
     console.error("❌ Contact form error:", err);
     res.status(500).json({
@@ -2283,45 +2245,6 @@ app.get("/signin", (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SERVICE WORKER - Offline Support
-// ═══════════════════════════════════════════════════════════════════════════
-app.get("/sw.js", (req, res) => {
-  res.setHeader("Content-Type", "application/javascript");
-  res.send(`
-const CACHE_NAME = 'validiant-v1';
-const ASSETS_TO_CACHE = [
-  '/signin',
-  '/app.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  // Cache-first for static assets
-  if (event.request.url.includes('font-awesome') || event.request.url.includes('.css')) {
-    event.respondWith(
-      caches.match(event.request).then((response) => response || fetch(event.request))
-    );
-  }
-  // Network-first for API (with offline message)
-  else if (event.request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request).catch(() => new Response(
-        JSON.stringify({ success: false, message: '📴 Offline - Changes will sync when online' }),
-        { headers: { 'Content-Type': 'application/json' } }
-      ))
-    );
-  }
-});
-  `);
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // FRONTEND - MAIN DASHBOARD APPLICATION (/app.js route)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2546,11 +2469,7 @@ app.get("/app.js", (req, res) => {
   html +=
     "@media (max-width: 900px) { .container { border-radius: 0; box-shadow: none; border-left: none; border-right: none; } .header { padding: 12px 12px 10px 12px; } .menu { padding: 8px 10px; } .content { padding: 12px 10px 16px 10px; } }";
   html +=
-    "@media (max-width: 640px) { .user-info { gap: 8px; } .user-chip span { max-width: 120px; } .menu { justify-content: flex-start; overflow-x: auto; } .menu::-webkit-scrollbar { height: 4px; } .menu::-webkit-scrollbar-thumb { background: rgba(55,65,81,0.9); border-radius: 999px; } ";
-  html += "/* iOS Touch Optimization */ ";
-  html += ".btn, .map-button, button { min-height: 44px; -webkit-tap-highlight-color: rgba(99, 102, 241, 0.2); touch-action: manipulation; } ";
-  html += ".content, .modal-content, table { -webkit-overflow-scrolling: touch; } ";
-  html += "input, select, textarea { font-size: 16px !important; } }";
+    "@media (max-width: 640px) { .user-info { gap: 8px; } .user-chip span { max-width: 120px; } .menu { justify-content: flex-start; overflow-x: auto; } .menu::-webkit-scrollbar { height: 4px; } .menu::-webkit-scrollbar-thumb { background: rgba(55,65,81,0.9); border-radius: 999px; } }";
 
   // NEW: ultra-smooth mobile layout for Admin > View All Tasks
   html +=
@@ -2630,19 +2549,7 @@ app.get("/app.js", (req, res) => {
       min-height: 44px;\
     }\
   }";
-  html += "    #taskDetailsPanel {\n";
-  html += "      position: fixed; bottom: 0; left: 0; right: 0; background: #fff; z-index: 2000;\n";
-  html += "      border-radius: 20px 20px 0 0; box-shadow: 0 -10px 40px rgba(0,0,0,0.3);\n";
-  html += "      transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);\n";
-  html += "      max-height: 85vh; overflow-y: auto; padding-bottom: 30px;\n";
-  html += "    }\n";
-  html += "    #taskDetailsPanel.active { transform: translateY(0); }\n";
-  html += "    #panelOverlay {\n";
-  html += "      position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6);\n";
-  html += "      z-index: 1999; opacity: 0; pointer-events: none; transition: opacity 0.3s;\n";
-  html += "    }\n";
-  html += "    #panelOverlay.active { opacity: 1; pointer-events: auto; }\n";
-  html += "    .panel-handle-bar { width: 50px; height: 5px; background: #e5e7eb; border-radius: 10px; margin: 15px auto; }\n";
+
   html += "</style>";
   html += "</head>";
   html += "<body>";
@@ -2677,11 +2584,7 @@ app.get("/app.js", (req, res) => {
   html += "</div>";
 
   html += "</div>"; // End container
-  html += '<div id="panelOverlay" onclick="closeTaskPanel()"></div>';
-  html += '<div id="taskDetailsPanel">';
-  html += '  <div class="panel-handle-bar" onclick="closeTaskPanel()"></div>';
-  html += '  <div id="panelContent" style="padding: 0 20px 20px 20px; color: #333;"></div>';
-  html += '</div>';
+
   // Now add the JavaScript (using string concatenation to avoid backtick issues)
   html += "<script>";
 
@@ -2700,8 +2603,6 @@ app.get("/app.js", (req, res) => {
   html += "let allHistoryTasks = [];\n";
   html += "let selectedTaskIds = [];\n";
   html += "let allAdminTasks = [];\n";
-  html += "let allUnassignedTasks = [];\n";
-  html += "let allEmployees = [];\n";
   html += "// Persistent sorting state for Sort by Nearest\n";
   html += "let isNearestSortActive = false;\n";
   html += "let savedEmployeeLocation = null; // { latitude, longitude }\n";
@@ -2796,35 +2697,14 @@ app.get("/app.js", (req, res) => {
   html += "  throw new Error('Invalid user data');\n";
   html += "}\n";
   html += "\n";
-  html += "\n";
-html += "// ✅ SAFETY CHECK: Validate user role exists\n";
-html += "if (!currentUser || !currentUser.role) {\n";
-html += "  console.error('❌ User role is missing or invalid!');\n";
-html += "  alert('Your session is invalid. Please login again.');\n";
-html += "  localStorage.removeItem('currentUser');\n";
-html += "  window.location.href = '/signin';\n";
-html += "  throw new Error('Invalid user session - missing role');\n";
-html += "}\n";
-html += "\n";
-html += "console.log('✅ User authenticated:', currentUser.name, 'Role:', currentUser.role);\n";
-html += "\n";
   html +=
     "// ═════════════════════════════on�o��═══════════════════════════════════════-c�════\n";
   html += "// SESSION TIMEOUT MANAGEMENT (15 minutes)\n";
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
-    html += "function resetSessionTimeout() {\n";
+  html += "function resetSessionTimeout() {\n";
   html += "  clearTimeout(sessionTimeout);\n";
-  html += "  \n";
-  html += "  // Warning at 13 minutes (2 min before expiry)\n";
-  html += "  setTimeout(function() {\n";
-  html += "    if (!sessionWarningShown) {\n";
-  html += "      showToast('⏰ Your session will expire in 2 minutes. Move your mouse to stay logged in.', 'warning');\n";
-  html += "      sessionWarningShown = true;\n";
-  html += "    }\n";
-  html += "  }, 780000); // 13 minutes\n";
-  html += "  \n";
   html += "  sessionTimeout = setTimeout(function() {\n";
   html += "    showToast('Session expired. Please login again.', 'error');\n";
   html += "    setTimeout(function() {\n";
@@ -2833,12 +2713,10 @@ html += "\n";
   html += "  }, 900000); // 15 minutes\n";
   html += "}\n";
   html += "\n";
-  html += "let sessionWarningShown = false;\n";
-  html += "\n";
   html += "resetSessionTimeout();\n";
-  html += "document.addEventListener('click', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
-  html += "document.addEventListener('keypress', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
-  html += "document.addEventListener('mousemove', function() { resetSessionTimeout(); sessionWarningShown = false; });\n";
+  html += "document.addEventListener('click', resetSessionTimeout);\n";
+  html += "document.addEventListener('keypress', resetSessionTimeout);\n";
+  html += "document.addEventListener('mousemove', resetSessionTimeout);\n";
   html += "\n";
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
@@ -2871,156 +2749,106 @@ html += "\n";
   html += "    toast.classList.remove('show');\n";
   html += "  }, 4000);\n";
   html += "}\n";
-  html += "function showEditMapModal(taskId) {\n";
-  html += "  // 🟢 Search in both lists (Admin View OR Unassigned Pool)\n";
-  html += "  var task = null;\n";
-  html += "  if (Array.isArray(allAdminTasks)) task = allAdminTasks.find(function(t) { return t.id === taskId; });\n";
-  html += "  if (!task && typeof allUnassignedTasks !== 'undefined' && Array.isArray(allUnassignedTasks)) {\n";
-  html += "    task = allUnassignedTasks.find(function(t) { return t.id === taskId; });\n";
-  html += "  }\n";
-  html += "\n";
-  html += "  if (!task) {\n";
-  html += "    showToast('Task data not found in memory. Please refresh.', 'error');\n";
-  html += "    return;\n";
-  html += "  }\n";
-  html += "\n";
-  html += "  var modal = document.createElement('div');\n";
-  html += "  modal.className = 'modal show';\n"; // Ensure 'show' class is added
-  html += "  modal.setAttribute('data-type', 'edit-map');\n";
-  html += "  \n";
-  html += "  var content = document.createElement('div');\n";
-  html += "  content.className = 'modal-content';\n";
-  html += "  \n";
-  html += "  var h2 = document.createElement('h2');\n";
-  html += "  h2.innerHTML = '<i class=\"fas fa-map-marked-alt\"></i> Edit Map Link';\n";
-  html += "  content.appendChild(h2);\n";
-  html += "  \n";
-  html += "  var p1 = document.createElement('p');\n";
-  html += "  p1.innerHTML = '<strong>Case ID:</strong> ' + escapeHtml(task.title);\n";
-  html += "  content.appendChild(p1);\n";
-  html += "  \n";
-  html += "  var p2 = document.createElement('p');\n";
-  html += "  p2.innerHTML = '<strong>Pincode:</strong> ' + escapeHtml(task.pincode || 'NA');\n";
-  html += "  content.appendChild(p2);\n";
-  html += "  \n";
-  html += "  var group = document.createElement('div');\n";
-  html += "  group.className = 'form-group';\n";
-  html += "  \n";
-  html += "  var label = document.createElement('label');\n";
-  html += "  label.setAttribute('for', 'editMapUrl');\n";
-  html += "  label.innerHTML = '<i class=\"fas fa-link\"></i> Google Maps URL';\n";
-  html += "  group.appendChild(label);\n";
-  html += "  \n";
-  html += "  var input = document.createElement('input');\n";
-  html += "  input.type = 'url';\n";
-  html += "  input.id = 'editMapUrl';\n";
-  html += "  input.className = 'search-box';\n";
-  html += "  input.style.width = '100%';\n";
-  html += "  input.placeholder = 'Paste Google Maps link';\n";
-  html += "  input.value = task.mapurl || task.map_url || task.mapUrl || '';\n";
-  html += "  group.appendChild(input);\n";
-  html += "  content.appendChild(group);\n";
-  html += "  \n";
-  html += "  var buttonsRow = document.createElement('div');\n";
-  html += "  buttonsRow.style.display = 'flex';\n";
-  html += "  buttonsRow.style.gap = '10px';\n";
-  html += "  buttonsRow.style.marginTop = '18px';\n";
-  html += "  \n";
-  html += "  var saveBtn = document.createElement('button');\n";
-  html += "  saveBtn.className = 'btn btn-primary btn-sm';\n";
-  html += "  saveBtn.innerHTML = '<i class=\"fas fa-save\"></i> Save';\n";
-  html += "  saveBtn.addEventListener('click', function () { saveMapUpdate(taskId); });\n";
-  html += "  buttonsRow.appendChild(saveBtn);\n";
-  html += "  \n";
-  html += "  var cancelBtn = document.createElement('button');\n";
-  html += "  cancelBtn.className = 'btn btn-secondary btn-sm';\n";
-  html += "  cancelBtn.innerHTML = '<i class=\"fas fa-times\"></i> Cancel';\n";
-  html += "  cancelBtn.addEventListener('click', closeEditMapModal);\n";
-  html += "  buttonsRow.appendChild(cancelBtn);\n";
-  html += "  \n";
-  html += "  content.appendChild(buttonsRow);\n";
-  html += "  modal.appendChild(content);\n";
-  html += "  document.body.appendChild(modal);\n";
-  html += "}\n";
+  html += "function showEditMapModal(taskId) {";
+  html += "  if (!Array.isArray(allAdminTasks)) {";
+  html += "    showToast('No tasks loaded in memory yet', 'error');";
+  html += "    return;";
+  html += "  }";
+  html +=
+    "  var task = allAdminTasks.find(function (t) { return t.id === taskId; });";
+  html += "  if (!task) {";
+  html += "    showToast('Task not found in current list', 'error');";
+  html += "    return;";
+  html += "  }";
+  html += "  var modal = document.createElement('div');";
+  html += "  modal.className = 'modal';";
+  html += "  modal.setAttribute('data-type', 'edit-map');";
+  html += "  var content = document.createElement('div');";
+  html += "  content.className = 'modal-content';";
+  html += "  var h2 = document.createElement('h2');";
+  html +=
+    "  h2.innerHTML = '<i class=\"fas fa-map-marked-alt\"></i> Edit Map Link';";
+  html += "  content.appendChild(h2);";
+  html += "  var p1 = document.createElement('p');";
+  html +=
+    "  p1.innerHTML = '<strong>Case ID:</strong> ' + escapeHtml(task.title);";
+  html += "  content.appendChild(p1);";
+  html += "  var p2 = document.createElement('p');";
+  html +=
+    "  p2.innerHTML = '<strong>Pincode:</strong> ' + escapeHtml(task.pincode || 'NA');";
+  html += "  content.appendChild(p2);";
+  html += "  var group = document.createElement('div');";
+  html += "  group.className = 'form-group';";
+  html += "  var label = document.createElement('label');";
+  html += "  label.setAttribute('for', 'editMapUrl');";
+  html +=
+    "  label.innerHTML = '<i class=\"fas fa-link\"></i> Google Maps URL';";
+  html += "  group.appendChild(label);";
+  html += "  var input = document.createElement('input');";
+  html += "  input.type = 'url';";
+  html += "  input.id = 'editMapUrl';";
+  html += "  input.className = 'search-box';";
+  html += "  input.placeholder = 'Paste Google Maps link';";
+  html += "  input.value = task.mapurl || task.map_url || task.mapUrl || '';";
+  html += "  group.appendChild(input);";
+  html += "  content.appendChild(group);";
+  html += "  var buttonsRow = document.createElement('div');";
+  html += "  buttonsRow.style.display = 'flex';";
+  html += "  buttonsRow.style.gap = '10px';";
+  html += "  buttonsRow.style.marginTop = '18px';";
+  html += "  var saveBtn = document.createElement('button');";
+  html += "  saveBtn.className = 'btn btn-primary btn-sm';";
+  html += "  saveBtn.innerHTML = '<i class=\"fas fa-save\"></i> Save';";
+  html +=
+    "  saveBtn.addEventListener('click', function () { saveMapUpdate(taskId); });";
+  html += "  buttonsRow.appendChild(saveBtn);";
+  html += "  var cancelBtn = document.createElement('button');";
+  html += "  cancelBtn.className = 'btn btn-secondary btn-sm';";
+  html += "  cancelBtn.innerHTML = '<i class=\"fas fa-times\"></i> Cancel';";
+  html += "  cancelBtn.addEventListener('click', closeEditMapModal);";
+  html += "  buttonsRow.appendChild(cancelBtn);";
+  html += "  content.appendChild(buttonsRow);";
+  html += "  modal.appendChild(content);";
+  html += "  document.body.appendChild(modal);";
+  html += "}";
   html += "function closeEditMapModal() {";
   html +=
     "  var modal = document.querySelector('.modal[data-type=\"edit-map\"]');";
   html += "  if (modal) modal.remove();";
   html += "}";
-  html += "function saveMapUpdate(taskId) {\n";
-  html += "  var input = document.getElementById('editMapUrl');\n";
-  html += "  if (!input) return;\n";
-  html += "  \n";
-  html += "  var newUrl = input.value.trim();\n";
-  html += "  /* Optional: Basic validation to ensure it's not empty, or allow empty to clear it */\n";
-  html += "  \n";
-  html += "  var btn = document.querySelector('.modal .btn-primary');\n";
-  html += "  if(btn) btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Saving...';\n";
-  html += "  \n";
-  html += "  fetch('/api/tasks/' + taskId, {\n";
-  html += "    method: 'PUT',\n";
-  html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify({ mapUrl: newUrl, userId: currentUser.id, userName: currentUser.name })\n";
-  html += "  })\n";
-  html += "  .then(function(res) { return res.json(); })\n";
-  html += "  .then(function(data) {\n";
-  html += "    if (data.success) {\n";
-  html += "      showToast('Map URL updated successfully', 'success');\n";
-  html += "      closeEditMapModal();\n";
-  html += "      \n";
-  html += "      // 🟢 SMART REFRESH LOGIC\n";
-  html += "      // Check if this task exists in the Unassigned list\n";
-  html += "      var isUnassigned = false;\n";
-  html += "      if (typeof allUnassignedTasks !== 'undefined' && Array.isArray(allUnassignedTasks)) {\n";
-  html += "        if (allUnassignedTasks.find(function(t) { return t.id === taskId; })) {\n";
-  html += "          isUnassigned = true;\n";
-  html += "        }\n";
-  html += "      }\n";
-  html += "      \n";
-  html += "      // Refresh the correct view based on where the task was found\n";
-  html += "      if (isUnassigned) {\n";
-  html += "        loadUnassignedTasks(); // Refresh Unassigned Table\n";
-  html += "      } else {\n";
-  html += "        loadAllTasks(); // Refresh Main Admin Table\n";
-  html += "      }\n";
-  html += "    } else {\n";
-  html += "      showToast('Failed to update map: ' + data.message, 'error');\n";
-  html += "      if(btn) btn.innerHTML = '<i class=\"fas fa-save\"></i> Save';\n";
-  html += "    }\n";
-  html += "  })\n";
-    html += "  .catch(function(err) {\n";
-  html += "    console.error(err);\n";
-  html += "    showToast('Error saving map update', 'error');\n";
-  html += "    if(btn) btn.innerHTML = '<i class=\"fas fa-save\"></i> Save';\n";
-  html += "  });\n";
-  html += "}\n";
-  html += "\n";
-  html += "// Attach change listeners to All Tasks filters\n";
-  html += "function attachAllTasksFilterListeners() {\n";
-  html += "  const statusEl = document.getElementById('allTasksStatusFilter');\n";
-  html += "  if (statusEl) statusEl.addEventListener('change', function() { loadAllTasks(); });\n";
-  html += "  \n";
-  html += "  const empEl = document.getElementById('allTasksEmployeeFilter');\n";
-  html += "  if (empEl) empEl.addEventListener('change', function() { loadAllTasks(); });\n";
-  html += "  \n";
-  html += "  const pinEl = document.getElementById('allTasksPincodeFilter');\n";
-  html += "  if (pinEl) pinEl.addEventListener('input', function() {\n";
-  html += "    const val = this.value.trim();\n";
-  html += "    if (val.length === 0 || val.length === 6) loadAllTasks();\n";
-  html += "  });\n";
-  html += "  \n";
-  html += "  const searchEl = document.getElementById('allTasksSearch');\n";
-  html += "  let searchTimeout;\n";
-  html += "  if (searchEl) searchEl.addEventListener('input', function() {\n";
-  html += "    clearTimeout(searchTimeout);\n";
-  html += "    searchTimeout = setTimeout(function() { loadAllTasks(); }, 500);\n";
-  html += "  });\n";
-  html += "  \n";
-  html += "  const fromDateEl = document.getElementById('allTasksFromDate');\n";
-  html += "  const toDateEl = document.getElementById('allTasksToDate');\n";
-  html += "  if (fromDateEl) fromDateEl.addEventListener('change', function() { loadAllTasks(); });\n";
-  html += "  if (toDateEl) toDateEl.addEventListener('change', function() { loadAllTasks(); });\n";
-  html += "}\n";
+  html += "function saveMapUpdate(taskId) {";
+  html += "  var input = document.getElementById('editMapUrl');";
+  html += "  if (!input) {";
+  html += "    showToast('Map URL field not found', 'error');";
+  html += "    return;";
+  html += "  }";
+  html += "  var url = input.value.trim();";
+  html += "  var payload = {";
+  html += "    mapUrl: url || null,";
+  html += "    userId: currentUser.id,";
+  html += "    userName: currentUser.name";
+  html += "  };";
+  html += "  fetch('/api/tasks/' + taskId, {";
+  html += "    method: 'PUT',";
+  html += "    headers: { 'Content-Type': 'application/json' },";
+  html += "    body: JSON.stringify(payload)";
+  html += "  })";
+  html += "  .then(function(res) { return res.json(); })";
+  html += "  .then(function(data) {";
+  html += "    if (data.success) {";
+  html += "      showToast('Map link updated successfully', 'success');";
+  html += "      closeEditMapModal();";
+  html += "      loadAllTasks();";
+  html += "    } else {";
+  html +=
+    "      showToast(data.message || 'Failed to update map link', 'error');";
+  html += "    }";
+  html += "  })";
+  html += "  .catch(function(err) {";
+  html += "    console.error('Error updating map link:', err);";
+  html += "    showToast('Connection error while updating map', 'error');";
+  html += "  });";
+  html += "}";
   html += "\n";
   html += "function showLoading(containerId) {\n";
   html +=
@@ -3507,12 +3335,12 @@ html += "\n";
   html += "}\n";
   html += "\n";
   html += "function loadUnassignedTasks(searchTerm) {\n";
-  html += "  const url = '/api/tasks/unassigned' + (searchTerm ? '?search=' + encodeURIComponent(searchTerm) : '');\n";
+  html +=
+    "  const url = '/api/tasks/unassigned' + (searchTerm ? '?search=' + encodeURIComponent(searchTerm) : '');\n";
   html += "  \n";
   html += "  fetch(url)\n";
   html += "    .then(function(res) { return res.json(); })\n";
   html += "    .then(function(tasks) {\n";
-  html += "      allUnassignedTasks = tasks; // 🟢 Store globally so Edit Modal can find them\n";
   html += "      fetch('/api/users')\n";
   html += "        .then(function(r) { return r.json(); })\n";
   html += "        .then(function(employees) {\n";
@@ -3521,7 +3349,8 @@ html += "\n";
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading unassigned tasks:', err);\n";
-  html += "      document.getElementById('unassignedTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Tasks</h3><p>Please try again.</p></div>';\n";
+  html +=
+    "      document.getElementById('unassignedTasksList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Tasks</h3><p>Please try again.</p></div>';\n";
   html += "      showToast('Failed to load tasks', 'error');\n";
   html += "    });\n";
   html += "}\n";
@@ -3533,11 +3362,14 @@ html += "\n";
   html += "    html = '<div class=\"empty-state\">';\n";
   html += "    html += '<i class=\"fas fa-check-circle\"></i>';\n";
   html += "    html += '<h3>All Clear!</h3>';\n";
-  html += "    html += '<p>No unassigned tasks found. All tasks have been assigned to employees.</p>';\n";
+  html +=
+    "    html += '<p>No unassigned tasks found. All tasks have been assigned to employees.</p>';\n";
   html += "    html += '</div>';\n";
   html += "  } else {\n";
-  html += "    html = '<p style=\"color: #e5e7eb; font-weight: 600; font-size: 13px; margin-bottom: 14px;\">';\n";
-  html += "    html += '<i class=\"fas fa-info-circle\"></i> Found ' + tasks.length + ' unassigned task(s)';\n";
+  html +=
+    "    html = '<p style=\"color: #e5e7eb; font-weight: 600; font-size: 13px; margin-bottom: 14px;\">';\n";
+  html +=
+    "    html += '<i class=\"fas fa-info-circle\"></i> Found ' + tasks.length + ' unassigned task(s)';\n";
   html += "    html += '</p>';\n";
   html += "    \n";
   html += "    html += '<table class=\"table\">';\n";
@@ -3552,35 +3384,36 @@ html += "\n";
   html += "    html += '<tbody>';\n";
   html += "    \n";
   html += "    tasks.forEach(function(task) {\n";
-  html += "      // 🟢 Robust map URL check\n";
-  html += "      const finalMapUrl = task.mapUrl || task.map_url || task.mapurl || null;\n";
-  html += "      \n";
   html += "      html += '<tr>';\n";
-  html += "      html += '<td data-label=\"Case ID\"><strong>' + escapeHtml(task.title) + '</strong></td>';\n";
-  html += "      html += '<td>' + escapeHtml(task.clientName || '-') + '</td>';\n";
-  html += "      html += '<td><span class=\"pincode-highlight\"><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'N/A') + '</span></td>';\n";
-  html += "      \n";
+  html +=
+    "      html += '<td data-label=\\\"Case ID\\\"><strong>' + escapeHtml(task.title) + '</strong></td>';\n";
+  html += " html += '<td>' + escapeHtml(task.clientName || '-') + '</td>';\n";
+  html +=
+    "      html += '<td><span class=\"pincode-highlight\"><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'N/A') + '</span></td>';\n";
   html += "      html += '<td>';\n";
-  html += "      if (finalMapUrl) {\n";
-  html += "        html += '<a href=\"' + escapeHtml(finalMapUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: #3b82f6; font-weight: 600; margin-right:8px;\">';\n";
-  html += "        html += '<i class=\"fas fa-map-marker-alt\"></i> View Map';\n";
+  html += "      if (task.mapUrl) {\n";
+  html +=
+    '        html += \'<a href="\' + escapeHtml(task.mapUrl) + \'" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; font-weight: 600;">\';\n';
+  html +=
+    "        html += '<i class=\"fas fa-map-marker-alt\"></i> View Map';\n";
   html += "        html += '</a>';\n";
   html += "      } else {\n";
-  html += "        html += '<span style=\"color: #9ca3af; font-style: italic; margin-right:8px;\">No map</span>';\n";
+  html +=
+    "        html += '<span style=\"color: #9ca3af; font-style: italic;\">No map</span>';\n";
   html += "      }\n";
-  html += "      // 🟢 The Edit Map Button\n";
-  html += "      html += '<button class=\"btn btn-secondary btn-sm\" style=\"padding:4px 8px;font-size:11px;\" title=\"Edit map link\" onclick=\"showEditMapModal(' + task.id + ')\"><i class=\"fas fa-pen\"></i></button>';\n";
   html += "      html += '</td>';\n";
-  html += "      \n";
   html += "      html += '<td>' + escapeHtml(task.notes || 'N/A') + '</td>';\n";
   html += "      html += '<td>';\n";
-  html += "      html += '<select id=\"emp-' + task.id + '\" style=\"padding: 10px; border-radius: 8px; margin-right: 10px; border: 2px solid #e2e8f0; font-weight: 600;\">';\n";
+  html +=
+    "      html += '<select id=\"emp-' + task.id + '\" style=\"padding: 10px; border-radius: 8px; margin-right: 10px; border: 2px solid #e2e8f0; font-weight: 600;\">';\n";
   html += "      html += '<option value=\"\">Select Employee</option>';\n";
   html += "      employees.forEach(function(emp) {\n";
-  html += "        html += '<option value=\"' + emp.id + '\">' + escapeHtml(emp.name) + '</option>';\n";
+  html +=
+    "        html += '<option value=\"' + emp.id + '\">' + escapeHtml(emp.name) + '</option>';\n";
   html += "      });\n";
   html += "      html += '</select>';\n";
-  html += "      html += '<button class=\"btn btn-success btn-sm\" onclick=\"assignTaskToEmployee(' + task.id + ')\">';\n";
+  html +=
+    "      html += '<button class=\"btn btn-success btn-sm\" onclick=\"assignTaskToEmployee(' + task.id + ')\">';\n";
   html += "      html += '<i class=\"fas fa-user-check\"></i> Assign';\n";
   html += "      html += '</button>';\n";
   html += "      html += '</td>';\n";
@@ -3590,7 +3423,8 @@ html += "\n";
   html += "    html += '</tbody></table>';\n";
   html += "  }\n";
   html += "  \n";
-  html += "  document.getElementById('unassignedTasksList').innerHTML = html;\n";
+  html +=
+    "  document.getElementById('unassignedTasksList').innerHTML = html;\n";
   html += "}\n";
   html += "\n";
   html += "function searchUnassignedTasks() {\n";
@@ -4252,7 +4086,6 @@ function attachAllTasksFilterListeners() {
   html += "      const finalTasks = applyAllTasksDateFilter(allAdminTasks);\n";
   html += "      updateAllTasksFilterChips();\n";
   html += "      displayAllTasks(finalTasks);\n";
-  html += "    attachAllTasksFilterListeners();\n";
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading tasks:', err);\n";
@@ -4548,121 +4381,23 @@ function attachAllTasksFilterListeners() {
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
   html += "function showEmployees() {\n";
-  html += "  fetch('/api/users')\n";
-  html += "    .then(function(res) { return res.json(); })\n";
-  html += "    .then(function(users) {\n";
-  html += "      allEmployees = users; // 🟢 Store globally\n";
-  html += "      var container = document.getElementById('employeesList');\n";
-  html += "      \n";
-  html += "      if (users.length === 0) {\n";
-  html += "        container.innerHTML = '<p>No employees found.</p>';\n";
-  html += "        return;\n";
-  html += "      }\n";
-  html += "      \n";
-  html += "      var html = '<table class=\"table\">';\n";
-  html += "      html += '<thead><tr><th>Name</th><th>ID</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>';\n";
-  html += "      html += '<tbody>';\n";
-  html += "      \n";
-  html += "      users.forEach(function(u) {\n";
-  html += "        html += '<tr>';\n";
-  html += "        html += '<td>' + escapeHtml(u.name) + '</td>';\n";
-  html += "        html += '<td>' + escapeHtml(u.employeeId || '-') + '</td>';\n";
-  html += "        html += '<td>' + escapeHtml(u.email) + '</td>';\n";
-  html += "        html += '<td>' + escapeHtml(u.phone || '-') + '</td>';\n";
-  html += "        html += '<td>' + (u.isActive ? '<span class=\"status-pill status-verified\">Active</span>' : '<span class=\"status-pill status-unassigned\">Inactive</span>') + '</td>';\n";
-  html += "        html += '<td>';\n";
-  html += "        \n";
-  html += "        // 🟢 Edit Button\n";
-  html += "        html += '<button class=\"btn btn-secondary btn-sm\" onclick=\"showEditEmployeeModal(' + u.id + ')\" style=\"margin-right:5px;\"><i class=\"fas fa-edit\"></i> Edit</button>';\n";
-  html += "        \n";
-  html += "        // Delete Button\n";
-  html += "        html += '<button class=\"btn btn-danger btn-sm\" onclick=\"deleteEmployee(' + u.id + ')\"><i class=\"fas fa-trash\"></i></button>';\n";
-  html += "        \n";
-  html += "        html += '</td>';\n";
-  html += "        html += '</tr>';\n";
-  html += "      });\n";
-  html += "      \n";
-  html += "      html += '</tbody></table>';\n";
-  html += "      container.innerHTML = html;\n";
-  html += "    });\n";
+  html +=
+    "  let html = '<h2><i class=\"fas fa-users\"></i> Manage Employees</h2>';\n";
+  html += "  \n";
+  html +=
+    '  html += \'<button class="btn btn-primary" onclick="showAddEmployee()" style="margin-bottom: 25px;">\';\n';
+  html += "  html += '<i class=\"fas fa-user-plus\"></i> Add New Employee';\n";
+  html += "  html += '</button>';\n";
+  html += "  \n";
+  html += "  html += '<div id=\"employeeList\">';\n";
+  html +=
+    '  html += \'<div class="loading-spinner show"><i class="fas fa-spinner"></i>Loading employees...</div>\';\n';
+  html += "  html += '</div>';\n";
+  html += "  \n";
+  html += "  document.getElementById('content').innerHTML = html;\n";
+  html += "  loadEmployees();\n";
   html += "}\n";
-  html += "function showEditEmployeeModal(userId) {\n";
-  html += "  var user = allEmployees.find(function(u) { return u.id === userId; });\n";
-  html += "  if (!user) return;\n";
   html += "\n";
-  html += "  var modal = document.createElement('div');\n";
-  html += "  modal.className = 'modal show';\n";
-  html += "  \n";
-  html += "  var content = document.createElement('div');\n";
-  html += "  content.className = 'modal-content';\n";
-  html += "  \n";
-  html += "  var h2 = document.createElement('h2');\n";
-  html += "  h2.innerHTML = '<i class=\"fas fa-user-edit\"></i> Edit Employee';\n";
-  html += "  content.appendChild(h2);\n";
-  html += "  \n";
-  html += "  // Form Generation Helper\n";
-  html += "  function createInput(label, id, value, type = 'text', placeholder = '') {\n";
-  html += "    var div = document.createElement('div'); div.className = 'form-group';\n";
-  html += "    div.innerHTML = '<label>' + label + '</label><input type=\"' + type + '\" id=\"' + id + '\" value=\"' + (value || '') + '\" class=\"search-box\" style=\"width:100%\" placeholder=\"' + placeholder + '\">';\n";
-  html += "    return div;\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  content.appendChild(createInput('Full Name', 'editEmpName', user.name));\n";
-  html += "  content.appendChild(createInput('Email', 'editEmpEmail', user.email, 'email'));\n";
-  html += "  content.appendChild(createInput('Employee ID', 'editEmpId', user.employeeId));\n";
-  html += "  content.appendChild(createInput('Phone', 'editEmpPhone', user.phone, 'tel'));\n";
-  html += "  content.appendChild(createInput('New Password (Optional)', 'editEmpPass', '', 'password', 'Leave blank to keep current'));\n";
-  html += "  \n";
-  html += "  // Buttons\n";
-  html += "  var btnRow = document.createElement('div');\n";
-  html += "  btnRow.style.marginTop = '20px';\n";
-  html += "  btnRow.style.display = 'flex';\n";
-  html += "  btnRow.style.gap = '10px';\n";
-  html += "  \n";
-  html += "  var saveBtn = document.createElement('button');\n";
-  html += "  saveBtn.className = 'btn btn-primary';\n";
-  html += "  saveBtn.innerText = 'Save Changes';\n";
-  html += "  saveBtn.onclick = function() { saveEmployeeUpdate(userId, modal); };\n";
-  html += "  \n";
-  html += "  var cancelBtn = document.createElement('button');\n";
-  html += "  cancelBtn.className = 'btn btn-secondary';\n";
-  html += "  cancelBtn.innerText = 'Cancel';\n";
-  html += "  cancelBtn.onclick = function() { document.body.removeChild(modal); };\n";
-  html += "  \n";
-  html += "  btnRow.appendChild(saveBtn);\n";
-  html += "  btnRow.appendChild(cancelBtn);\n";
-  html += "  content.appendChild(btnRow);\n";
-  html += "  \n";
-  html += "  modal.appendChild(content);\n";
-  html += "  document.body.appendChild(modal);\n";
-  html += "}\n";
-
-  html += "function saveEmployeeUpdate(userId, modal) {\n";
-  html += "  var name = document.getElementById('editEmpName').value;\n";
-  html += "  var email = document.getElementById('editEmpEmail').value;\n";
-  html += "  var empId = document.getElementById('editEmpId').value;\n";
-  html += "  var phone = document.getElementById('editEmpPhone').value;\n";
-  html += "  var pass = document.getElementById('editEmpPass').value;\n";
-  html += "  \n";
-  html += "  fetch('/api/users/' + userId, {\n";
-  html += "    method: 'PUT',\n";
-  html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify({\n";
-  html += "      name: name, email: email, employeeId: empId, phone: phone, password: pass,\n";
-  html += "      adminId: currentUser.id, adminName: currentUser.name\n";
-  html += "    })\n";
-  html += "  })\n";
-  html += "  .then(function(r) { return r.json(); })\n";
-  html += "  .then(function(data) {\n";
-  html += "    if (data.success) {\n";
-  html += "      showToast('Employee updated successfully', 'success');\n";
-  html += "      document.body.removeChild(modal);\n";
-  html += "      showEmployees(); // Refresh list\n";
-  html += "    } else {\n";
-  html += "      showToast('Error: ' + data.message, 'error');\n";
-  html += "    }\n";
-  html += "  });\n";
-  html += "}\n";
   html += "function openResetPasswordModal(empId, empEmail) {\n";
   html += "  const modal = document.createElement('div');\n";
   html += "  modal.className = 'modal show';\n";
@@ -4929,98 +4664,18 @@ function attachAllTasksFilterListeners() {
   html +=
     "      html += '<button class=\"btn btn-danger btn-sm\" onclick=\\'deleteEmployeePrompt(' + emp.id + ', ' + JSON.stringify(emp.name) + ')\\'><i class=\"fas fa-trash\"></i> Delete</button>';\n";
   html += "      html += '</td>';\n";
-  html += "      html += '</tr>';\n";
-  html += "    });\n";
-  html += "    html += '</tbody></table>';\n";
-  html += "  }\n";
-  html += "  document.getElementById('employeesList').innerHTML = html;\n";
-  html += "})\n";
-  html += ".catch(function(err) {\n";
-  html += "  console.error('Error loading employees:', err);\n";
-  html += "  document.getElementById('employeesList').innerHTML = '<p>Error loading list.</p>';\n";
-  html += "});\n";
-  html += "}\n";
-  
-  // Password Reset Modal Function
-  html += "\n";
-  html += "function openResetPasswordModal(empId, empEmail) {\n";
-  html += "  const modal = document.createElement('div');\n";
-  html += "  modal.className = 'modal show';\n";
-  html += "  modal.setAttribute('data-type', 'reset-password');\n";
-  html += "  \n";
-  html += "  let modalHtml = '<div class=\"modal-content\">';\n";
-  html += "  modalHtml += '<h2><i class=\"fas fa-key\"></i> Reset Password</h2>';\n";
-  html += "  modalHtml += '<p style=\"color: #9ca3af; margin-bottom: 16px;\">Reset password for: <strong>' + escapeHtml(empEmail) + '</strong></p>';\n";
-  html += "  \n";
-  html += "  modalHtml += '<div class=\"form-group\">';\n";
-  html += "  modalHtml += '<label for=\"newPassword\"><i class=\"fas fa-lock\"></i> New Password (leave blank for auto-generate)</label>';\n";
-  html += "  modalHtml += '<input type=\"text\" id=\"newPassword\" class=\"search-box\" placeholder=\"Auto-generate if empty\" style=\"width: 100%;\">';\n";
-  html += "  modalHtml += '</div>';\n";
-  html += "  \n";
-  html += "  modalHtml += '<div style=\"display: flex; gap: 12px; margin-top: 20px;\">';\n";
-  html += "  modalHtml += '<button class=\"btn btn-primary\" onclick=\"submitPasswordReset(' + empId + ')\"><i class=\"fas fa-check\"></i> Reset Password</button>';\n";
-  html += "  modalHtml += '<button class=\"btn btn-secondary\" onclick=\"closeResetPasswordModal()\"><i class=\"fas fa-times\"></i> Cancel</button>';\n";
-  html += "  modalHtml += '</div>';\n";
-  html += "  modalHtml += '</div>';\n";
-  html += "  \n";
-  html += "  modal.innerHTML = modalHtml;\n";
-  html += "  document.body.appendChild(modal);\n";
-  html += "}\n";
-  html += "\n";
-  html += "function closeResetPasswordModal() {\n";
-  html += "  const modal = document.querySelector('.modal[data-type=\"reset-password\"]');\n";
-  html += "  if (modal) modal.remove();\n";
-  html += "}\n";
-  html += "\n";
-  html += "function submitPasswordReset(empId) {\n";
-  html += "  const newPassword = document.getElementById('newPassword').value.trim();\n";
-  html += "  const btn = event.target;\n";
-  html += "  btn.disabled = true;\n";
-  html += "  btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Resetting...';\n";
-  html += "  \n";
-  html += "  fetch('/api/users/' + empId + '/reset-password', {\n";
-  html += "    method: 'POST',\n";
-  html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify({\n";
-  html += "      adminId: currentUser.id,\n";
-  html += "      adminName: currentUser.name,\n";
-  html += "      newPassword: newPassword || null\n";
-  html += "    })\n";
-  html += "  })\n";
-  html += "  .then(function(res) { return res.json(); })\n";
-  html += "  .then(function(data) {\n";
-  html += "    if (data.success) {\n";
-  html += "      showToast('Password reset! New password: ' + data.tempPassword, 'success');\n";
-  html += "      closeResetPasswordModal();\n";
-  html += "      \n";
-  html += "      // Show password in alert for admin to share with employee\n";
-  html += "      alert('✅ Password Reset Successful!\\n\\nNew temporary password:\\n' + data.tempPassword + '\\n\\nPlease share this with the employee securely.');\n";
-  html += "    } else {\n";
-  html += "      showToast('Failed: ' + data.message, 'error');\n";
-  html += "      btn.disabled = false;\n";
-  html += "      btn.innerHTML = '<i class=\"fas fa-check\"></i> Reset Password';\n";
-  html += "    }\n";
-  html += "  })\n";
-  html += "  .catch(function(err) {\n";
-  html += "    console.error(err);\n";
-  html += "    showToast('Connection error', 'error');\n";
-  html += "    btn.disabled = false;\n";
-  html += "    btn.innerHTML = '<i class=\"fas fa-check\"></i> Reset Password';\n";
-  html += "  });\n";
-  html += "}\n";
-  html += "\n";
   html += "          html += '</tr>';\n";
   html += "        });\n";
   html += "        \n";
   html += "        html += '</tbody></table>';\n";
   html += "      }\n";
   html += "      \n";
-  html += "      document.getElementById('employeesList').innerHTML = html;\n";
+  html += "      document.getElementById('employeeList').innerHTML = html;\n";
   html += "    })\n";
   html += "    .catch(function(err) {\n";
   html += "      console.error('Error loading employees:', err);\n";
   html +=
-    "      document.getElementById('employeesList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Employees</h3><p>Please try again.</p></div>';\n";
+    "      document.getElementById('employeeList').innerHTML = '<div class=\"empty-state\"><i class=\"fas fa-exclamation-triangle\"></i><h3>Error Loading Employees</h3><p>Please try again.</p></div>';\n";
   html += "      showToast('Failed to load employees', 'error');\n";
   html += "    });\n";
   html += "}\n";
@@ -5142,29 +4797,11 @@ function attachAllTasksFilterListeners() {
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
   html += "function exportTasks() {\n";
-  html += "  // Read values from the 'All Tasks' filter bar\n";
-  html += "  const statusEl = document.getElementById('allTasksStatusFilter');\n";
-  html += "  const empEl = document.getElementById('allTasksEmployeeFilter');\n";
-  html += "  const pinEl = document.getElementById('allTasksPincodeFilter');\n";
-  html += "  const searchEl = document.getElementById('allTasksSearch');\n";
-  html += "  const fromEl = document.getElementById('allTasksFromDate');\n";
-  html += "  const toEl = document.getElementById('allTasksToDate');\n";
-  html += "\n";
-  html += "  const params = new URLSearchParams();\n";
-  html += "\n";
-  html += "  if (statusEl && statusEl.value !== 'all') params.append('status', statusEl.value);\n";
-  html += "  if (empEl && empEl.value !== 'all') params.append('employeeId', empEl.value);\n";
-  html += "  if (pinEl && pinEl.value.trim()) params.append('pincode', pinEl.value.trim());\n";
-  html += "  if (searchEl && searchEl.value.trim()) params.append('search', searchEl.value.trim());\n";
-  html += "  if (fromEl && fromEl.value) params.append('startDate', fromEl.value);\n";
-  html += "  if (toEl && toEl.value) params.append('endDate', toEl.value);\n";
-  html += "\n";
-  html += "  showToast('Preparing export with current filters...', 'info');\n";
-  html += "  window.location.href = '/api/export?' + params.toString();\n";
-  html += "\n";
+  html += "  showToast('Preparing export...', 'info');\n";
+  html += "  window.location.href = '/api/export';\n";
   html += "  setTimeout(function() {\n";
-  html += "    showToast('Download started!', 'success');\n";
-  html += "  }, 2000);\n";
+  html += "    showToast('Export downloaded successfully!', 'success');\n";
+  html += "  }, 1000);\n";
   html += "}\n";
   html += "\n";
   html +=
@@ -5211,58 +4848,10 @@ function attachAllTasksFilterListeners() {
   html += "  loadTodayTasks();\n";
   html += "}\n";
   html += "\n";
-  html += "function openTaskPanel(task) {\n";
-  html += "  var panel = document.getElementById('taskDetailsPanel');\n";
-  html += "  var overlay = document.getElementById('panelOverlay');\n";
-  html += "  var content = document.getElementById('panelContent');\n";
-  html += "  \n";
-  html += "  // Safe map URL check\n";
-  html += "  var mapLink = task.mapurl || task.map_url || task.mapUrl || '';\n";
-  html += "  \n";
-  html += "  var html = '';\n";
-  html += "  html += '<h2 style=\"margin-top:0; font-size:18px; color:#111827\">' + escapeHtml(task.title) + '</h2>';\n";
-  html += "  html += '<p style=\"color:#6b7280; font-size:13px; margin-bottom:15px\">' + escapeHtml(task.clientName || 'Unknown Client') + '</p>';\n";
-  html += "  \n";
-  html += "  html += '<div style=\"display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px\">';\n";
-  html += "  html += '  <div style=\"background:#f3f4f6; padding:12px; border-radius:12px\"><strong>Pincode</strong><br>' + escapeHtml(task.pincode) + '</div>';\n";
-  html += "  html += '  <div style=\"background:#f3f4f6; padding:12px; border-radius:12px\"><strong>Status</strong><br>' + escapeHtml(task.status) + '</div>';\n";
-  html += "  html += '</div>';\n";
-  html += "  \n";
-  html += "  if (mapLink) {\n";
-  html += "    html += '<a href=\"' + mapLink + '\" target=\"_blank\" class=\"btn btn-primary\" style=\"display:flex; width:100%; justify-content:center; padding:14px; margin-bottom:12px; font-size:14px\"><i class=\"fas fa-location-arrow\"></i> Navigate to Location</a>';\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  html += '<div style=\"background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:15px; margin-top:15px\">';\n";
-  html += "  html += '  <label style=\"font-size:12px; color:#6b7280; display:block; margin-bottom:8px\">UPDATE STATUS</label>';\n";
-  html += "  html += '  <div style=\"display:flex; gap:10px\">';\n";
-  html += "  html += '    <select id=\"panel-status-' + task.id + '\" style=\"flex:1; padding:10px; border-radius:8px; border:1px solid #d1d5db\">';\n";
-  html += "  html += '      <option value=\"Pending\">Pending</option>';\n";
-  html += "  html += '      <option value=\"Completed\">Completed</option>';\n";
-  html += "  html += '      <option value=\"Verified\">Verified</option>';\n";
-  html += "  html += '      <option value=\"Left Job\">Left Job</option>';\n";
-  html += "  html += '      <option value=\"Not Picking\">Not Picking</option>';\n";
-  html += "  html += '    </select>';\n";
-  html += "  html += '    <button class=\"btn btn-primary\" onclick=\"updateTaskStatus(' + task.id + ', true)\">Update</button>';\n";
-  html += "  html += '  </div>';\n";
-  html += "  html += '</div>';\n";
-  html += "  \n";
-  html += "  content.innerHTML = html;\n";
-  html += "  \n";
-  html += "  // Set current status in dropdown\n";
-  html += "  setTimeout(function() { document.getElementById('panel-status-' + task.id).value = task.status; }, 50);\n";
-  html += "  \n";
-  html += "  panel.classList.add('active');\n";
-  html += "  overlay.classList.add('active');\n";
-  html += "}\n";
-  html += "\n";
-  html += "function closeTaskPanel() {\n";
-  html += "  document.getElementById('taskDetailsPanel').classList.remove('active');\n";
-  html += "  document.getElementById('panelOverlay').classList.remove('active');\n";
-  html += "}\n";
   html += "function loadTodayTasks(searchTerm) {\n";
   html += "  // --- FIX 2: PRIVACY FIX ---\n";
   html += "  // Changed userId= to employeeId= so backend filters correctly\n";
-  html += "  const url = '/api/tasks?role=employee&status=Pending&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
+  html += "  const url = '/api/tasks?role=employee&employeeId=' + currentUser.id + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');\n";
   html += "  \n";
   html += "  fetch(url)\n";
   html += "    .then(function(res) { return res.json(); })\n";
@@ -5308,26 +4897,86 @@ function attachAllTasksFilterListeners() {
   html += "    html += '<div class=\"grid\">';\n";
   html += "    \n";
   html += "    tasks.forEach(function(task) {\n";
-  html += "      const statusClass = 'status-' + task.status.toLowerCase().replace(/ /g, '-');\n";
+  html +=
+    "      const statusClass = 'status-' + task.status.toLowerCase().replace(/ /g, '-');\n";
   html += "      \n";
-  html += "      // 🟢 COMPACT CARD (Click to Open Panel)\n";
-  html += "      html += '<div class=\"task-card\" onclick=\\'openTaskPanel(' + JSON.stringify(task).replace(/'/g, \"&apos;\") + ')\\'>';\n";
-  html += "      html += '  <div style=\"display:flex; justify-content:space-between; align-items:center;\">';\n";
-  html += "      html += '    <h3 style=\"margin:0; font-size:15px; color:#e5e7eb;\"><i class=\"fas fa-clipboard-list\" style=\"color:#818cf8\"></i> ' + escapeHtml(task.title) + '</h3>';\n";
-  html += "      html += '    <span class=\"status-badge ' + statusClass + '\" style=\"font-size:10px\">' + escapeHtml(task.status) + '</span>';\n";
-  html += "      html += '  </div>';\n";
-  html += "      html += '  <div style=\"margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;\">';\n";
-  html += "      html += '    <span><i class=\"fas fa-map-pin\"></i> ' + escapeHtml(task.pincode || 'N/A') + '</span>';\n";
-  html += "      html += '    <div style=\"display:flex; gap:10px; align-items:center;\">';\n";
-  html += "      if (task.mapurl || task.map_url || task.mapUrl) {\n";
-  html += "         // Stop propagation prevents the panel from opening when clicking the map icon\n";
-  html += "         html += ' <a href=\"' + (task.mapurl || task.map_url || task.mapUrl) + '\" target=\"_blank\" onclick=\"event.stopPropagation()\" style=\"color:#38bdf8; font-size:16px;\"><i class=\"fas fa-location-arrow\"></i></a>';\n";
+  html += "      html += '<div class=\"task-card\">';\n";
+  html +=
+    "      html += '<h3><i class=\"fas fa-clipboard-list\"></i> ' + escapeHtml(task.title) + '</h3>';\n";
+  html += " if (task.clientName) {\n";
+  html +=
+    " html += '<p><strong>Client:</strong> ' + escapeHtml(task.clientName) + '</p>';\n";
+  html += " }\n";
+  html += "      \n";
+  html += "      html += '<div class=\"pincode-highlight\">';\n";
+  html +=
+    "      html += '<i class=\"fas fa-map-pin\"></i> Pincode: ' + escapeHtml(task.pincode || 'N/A');\n";
+  html += "      html += '</div>';\n";
+  html += "      \n";
+  html += "      if (task.distance !== undefined) {\n";
+  html += "        html += '<div class=\"distance-indicator\">';\n";
+  html +=
+    "        html += '<i class=\"fas fa-route\"></i> Distance: ' + task.distance.toFixed(2) + ' km away';\n";
+  html += "        html += '</div>';\n";
   html += "      }\n";
-  html += "      html += '    <span style=\"color:#60a5fa\">Tap for details <i class=\"fas fa-chevron-right\" style=\"font-size:10px\"></i></span>';\n";    
-  html += "      html += '    </div>';\n";
-  html += "      html += '  </div>';\n";
+  html += "      \n";
+  html +=
+    "      html += '<span class=\"status-badge ' + statusClass + '\">';\n";
+  html +=
+    "      html += '<i class=\"fas fa-circle\"></i> ' + escapeHtml(task.status);\n";
+  html += "      html += '</span>';\n";
+  html += "      \n";
+  html += "      if (task.notes) {\n";
+  html +=
+    "        html += '<p style=\"margin-top: 13px; color: #e5e7eb; font-size: 13px;\"><i class=\"fas fa-sticky-note\"></i> ' + escapeHtml(task.notes) + '</p>';\n";
+  html += "      }\n";
+  html += "      \n";
+  html += "      // Feature #8: MapURL visibility (CRITICAL)\n";
+  html += '        var taskMapUrl = task.mapurl || task.map_url || task.mapUrl;\n';
+  html += '        if (taskMapUrl) {\n';
+  html += '        html += \'<a href="\' + escapeHtml(taskMapUrl) + \'" target="_blank" rel="noopener noreferrer" class="map-button">\';\n';
+  html +=
+    "        html += '<i class=\"fas fa-location-arrow\"></i> Open Map';\n";
+  html += "        html += '</a>';\n";
+  html += "      } else {\n";
+  html +=
+    '        html += \'<div class="no-map"><i class="fas fa-map-marker-alt"></i> No map available for this task</div>\';\n';
+  html += "      }\n";
+  html += "      \n";
+  html += "      html += '<div class=\"action-buttons\">';\n";
+  html +=
+    "      html += '<select id=\"status-' + task.id + '\" style=\"flex: 2;\">';\n";
+  html +=
+    "      html += '<option value=\"Pending\"' + (task.status === 'Pending' ? ' selected' : '') + '>Select updated status</option>'; \n";
+  html +=
+    "      html += '<option value=\"Completed\"' + (task.status === 'Completed' ? ' selected' : '') + '>Completed</option>'; \n";
+  html +=
+    "      html += '<option value=\"Verified\"' + (task.status === 'Verified' ? ' selected' : '') + '>Verified</option>'; \n";
+  html +=
+    "      html += '<option value=\"Left Job\"' + (task.status === 'Left Job' ? ' selected' : '') + '>Left Job</option>'; \n";
+  html +=
+    "      html += '<option value=\"Not Sharing Info\"' + (task.status === 'Not Sharing Info' ? ' selected' : '') + '>Not Sharing Info</option>'; \n";
+  html +=
+    "      html += '<option value=\"Not Picking\"' + (task.status === 'Not Picking' ? ' selected' : '') + '>Not Picking</option>'; \n";
+  html +=
+    "      html += '<option value=\"Switch Off\"' + (task.status === 'Switch Off' ? ' selected' : '') + '>Switch Off</option>'; \n";
+  html +=
+    "      html += '<option value=\"Incorrect Number\"' + (task.status === 'Incorrect Number' ? ' selected' : '') + '>Incorrect Number</option>'; \n";
+  html +=
+    "      html += '<option value=\"Wrong Address\"' + (task.status === 'Wrong Address' ? ' selected' : '') + '>Wrong Address</option>'; \n";
+  html += "      html += '</select>'; \n";
+  html +=
+    '      html += \'<button class="btn btn-primary" onclick="updateTaskStatus(\' + task.id + \')" style="flex: 1;">\';\n';
+  html += "      html += '<i class=\"fas fa-save\"></i> Update';\n";
+  html += "      html += '</button>'; \n";
+  html += "      html += '</div>'; \n";
+  html += "      \n";
   html += "      html += '</div>';\n";
   html += "    });\n";
+  html += "    \n";
+  html += "    html += '</div>';\n";
+  html += "  }\n";
+  html += "  \n";
   html += "  document.getElementById('todayTasksList').innerHTML = html;\n";
   html += "}\n";
   html += "\n";
@@ -5353,6 +5002,9 @@ function attachAllTasksFilterListeners() {
   html += "// ENHANCED: Route Optimization (Greedy Nearest Neighbor)\n";
   html +=
     "// Sorts tasks to minimize travel distance from one task to the next\n";
+  // EDIT: Search for "function reapplyDistanceSorting" (approx line 1264)
+  // Replace the ENTIRE function block with this string-wrapped version:
+
   html += "function reapplyDistanceSorting(tasks, userLat, userLng) {\n";
   html += "  if (!userLat || !userLng) return tasks;\n";
   html += "  \n";
@@ -5578,83 +5230,58 @@ function attachAllTasksFilterListeners() {
     "  if (searchBox) searchBox.placeholder = 'Sorted by Pincode (Ascending)';\n";
   html += "}\n";
   html += "\n";
-  html += "function updateTaskStatus(taskId, fromPanel) {\n";
-  html += "  // 🟢 FIX: Check which dropdown to read from (Panel vs List)\n";
-  html += "  var selectId = fromPanel ? 'panel-status-' + taskId : 'status-' + taskId;\n";
-  html += "  var selectEl = document.getElementById(selectId);\n";
-  html += "  \n";
-  html += "  if (!selectEl) {\n";
-  html += "    showToast('Error: Status dropdown not found', 'error');\n";
-  html += "    return;\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  const newStatus = selectEl.value;\n";
-  html += "  const btn = selectEl.nextElementSibling;\n"; // The button next to the select
-  html += "  \n";
+  html += "function updateTaskStatus(taskId) {\n";
+  html +=
+    "  const newStatus = document.getElementById('status-' + taskId).value;\n";
+  html +=
+    "  const btn = document.querySelector('#status-' + taskId).nextElementSibling;\n";
   html += "  // FEATURE 1 PATCH: Prompt confirmation before status update\n";
   html += "  if (newStatus === 'Pending') {\n";
-  html += "    if (!confirm('Task status is still Pending! Please select the correct status when your work is done. Continue anyway?')) {\n";
+  html +=
+    "    if (!confirm('Task status is still Pending! Please select the correct status when your work is done. Continue anyway?')) {\n";
+  html += "      btn.disabled = false;\n";
+  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
   html += "      return;\n";
   html += "    }\n";
   html += "  } else {\n";
-  html += "    if (!confirm('Are you sure you want to change status to \"' + newStatus + '\"?')) {\n";
+  html +=
+    "    if (!confirm('Are you sure you want to change status to \"' + newStatus + '\"?')) {\n";
+  html += "      btn.disabled = false;\n";
+  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
   html += "      return;\n";
   html += "    }\n";
   html += "  }\n";
-  html += "  \n";
-  html += "  if(btn) {\n";
-  html += "    btn.disabled = true;\n";
-  html += "    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Updating...';\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  // 📍 Get GPS location if completing task\n";
-  html += "  if (newStatus === 'Completed' && navigator.geolocation) {\n";
-  html += "    navigator.geolocation.getCurrentPosition(function(position) {\n";
-  html += "      sendTaskUpdate(taskId, {\n";
-  html += "        status: newStatus,\n";
-  html += "        userId: currentUser.id,\n";
-  html += "        userName: currentUser.name,\n";
-  html += "        completedLat: position.coords.latitude,\n";
-  html += "        completedLng: position.coords.longitude\n";
-  html += "      }, btn, fromPanel);\n";
-  html += "    }, function(error) {\n";
-  html += "      console.warn('📍 Location unavailable:', error.message);\n";
-  html += "      sendTaskUpdate(taskId, { status: newStatus, userId: currentUser.id, userName: currentUser.name }, btn, fromPanel);\n";
-  html += "    }, { enableHighAccuracy: true, timeout: 5000 });\n";
-  html += "  } else {\n";
-  html += "    sendTaskUpdate(taskId, { status: newStatus, userId: currentUser.id, userName: currentUser.name }, btn, fromPanel);\n";
-  html += "  }\n";
-  html += "}\n";
-  html += "\n";
-  html += "function sendTaskUpdate(taskId, updateData, btn, fromPanel) {\n";
-  html += "  fetch('/api/tasks/' + taskId + '/status', {\n";
+  html += "  btn.disabled = true;\n";
+  html +=
+    "  btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Updating...';\n";
+  html += "  fetch('/api/tasks/' + taskId, {\n";
   html += "    method: 'PUT',\n";
   html += "    headers: { 'Content-Type': 'application/json' },\n";
-  html += "    body: JSON.stringify(updateData)\n";
+  html += "    body: JSON.stringify({\n";
+  html += "      status: newStatus,\n";
+  html += "      userId: currentUser.id,\n";
+  html += "      userName: currentUser.name\n";
+  html += "    })\n";
   html += "  })\n";
   html += "  .then(function(res) { return res.json(); })\n";
   html += "  .then(function(data) {\n";
   html += "    if (data.success) {\n";
   html += "      showToast('Status updated to ' + newStatus, 'success');\n";
-  html += "      if (fromPanel) closeTaskPanel();\n";
   html += "      loadTodayTasks();\n";
   html += "    } else {\n";
   html += "      showToast('Error updating status', 'error');\n";
-  html += "      if(btn) {\n";
-  html += "        btn.disabled = false;\n";
-  html += "        btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
-  html += "      }\n";
+  html += "      btn.disabled = false;\n";
+  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
   html += "    }\n";
   html += "  })\n";
   html += "  .catch(function(err) {\n";
   html += "    console.error('Error updating status:', err);\n";
   html += "    showToast('Connection error', 'error');\n";
-  html += "    if(btn) {\n";
-  html += "      btn.disabled = false;\n";
-  html += "      btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
-  html += "    }\n";
+  html += "    btn.disabled = false;\n";
+  html += "    btn.innerHTML = '<i class=\"fas fa-save\"></i> Update';\n";
   html += "  });\n";
   html += "}\n";
+  html += "\n";
   html +=
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "// EMPLOYEE FUNCTIONS - TASK HISTORY (Feature #7)\n";
@@ -5802,28 +5429,9 @@ function attachAllTasksFilterListeners() {
     "// ═══════════════════════════════════════════════════════════════════════════\n";
   html += "\n";
   html += "function initMenu() {\n";
-html += "  console.log('📋 initMenu() called');\n";
-html += "  \n";
-html += "  // Safety check: menu element exists\n";
-html += "  const menu = document.getElementById('menu');\n";
-html += "  if (!menu) {\n";
-html += "    console.error('❌ CRITICAL: Menu element not found!');\n";
-html += "    alert('Dashboard error: Menu container missing. Please refresh the page.');\n";
-html += "    return;\n";
-html += "  }\n";
-html += "  \n";
-html += "  // Safety check: user role exists\n";
-html += "  if (!currentUser || !currentUser.role) {\n";
-html += "    console.error('❌ CRITICAL: currentUser.role is undefined!');\n";
-html += "    alert('Session error: User role is undefined. Please login again.');\n";
-html += "    localStorage.removeItem('currentUser');\n";
-html += "    window.location.href = '/signin';\n";
-html += "    return;\n";
-html += "  }\n";
-html += "  \n";
-html += "  console.log('✅ Initializing menu for role:', currentUser.role);\n";
-html += "  \n";
-html += "  if (currentUser.role === 'admin') {\n";
+  html += "  const menu = document.getElementById('menu');\n";
+  html += "  \n";
+  html += "  if (currentUser.role === 'admin') {\n";
   html += "    menu.innerHTML = '' +\n";
   html +=
     '      \'<button class="btn btn-primary" onclick="showAssignTask()">\' +\n';
@@ -5872,44 +5480,9 @@ html += "  if (currentUser.role === 'admin') {\n";
   html += "  }\n";
   html += "}\n";
   html += "\n";
-html += "function initMenu() {\n";
-  html += "  console.log('📋 initMenu() triggered');\n";
-  html += "  const menu = document.getElementById('menu');\n";
-  html += "  if (!menu) return console.error('Menu element missing');\n";
-  html += "  \n";
-  html += "  if (!currentUser || !currentUser.role) {\n";
-  html += "    localStorage.removeItem('currentUser');\n";
-  html += "    window.location.href = '/signin';\n";
-  html += "    return;\n";
-  html += "  }\n";
-  html += "  \n";
-  html += "  if (currentUser.role === 'admin') {\n";
-  html += "    menu.innerHTML = \n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showAssignTask()\"><i class=\"fas fa-plus-circle\"></i> Assign Task</button>' +\n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showUnassignedTasks()\"><i class=\"fas fa-inbox\"></i> Unassigned Pool</button>' +\n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showAllTasks()\"><i class=\"fas fa-list\"></i> All Tasks</button>' +\n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showEmployees()\"><i class=\"fas fa-users\"></i> Employees</button>' +\n";
-  html += "      '<button class=\"btn btn-success\" onclick=\"exportTasks()\"><i class=\"fas fa-download\"></i> Export CSV</button>' +\n";
-  html += "      '<button class=\"btn btn-primary\" style=\"background:#8b5cf6;\" onclick=\"showKYCDashboard()\"><i class=\"fas fa-fingerprint\"></i> KYC</button>';\n";
-  html += "    showAssignTask();\n";
-  html += "  } else {\n";
-  html += "    menu.innerHTML = \n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showTodayTasks()\"><i class=\"fas fa-tasks\"></i> Today\\'s Tasks</button>' +\n";
-  html += "      '<button class=\"btn btn-primary\" onclick=\"showTaskHistory()\"><i class=\"fas fa-history\"></i> History</button>';\n";
-  html += "    showTodayTasks();\n";
-  html += "  }\n";
-  html += "}\n";
+  html += "// Initialize dashboard\n";
+  html += "initMenu();\n";
   html += "\n";
-  html += "// --- DASHBOARD STARTUP WRAPPER ---\n";
-  html += "window.onload = function() {\n";
-  html += "  console.log('🚀 Dashboard Window Loaded');\n";
-  html += "  try {\n";
-  html += "    initMenu();\n";
-  html += "  } catch (err) {\n";
-  html += "    console.error('Init Failure:', err);\n";
-  html += "    alert('Dashboard failed to initialize. Please refresh.');\n";
-  html += "  }\n";
-  html += "};\n";
   html += "</script>";
   html += '<script src="/kyc_service.js"></script>';
   html += "</body>";
@@ -5917,6 +5490,7 @@ html += "function initMenu() {\n";
 
   res.send(html);
 });
+
 // ═══════════════════════════════════════════════════════════════════════════
 // VALIDIANT DIGITAL KYC SERVICE (v3.0)
 // Integration with Didit.me
@@ -6198,16 +5772,20 @@ async function startServer() {
     // await initializeDatabase();
 
     // Start Express server
-    app.listen(PORT, HOST, () => {
-  console.log("");
-  console.log("═══════════════════════════════════════════════════════════════");
-  console.log("✅ SERVER RUNNING SUCCESSFULLY");
-  console.log("═══════════════════════════════════════════════════════════════");
-  console.log(`🌐 URL: http://${HOST}:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "production"}`);
-  console.log(`🔐 Admin Login: admin@validiant.com / Admin@123`);
-  console.log("");
-  console.log("✅ Keep-alive system starting...");
+    app.listen(PORT, () => {
+      console.log("");
+      console.log(
+        "═══════════════════════════════════════════════════════════════",
+      );
+      console.log("✅ SERVER RUNNING SUCCESSFULLY");
+      console.log(
+        "═══════════════════════════════════════════════════════════════",
+      );
+      console.log(`🌐 URL: http://localhost:${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || "production"}`);
+      console.log(`🔐 Admin Login: admin@validiant.com / Admin@123`);
+      console.log("");
+      console.log("✅ Keep-alive system starting...");
 
       // Start keep-alive pings every 3 minutes
       setInterval(keepAlive, 180000);
