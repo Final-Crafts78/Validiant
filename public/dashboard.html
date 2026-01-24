@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Validiant Tracker - Dashboard</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #020617;
+      --bg-panel: rgba(15, 23, 42, 0.96);
+      --border-color: rgba(31, 41, 55, 0.9);
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --primary: #6366f1;
+      --accent: #38bdf8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 55%), radial-gradient(circle at bottom right, rgba(129, 140, 248, 0.26), transparent 55%), var(--bg-dark); min-height: 100vh; padding: 16px; color: var(--text-main); }
+
+    /* --- LAYOUT --- */
+    .container { max-width: 1440px; margin: 0 auto; border-radius: 20px; background: radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.98)); box-shadow: 0 28px 80px rgba(15,23,42,0.95); border: 1px solid var(--border-color); overflow: hidden; display: grid; grid-template-rows: auto auto minmax(0,1fr); min-height: 85vh; }
+    
+    .header { padding: 16px 22px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 18px; background: radial-gradient(circle at top left, rgba(37,99,235,0.18), transparent 65%), #020617; }
+    .header h1 { font-size: 18px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+    
+    .user-info { display: flex; align-items: center; gap: 12px; }
+    .user-chip { padding: 7px 12px; border-radius: 999px; background: rgba(15,23,42,0.95); border: 1px solid rgba(55,65,81,0.9); font-size: 11px; color: #d1d5db; display: inline-flex; align-items: center; gap: 8px; }
+
+    .menu { padding: 10px 18px; border-bottom: 1px solid var(--border-color); background: rgba(15,23,42,0.95); display: flex; gap: 10px; flex-wrap: wrap; }
+    .content { padding: 18px; background: radial-gradient(circle at top, rgba(30,64,175,0.2), transparent 55%), #020617; overflow: auto; }
+
+    /* --- COMPONENTS --- */
+    .btn { padding: 9px 16px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; color: white; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+    .btn-secondary { background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-color); }
+    .btn-success { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .btn-danger { background: linear-gradient(135deg, #f87171, #ef4444); }
+    .btn-info { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
+    .btn-sm { padding: 6px 12px; font-size: 11px; }
+
+    .search-box { flex: 1; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border-color); background: rgba(15,23,42,0.8); color: white; font-size: 12px; }
+    .filter-section { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+    
+    /* --- TABLES & CARDS --- */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; background: var(--bg-panel); border-radius: 12px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    th { font-weight: 600; text-transform: uppercase; color: var(--text-muted); background: rgba(30, 41, 59, 0.5); }
+    
+    .status-badge { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+    .status-pending { background: rgba(234,179,8,0.2); color: #facc15; border: 1px solid rgba(234,179,8,0.5); }
+    .status-completed { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.5); }
+    .status-unassigned { background: rgba(148,163,184,0.1); color: #cbd5e1; border: 1px dashed #64748b; }
+
+    /* --- UTILS --- */
+    .loading-spinner { display: none; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
+    .loading-spinner.show { display: flex; }
+    .toast { position: fixed; top: 20px; right: 20px; background: var(--bg-panel); border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); transform: translateX(120%); transition: transform 0.3s; z-index: 9999; }
+    .toast.show { transform: translateX(0); }
+
+    /* --- RESPONSIVE --- */
+    @media (max-width: 768px) {
+      .container { border-radius: 0; border: none; min-height: 100vh; }
+      .menu { overflow-x: auto; }
+      td, th { padding: 8px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <div class="container">
+    
+    <div class="header">
+      <h1><i class="fas fa-clipboard-check"></i> Validiant Tracker</h1>
+      <div class="user-info">
+        <span id="userName" class="user-chip">
+          <i class="fas fa-circle-notch fa-spin"></i> Loading...
+        </span>
+        <button class="btn btn-danger btn-sm" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
+    </div>
+
+    <div id="menu" class="menu"></div>
+
+    <div id="content" class="content">
+      <div class="loading-spinner show">
+        <i class="fas fa-spinner"></i> Preparing dashboard...
+      </div>
+    </div>
+
+  </div>
+
+  <div id="panelOverlay" onclick="closeTaskPanel()"></div>
+  <div id="taskDetailsPanel">
+    <div class="panel-handle-bar" onclick="closeTaskPanel()"></div>
+    <div id="panelContent" style="padding: 0 20px 20px 20px; color: #333;">
+      </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+  <script src="kyc_service.js"></script>
+  <script src="client.js"></script> 
+
+</body>
+</html>
