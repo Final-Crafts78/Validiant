@@ -277,7 +277,7 @@ function initMenu() {
       { icon: 'fa-history', text: 'Activity Log', action: 'showActivityLog', class: 'btn-primary' },
       { icon: 'fa-chart-pie', text: 'Analytics', action: 'showAnalyticsDashboard', class: 'btn-info' },
       { icon: 'fa-download', text: 'Export CSV', action: 'exportTasks', class: 'btn-success' },
-      { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'showKYCDashboard', class: 'btn-primary', style: 'background:#8b5cf6; border-color:#7c3aed;' }
+      { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'showKYCDashboard', class: 'btn-primary' }
     ];
     
     console.log('Creating', buttons.length, 'menu buttons...');
@@ -3371,6 +3371,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
