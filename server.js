@@ -398,7 +398,7 @@ app.post("/api/tasks", async (req, res) => {
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, userId, userName } = req.body;
+    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName } = req.body;
     const updateData = { updated_at: new Date() };
 
     if (title) updateData.title = title;
@@ -406,7 +406,13 @@ app.put("/api/tasks/:id", async (req, res) => {
     if (address) updateData.address = address;
     if (clientName) updateData.client_name = clientName;
     if (notes) updateData.notes = notes;
-    if (mapUrl) updateData.map_url = mapUrl;
+    
+    // Handle both camelCase and snake_case for map URL
+    const finalMapUrl = map_url || mapUrl;
+    if (finalMapUrl !== undefined) {
+      updateData.map_url = finalMapUrl;
+      console.log('✅ Updating map_url to:', finalMapUrl);
+    }
     if (status) {
       updateData.status = status;
       if (status === 'Completed') updateData.completed_at = new Date();
@@ -709,4 +715,5 @@ app.listen(PORT, HOST, () => {
   console.log(`✅ SERVER RUNNING ON PORT ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || "production"}`);
   setInterval(keepAlive, 180000); // 3 minutes
+
 });
