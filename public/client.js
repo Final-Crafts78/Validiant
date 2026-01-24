@@ -250,13 +250,24 @@ function showLoading(msg = 'Loading...') {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function initMenu() {
-  const menu = document.getElementById('menu');
-  if (!menu) return;
+  console.log('🔧 initMenu() called');
+  console.log('Current user role:', currentUser.role);
+  
+  const menu = document.getElementById('sidebarMenu');
+  console.log('sidebarMenu element:', menu);
+  
+  if (!menu) {
+    console.error('❌ CRITICAL: sidebarMenu element NOT FOUND in HTML!');
+    return;
+  }
   
   // Clear existing menu
   menu.innerHTML = '';
+  console.log('✓ Menu cleared');
   
   if (currentUser.role === 'admin') {
+    console.log('✓ Building ADMIN menu...');
+    
     // ADMIN MENU
     const buttons = [
       { icon: 'fa-plus-circle', text: 'Assign Task', action: 'showAssignTask', class: 'btn-primary' },
@@ -269,34 +280,62 @@ function initMenu() {
       { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'showKYCDashboard', class: 'btn-primary', style: 'background:#8b5cf6; border-color:#7c3aed;' }
     ];
     
-    buttons.forEach(btn => {
-      menu.innerHTML += `
-        <button class="btn ${btn.class}" onclick="cleanupCurrentView(); ${btn.action}()" style="${btn.style || ''}">
-          <i class="fas ${btn.icon}"></i> ${btn.text}
-        </button>
-      `;
+    console.log('Creating', buttons.length, 'menu buttons...');
+    
+    buttons.forEach((btn, index) => {
+      const button = document.createElement('button');
+      button.className = `menu-item`;
+      button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
+      if (btn.style) button.setAttribute('style', btn.style);
+      
+      button.onclick = function() {
+        console.log('Menu clicked:', btn.text);
+        cleanupCurrentView();
+        window[btn.action]();
+      };
+      
+      menu.appendChild(button);
+      console.log(`✓ Button ${index + 1} created:`, btn.text);
     });
+    
+    console.log('✓ All admin menu buttons created');
+    console.log('Calling showAssignTask()...');
     
     // Default view for Admin
     showAssignTask();
+    
   } else {
+    console.log('✓ Building EMPLOYEE menu...');
+    
     // EMPLOYEE MENU
     const buttons = [
-      { icon: 'fa-tasks', text: 'Today\'s Tasks', action: 'showTodayTasks', class: 'btn-primary' },
+      { icon: 'fa-tasks', text: "Today's Tasks", action: 'showTodayTasks', class: 'btn-primary' },
       { icon: 'fa-history', text: 'Task History', action: 'showTaskHistory', class: 'btn-primary' }
     ];
     
-    buttons.forEach(btn => {
-      menu.innerHTML += `
-        <button class="btn ${btn.class}" onclick="cleanupCurrentView(); ${btn.action}()">
-          <i class="fas ${btn.icon}"></i> ${btn.text}
-        </button>
-      `;
+    buttons.forEach((btn, index) => {
+      const button = document.createElement('button');
+      button.className = `menu-item`;
+      button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
+      
+      button.onclick = function() {
+        console.log('Menu clicked:', btn.text);
+        cleanupCurrentView();
+        window[btn.action]();
+      };
+      
+      menu.appendChild(button);
+      console.log(`✓ Button ${index + 1} created:`, btn.text);
     });
+    
+    console.log('✓ All employee menu buttons created');
+    console.log('Calling showTodayTasks()...');
     
     // Default view for Employee
     showTodayTasks();
   }
+  
+  console.log('🎉 initMenu() complete!');
 }
 
 
@@ -3258,5 +3297,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
