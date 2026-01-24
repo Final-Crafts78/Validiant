@@ -31,7 +31,11 @@
       padding: 12px 16px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; color: var(--text-muted);
       display: flex; align-items: center; gap: 12px; transition: 0.2s; font-size: 14px; font-weight: 500; text-decoration: none; border: none; background: none; width: 100%; text-align: left;
     }
-    .menu-item:hover, .menu-item.active { background: rgba(99, 102, 241, 0.1); color: var(--primary); }
+    .menu-item:hover, .menu-item.active {
+  background: rgba(99, 102, 241, 0.2) !important;
+  color: #6366F1 !important;
+  border-left: 3px solid #6366F1;
+}
     .menu-item i { width: 20px; text-align: center; }
 
     /* MAIN CONTENT */
@@ -624,6 +628,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
