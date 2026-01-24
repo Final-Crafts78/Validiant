@@ -1,0 +1,54 @@
+# Environment variables - NEVER COMMIT THESE!
+.env
+.env.local
+.env.production
+.env.development
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Uploaded files (temporary storage)
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+logs/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Database files (if testing locally)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.data/
+database/
+
+# Build outputs
+dist/
+build/
+.cache/
+
+# Testing
+coverage/
+.nyc_output/
