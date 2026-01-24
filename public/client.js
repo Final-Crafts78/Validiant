@@ -1881,39 +1881,65 @@ function saveEditedMapUrl(taskId) {
   
   const url = input.value.trim();
   
-  console.log('Saving map URL for task', taskId, ':', url);
+  console.log('💾 Saving map URL for task', taskId);
+  console.log('New URL:', url);
+  
+  // Disable the save button to prevent double-clicks
+  const saveBtn = document.querySelector('.modal-overlay .btn-primary');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
   
   fetch(`/api/tasks/${taskId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      map_url: url,  // ← Use map_url to match database column
+      map_url: url,  // ← Correct database column name
       userId: currentUser.id,
       userName: currentUser.name
     })
   })
-    .then(res => res.json())
+    .then(res => {
+      console.log('Response status:', res.status);
+      return res.json();
+    })
     .then(data => {
+      console.log('Server response:', data);
+      
       if (data.success) {
         showToast('✓ Map URL updated successfully!', 'success');
         closeAllModals();
         
-        // Refresh the current view
-        if (document.getElementById('unassignedTasksList')) {
-          console.log('Refreshing unassigned tasks...');
-          loadUnassignedTasks();
-        }
-        if (document.getElementById('allTasksList')) {
-          console.log('Refreshing all tasks...');
-          loadAllTasks();
-        }
+        // Force refresh with a small delay to ensure server has processed
+        setTimeout(() => {
+          // Check which view is currently active and refresh it
+          if (document.getElementById('unassignedTasksList')) {
+            console.log('🔄 Refreshing unassigned tasks view...');
+            loadUnassignedTasks();
+          }
+          if (document.getElementById('allTasksList')) {
+            console.log('🔄 Refreshing all tasks view...');
+            loadAllTasks();
+          }
+        }, 300);
+        
       } else {
+        console.error('Update failed:', data.message);
         showToast(data.message || 'Update failed', 'error');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+        }
       }
     })
     .catch(err => {
-      console.error('Error updating map URL:', err);
+      console.error('❌ Error updating map URL:', err);
       showToast('Connection error. Please try again.', 'error');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+      }
     });
 }
 
@@ -3321,6 +3347,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
