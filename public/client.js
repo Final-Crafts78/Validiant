@@ -1605,20 +1605,33 @@ function showUnassignedTasks() {
 function loadUnassignedTasks() {
   const term = document.getElementById('unassignedSearch') ? document.getElementById('unassignedSearch').value : '';
   
-  // Add timestamp to prevent caching
-  const timestamp = new Date().getTime();
-  const url = `/api/tasks/unassigned${term ? `?search=${encodeURIComponent(term)}&` : '?'}t=${timestamp}`;
+  // Force fresh data by adding timestamp
+  const timestamp = Date.now();
+  let url = `/api/tasks/unassigned?_t=${timestamp}`;
+  if (term) url += `&search=${encodeURIComponent(term)}`;
   
-  console.log('🔄 Fetching unassigned tasks...');
+  console.log('📡 Fetching unassigned tasks from:', url);
   
-  fetch(url)
+  fetch(url, {
+    cache: 'no-store',  // Disable browser caching
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  })
     .then(res => res.json())
     .then(tasks => {
-      console.log('✓ Received', tasks.length, 'tasks');
+      console.log('✓ Received', tasks.length, 'unassigned tasks');
       allUnassignedTasks = tasks;
       
-      // Fetch employees
-      return fetch(`/api/users?t=${timestamp}`);
+      // Fetch employees with cache-busting
+      return fetch(`/api/users?_t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
     })
     .then(r => r.json())
     .then(employees => {
@@ -3371,6 +3384,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
