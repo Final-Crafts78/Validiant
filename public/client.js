@@ -1244,7 +1244,12 @@ function loadTaskHistory() {
   fetch(`/api/tasks?role=employee&employeeId=${currentUser.id}`)
     .then(res => res.json())
     .then(tasks => {
-      const completed = tasks.filter(t => t.status === 'Completed' || t.status === 'Verified');
+      const completed = tasks.filter(t => 
+  t.status === 'Verified' || 
+  t.status === 'Unable To Verify' || 
+  t.status === 'Not Picking Call' || 
+  t.status === 'Does Not Reside'
+);
       const list = document.getElementById('historyList');
       if (completed.length === 0) {
         list.innerHTML = '<div class="empty-state"><h3>No History</h3></div>';
@@ -3577,6 +3582,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
