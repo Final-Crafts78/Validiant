@@ -3445,13 +3445,15 @@ async function bulkDeleteTasks() {
 // ═══════════════════════════════════════════════════════════════════════════
 function openStatusUpdateModal(taskId, currentStatus) {
   const statusOptions = {
-    'Pending': ['In Progress', 'Completed', 'Verified'],
-    'In Progress': ['Completed', 'Verified', 'Pending'],
-    'Completed': ['Verified'],
-    'Verified': ['Completed']
+    'Pending': ['In Progress', 'Verified', 'Unable To Verify', 'Not Picking Call', 'Does Not Reside'],
+    'In Progress': ['Verified', 'Unable To Verify', 'Not Picking Call', 'Does Not Reside', 'Pending'],
+    'Verified': ['In Progress'],
+    'Unable To Verify': ['In Progress', 'Verified'],
+    'Not Picking Call': ['In Progress', 'Verified'],
+    'Does Not Reside': ['In Progress', 'Verified']
   };
   
-  const availableStatuses = statusOptions[currentStatus] || ['Pending', 'In Progress', 'Completed', 'Verified'];
+  const availableStatuses = statusOptions[currentStatus] || ['In Progress', 'Verified', 'Unable To Verify', 'Not Picking Call', 'Does Not Reside'];
   
   let optionsHtml = '';
   availableStatuses.forEach(status => {
@@ -3575,6 +3577,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
