@@ -735,9 +735,17 @@ select.form-input {
 <body>
 
   <aside class="sidebar" id="sidebar">
-    <div class="logo"><i class="fas fa-shield-alt"></i> &nbsp; Validiant</div>
-    <nav id="sidebarMenu">
-      </nav>
+  <div class="sidebar-header">
+    <div class="logo">
+      <i class="fas fa-shield-alt"></i> 
+      <span class="logo-text">&nbsp; Validiant</span>
+    </div>
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+      <i class="fas fa-bars"></i>
+    </button>
+  </div>
+  <nav id="sidebarMenu">
+  </nav>
   </aside>
 
   <main class="main-content">
@@ -765,6 +773,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
