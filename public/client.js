@@ -188,6 +188,37 @@ function cleanupCurrentView() {
   tempElements.forEach(el => el.remove());
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const isMobile = window.innerWidth <= 768;
+  
+  if (isMobile) {
+    // On mobile, toggle open/close
+    sidebar.classList.toggle('open');
+  } else {
+    // On desktop, toggle collapsed
+    sidebar.classList.toggle('collapsed');
+    
+    // Save preference
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    localStorage.setItem('sidebarCollapsed', isCollapsed);
+  }
+}
+
+// Restore sidebar state on load
+document.addEventListener('DOMContentLoaded', () => {
+  const sidebar = document.getElementById('sidebar');
+  const wasCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  
+  if (wasCollapsed && window.innerWidth > 768) {
+    sidebar.classList.add('collapsed');
+  }
+});
+
 // Helper to update bulk action panel visibility
 function updateBulkActions() {
   const checkboxes = document.querySelectorAll('.task-checkbox:checked, .taskCheckbox:checked');
@@ -3393,6 +3424,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
