@@ -167,12 +167,101 @@ function createModal(title, content, options = {}) {
   return modal;
 }
 
-function closeAllModals() {
-  const modals = document.querySelectorAll('.modal-overlay, .modal.show');
-  modals.forEach(modal => {
-    modal.classList.remove('show');
-    setTimeout(() => modal.remove(), 300);
-  });
+// ═══════════════════════════════════════════════════════════════════════════
+// EMPLOYEE TASK DETAILS MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openTaskDetailsModal(taskId) {
+  console.log('Opening task details for ID:', taskId);
+  
+  // Find the task in the current list
+  const task = allEmployeeTasks.find(t => t.id === taskId);
+  
+  if (!task) {
+    showToast('Task not found', 'error');
+    return;
+  }
+  
+  const mapLink = task.map_url || task.mapUrl || task.mapurl;
+  
+  const content = `
+    <div class="task-details-modal">
+      <div class="task-header" style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #374151;">
+        <h2 style="margin: 0 0 10px 0; font-size: 20px; color: #E5E7EB; font-weight: 600;">
+          <i class="fas fa-clipboard-list" style="color: #6366f1;"></i>
+          ${escapeHtml(task.title)}
+        </h2>
+        <span class="status-badge status-${task.status.toLowerCase().replace(/\s/g, '-')}">
+          ${escapeHtml(task.status)}
+        </span>
+      </div>
+      
+      <div class="task-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+        
+        <div class="info-item">
+          <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="fas fa-user-tie"></i> Client
+          </div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">
+            ${escapeHtml(task.client_name || task.clientName || 'Unknown Client')}
+          </div>
+        </div>
+        
+        <div class="info-item">
+          <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="fas fa-map-pin"></i> Pincode
+          </div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">
+            ${escapeHtml(task.pincode)}
+          </div>
+        </div>
+        
+        <div class="info-item">
+          <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="fas fa-calendar"></i> Assigned Date
+          </div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">
+            ${task.assigned_date || task.assignedDate || 'N/A'}
+          </div>
+        </div>
+        
+      </div>
+      
+      ${task.notes ? `
+        <div class="info-section" style="margin-bottom: 20px; padding: 15px; background: rgba(99, 102, 241, 0.1); border-radius: 10px; border: 1px solid rgba(99, 102, 241, 0.3);">
+          <div style="color: #C7D2FE; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="fas fa-sticky-note"></i> Notes
+          </div>
+          <div style="color: #E5E7EB; font-size: 14px; line-height: 1.6;">
+            ${escapeHtml(task.notes)}
+          </div>
+        </div>
+      ` : ''}
+      
+      ${mapLink ? `
+        <div style="margin-bottom: 20px;">
+          <a href="${escapeHtml(mapLink)}" target="_blank" class="btn btn-primary" style="width: 100%; padding: 12px; justify-content: center;">
+            <i class="fas fa-map-marked-alt"></i> Open Location in Maps
+          </a>
+        </div>
+      ` : `
+        <div style="margin-bottom: 20px; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #FCA5A5; font-size: 13px; text-align: center;">
+          <i class="fas fa-exclamation-triangle"></i> No map location available for this task
+        </div>
+      `}
+      
+      <div class="modal-actions" style="display: flex; gap: 10px; padding-top: 15px; border-top: 1px solid #374151;">
+        <button class="btn btn-success" onclick="closeAllModals(); openStatusUpdateModal(${taskId}, '${escapeHtml(task.status)}');" style="flex: 1;">
+          <i class="fas fa-sync-alt"></i> Update Status
+        </button>
+        <button class="btn btn-secondary" onclick="closeAllModals();" style="flex: 1;">
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  createModal('Task Details', content, { icon: 'fa-clipboard-list', size: 'medium' });
 }
 
 // Clean up function - called when switching menus
@@ -883,30 +972,42 @@ function displayEmployeeTasks(tasks) {
   let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px;"><i class="fas fa-info-circle"></i> You have ${tasks.length} task(s) for today</p>`;
   
   tasks.forEach(task => {
-  // Properly escape the task data for onclick
-  const taskDataEscaped = JSON.stringify(task)
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '&quot;');
-  
   const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
   
   html += `
-    <div class="panel" style="margin-bottom:10px; cursor:pointer; padding:15px; background:#1e293b; border-radius:12px; border:1px solid #334155;" 
-         onclick='openTaskPanel(${JSON.stringify(task)})'>
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:15px; color:#e5e7eb;">
-          <i class="fas fa-clipboard-list" style="color:#818cf8;"></i> 
+    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="
+      margin-bottom: 15px;
+      cursor: pointer;
+      padding: 16px;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-radius: 12px;
+      border: 1px solid #334155;
+      transition: all 0.3s ease;
+    " onmouseover="this.style.borderColor='#6366f1'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.3)';" 
+       onmouseout="this.style.borderColor='#334155'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
+          <i class="fas fa-clipboard-list" style="color: #818cf8; margin-right: 8px;"></i>
           ${escapeHtml(task.title)}
         </h3>
         <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
       </div>
-      <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;">
-        <span><i class="fas fa-map-pin"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
-        <span style="color:#60a5fa;">Tap for details <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 12px;">
+        <span>
+          <i class="fas fa-map-pin" style="color: #60a5fa;"></i> 
+          ${escapeHtml(task.pincode || 'N/A')}
+        </span>
+        <span style="color: #60a5fa; font-weight: 500;">
+          Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i>
+        </span>
       </div>
-      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${task.status}');" 
-              style="width:100%; margin-top:8px; padding:8px; background:#10B981; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">
+      
+      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${escapeHtml(task.status)}');" 
+              style="width: 100%; padding: 10px; background: #10B981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease;"
+              onmouseover="this.style.background='#059669';"
+              onmouseout="this.style.background='#10B981';">
         <i class="fas fa-sync-alt"></i> Update Status
       </button>
     </div>
@@ -3443,6 +3544,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
