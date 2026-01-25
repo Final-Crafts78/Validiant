@@ -971,59 +971,65 @@ function displayEmployeeTasks(tasks) {
   const list = document.getElementById('todayTasksList');
   
   if (tasks.length === 0) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-check-circle"></i>
-        <h3>All Clear!</h3>
-        <p>No tasks assigned for today.</p>
-      </div>`;
+    list.innerHTML = `<div class="empty-state">
+      <i class="fas fa-check-circle"></i>
+      <h3>All Clear!</h3>
+      <p>No tasks assigned for today.</p>
+    </div>`;
     return;
   }
 
-  let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px;"><i class="fas fa-info-circle"></i> You have ${tasks.length} task(s) for today</p>`;
+  let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px">
+    <i class="fas fa-info-circle"></i> You have ${tasks.length} task(s) for today</p>`;
   
   tasks.forEach(task => {
-  const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
-  
-  html += `
-    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="
-      margin-bottom: 15px;
-      cursor: pointer;
-      padding: 16px;
-      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      border-radius: 12px;
-      border: 1px solid #334155;
-      transition: all 0.3s ease;
-    " onmouseover="this.style.borderColor='#6366f1'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.3)';" 
-       onmouseout="this.style.borderColor='#334155'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+    const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
+    const mapLink = task.map_url || task.mapUrl || task.mapurl; // Get map URL
+    
+    html += `
+    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: all 0.3s ease;" 
+         onmouseover="this.style.borderColor='#6366f1'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.3)';" 
+         onmouseout="this.style.borderColor='#334155'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
       
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <!-- Header with Title and Status/Map -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
         <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
           <i class="fas fa-clipboard-list" style="color: #818cf8; margin-right: 8px;"></i>
           ${escapeHtml(task.title)}
         </h3>
-        <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
+        
+        <!-- Right side: Map button + Status -->
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+          ${mapLink ? `
+            <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
+                    class="map-quick-btn"
+                    title="Open in Google Maps"
+                    style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;"
+                    onmouseover="this.style.background='rgba(59, 130, 246, 0.3)'; this.style.borderColor='#3B82F6';"
+                    onmouseout="this.style.background='rgba(59, 130, 246, 0.2)'; this.style.borderColor='rgba(59, 130, 246, 0.4)';">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>Maps</span>
+            </button>
+          ` : ''}
+          <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
+        </div>
       </div>
       
+      <!-- Footer with Pincode and Tap info -->
       <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 12px;">
-        <span>
-          <i class="fas fa-map-pin" style="color: #60a5fa;"></i> 
-          ${escapeHtml(task.pincode || 'N/A')}
-        </span>
-        <span style="color: #60a5fa; font-weight: 500;">
-          Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i>
-        </span>
+        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
+        <span style="color: #60a5fa; font-weight: 500;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i></span>
       </div>
       
-      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${escapeHtml(task.status)}');" 
+      <!-- Update Status Button -->
+      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${escapeHtml(task.status)}')" 
               style="width: 100%; padding: 10px; background: #10B981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease;"
               onmouseover="this.style.background='#059669';"
               onmouseout="this.style.background='#10B981';">
         <i class="fas fa-sync-alt"></i> Update Status
       </button>
-    </div>
-  `;
-});
+    </div>`;
+  });
   
   list.innerHTML = html;
 }
@@ -3555,6 +3561,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
