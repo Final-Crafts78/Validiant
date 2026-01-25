@@ -839,26 +839,35 @@ function displayEmployeeTasks(tasks) {
   let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px;"><i class="fas fa-info-circle"></i> You have ${tasks.length} task(s) for today</p>`;
   
   tasks.forEach(task => {
-    const statusClass = 'status-' + task.status.toLowerCase().replace(/ /g, '-');
-    // Escape the task object for the onclick handler
-    const taskJson = JSON.stringify(task).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
-
-    html += `
-      <div class="panel" style="margin-bottom:10px; cursor:pointer;" onclick='openTaskPanel(${taskJson})'>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 style="margin:0; font-size:15px; color:#e5e7eb;"><i class="fas fa-clipboard-list" style="color:#818cf8"></i> ${escapeHtml(task.title)}</h3>
-          <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
-        </div>
-                <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;">
-          <span><i class="fas fa-map-pin"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
-          <span style="color:#60a5fa">Tap for details <i class="fas fa-chevron-right" style="font-size:10px"></i></span>
-        </div>
-        <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${task.status}')" style="width:100%;margin-top:8px;padding:8px;background:#10B981;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold">
-          <i class="fas fa-sync-alt"></i> Update Status
-        </button>
+  // Properly escape the task data for onclick
+  const taskDataEscaped = JSON.stringify(task)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
+  
+  const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
+  
+  html += `
+    <div class="panel" style="margin-bottom:10px; cursor:pointer; padding:15px; background:#1e293b; border-radius:12px; border:1px solid #334155;" 
+         onclick='openTaskPanel(${JSON.stringify(task)})'>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:15px; color:#e5e7eb;">
+          <i class="fas fa-clipboard-list" style="color:#818cf8;"></i> 
+          ${escapeHtml(task.title)}
+        </h3>
+        <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
       </div>
-    `;
-  });
+      <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; font-size:12px;">
+        <span><i class="fas fa-map-pin"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
+        <span style="color:#60a5fa;">Tap for details <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
+      </div>
+      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${task.status}');" 
+              style="width:100%; margin-top:8px; padding:8px; background:#10B981; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">
+        <i class="fas fa-sync-alt"></i> Update Status
+      </button>
+    </div>
+  `;
+});
   
   list.innerHTML = html;
 }
@@ -3384,6 +3393,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
