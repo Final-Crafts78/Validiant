@@ -3421,9 +3421,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize the menu and default view
   console.log('✓ Calling initMenu() for role:', currentUser.role);
   initMenu();
+    // Restore sidebar collapsed state
+  const sidebar = document.getElementById('sidebar');
+  const wasCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  if (wasCollapsed && window.innerWidth > 768) {
+    sidebar.classList.add('collapsed');
+  }
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
