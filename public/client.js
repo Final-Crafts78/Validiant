@@ -316,8 +316,8 @@ function initMenu() {
     buttons.forEach((btn, index) => {
   const button = document.createElement('button');
   button.className = `menu-item`;
-  button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
-  button.setAttribute('data-view', btn.action); // Add identifier
+  button.setAttribute('data-view', btn.action);
+  button.innerHTML = `<i class="fas ${btn.icon}"></i> <span>${btn.text}</span>`;  // ← WRAPPED IN SPAN!
   if (btn.style) button.setAttribute('style', btn.style);
   
   button.onclick = function() {
@@ -358,19 +358,32 @@ menu.querySelector('.menu-item')?.classList.add('active');
     ];
     
     buttons.forEach((btn, index) => {
-      const button = document.createElement('button');
-      button.className = `menu-item`;
-      button.innerHTML = `<i class="fas ${btn.icon}"></i> ${btn.text}`;
-      
-      button.onclick = function() {
-        console.log('Menu clicked:', btn.text);
-        cleanupCurrentView();
-        window[btn.action]();
-      };
-      
-      menu.appendChild(button);
-      console.log(`✓ Button ${index + 1} created:`, btn.text);
+  const button = document.createElement('button');
+  button.className = `menu-item`;
+  button.setAttribute('data-view', btn.action);
+  button.innerHTML = `<i class="fas ${btn.icon}"></i> <span>${btn.text}</span>`;  // ← WRAPPED IN SPAN!
+  
+  button.onclick = function() {
+    console.log('Menu clicked:', btn.text);
+    
+    // Remove active class from all menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.classList.remove('active');
     });
+    
+    // Add active class to clicked item
+    this.classList.add('active');
+    
+    cleanupCurrentView();
+    window[btn.action]();
+  };
+  
+  menu.appendChild(button);
+  console.log(`✓ Button ${index + 1} created:`, btn.text);
+});
+
+// Set first button as active by default
+menu.querySelector('.menu-item')?.classList.add('active');
     
     console.log('✓ All employee menu buttons created');
     console.log('Calling showTodayTasks()...');
@@ -3430,6 +3443,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
