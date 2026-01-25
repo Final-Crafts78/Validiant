@@ -122,6 +122,17 @@ function showToast(message, type) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CLOSE ALL MODALS
+// ═══════════════════════════════════════════════════════════════════════════
+function closeAllModals() {
+  const modals = document.querySelectorAll('.modal-overlay, .modal.show');
+  modals.forEach(modal => {
+    modal.classList.remove('show');
+    setTimeout(() => modal.remove(), 300);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ENHANCED MODAL SYSTEM - Matches Old UI
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3544,6 +3555,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
