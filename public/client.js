@@ -292,6 +292,7 @@ function cleanupCurrentView() {
 // SIDEBAR TOGGLE
 // ═══════════════════════════════════════════════════════════════════════════
 
+// SIDEBAR TOGGLE
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const isMobile = window.innerWidth <= 768;
@@ -299,14 +300,27 @@ function toggleSidebar() {
   if (isMobile) {
     // On mobile, toggle open/close
     sidebar.classList.toggle('open');
+    
+    // Add/remove backdrop
+    let overlay = document.querySelector('.sidebar-overlay');
+    if (sidebar.classList.contains('open')) {
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        overlay.onclick = () => toggleSidebar(); // Close on backdrop click
+        document.body.appendChild(overlay);
+      }
+    } else {
+      if (overlay) overlay.remove();
+    }
   } else {
     // On desktop, toggle collapsed
     sidebar.classList.toggle('collapsed');
-    
-    // Save preference
-    const isCollapsed = sidebar.classList.contains('collapsed');
-    localStorage.setItem('sidebarCollapsed', isCollapsed);
   }
+  
+  // Save preference
+  const isCollapsed = sidebar.classList.contains('collapsed');
+  localStorage.setItem('sidebarCollapsed', isCollapsed);
 }
 
 // Restore sidebar state on load
@@ -3561,6 +3575,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
