@@ -2701,6 +2701,7 @@ CASE003,560003,Test Client,,,,"Leave MapURL empty if not available"`;
 }
 
 // Form Submit Handler
+
 function handleBulkUploadSubmit(e) {
   e.preventDefault();
   
@@ -2712,61 +2713,214 @@ function handleBulkUploadSubmit(e) {
     return;
   }
   
-  const formData = new FormData();
-  formData.append('excelFile', file);
-  formData.append('adminId', currentUser.id);
-  formData.append('adminName', currentUser.name);
-  
-  const uploadBtn = document.getElementById('bulkUploadBtn');
-  const progressContainer = document.getElementById('uploadProgressContainer');
-  const progressBar = document.getElementById('uploadProgressBar');
-  const progressText = document.getElementById('uploadProgressText');
-  
-  uploadBtn.disabled = true;
-  uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-  progressContainer.style.display = 'block';
-  
-  const xhr = new XMLHttpRequest();
-  
-  xhr.upload.onprogress = function(e) {
-    if (e.lengthComputable) {
-      const percent = Math.round((e.loaded / e.total) * 100);
-      progressBar.style.width = percent + '%';
-      progressText.textContent = `Uploading... ${percent}%`;
-    }
-  };
-  
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      const response = JSON.parse(xhr.responseText);
-      if (response.success) {
-        showToast(`✓ ${response.successCount} tasks uploaded successfully!`, 'success');
-        closeAllModals();
-        // Redirect to unassigned pool
-        setTimeout(() => showUnassignedTasks(), 500);
+  // Call the new handleBulkUpload function
+  handleBulkUpload(file);
+}
+
+// Check for duplicate cases in bulk upload
+async function checkDuplicateCases(tasksFromExcel) {
+  try {
+    const response = await fetch('/api/tasks?role=admin');
+    const existingTasks = await response.json();
+    
+    const existingCaseIds = new Set(existingTasks.map(t => t.title.trim().toLowerCase()));
+    
+    const duplicates = [];
+    const newTasks = [];
+    
+    tasksFromExcel.forEach(task => {
+      const caseId = task.title.trim().toLowerCase();
+      if (existingCaseIds.has(caseId)) {
+        duplicates.push(task);
       } else {
-        showToast(response.message || 'Upload failed', 'error');
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
-        progressContainer.style.display = 'none';
+        newTasks.push(task);
       }
-    } else {
-      showToast('Upload failed. Please try again.', 'error');
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
-      progressContainer.style.display = 'none';
+    });
+    
+    return { duplicates, newTasks };
+  } catch (err) {
+    console.error('Error checking duplicates:', err);
+    return { duplicates: [], newTasks: tasksFromExcel }; // If error, treat all as new
+  }
+}
+
+async function handleBulkUpload(file) {
+  const reader = new FileReader();
+  
+  reader.onload = async function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet);
+      
+      if (rows.length === 0) {
+        showToast('Excel file is empty!', 'error');
+        return;
+      }
+      
+      // Parse tasks from Excel
+      const tasksFromExcel = rows.map(row => ({
+        title: row['Case ID'] || row['Title'] || '',
+        clientName: row['Client Name'] || '',
+        pincode: row['Pincode'] || '',
+        mapUrl: row['Map URL'] || '',
+        notes: row['Notes'] || '',
+        assignedTo: row['Employee ID'] ? parseInt(row['Employee ID']) : null
+      })).filter(t => t.title); // Remove empty rows
+      
+      // Check for duplicates
+      const { duplicates, newTasks } = await checkDuplicateCases(tasksFromExcel);
+      
+      if (duplicates.length > 0) {
+        // Show modal with options
+        showDuplicateModal(duplicates, newTasks);
+      } else {
+        // No duplicates, proceed normally
+        processBulkUpload(newTasks);
+      }
+      
+    } catch (err) {
+      console.error('Error reading file:', err);
+      showToast('Failed to read Excel file', 'error');
     }
   };
   
-  xhr.onerror = function() {
-    showToast('Network error. Please try again.', 'error');
-    uploadBtn.disabled = false;
-    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Tasks';
-    progressContainer.style.display = 'none';
-  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showDuplicateModal(duplicates, newTasks) {
+  const content = `
+    <div class="form-info" style="margin-bottom: 20px;">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span><strong>${duplicates.length}</strong> duplicate case(s) found. What would you like to do?</span>
+    </div>
+    
+    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+      <div style="color: #FCA5A5; font-size: 13px; font-weight: 500; margin-bottom: 8px;">Duplicate Cases:</div>
+      <div style="max-height: 150px; overflow-y: auto; color: #D1D5DB; font-size: 12px;">
+        ${duplicates.map(d => `• ${escapeHtml(d.title)}`).join('<br>')}
+      </div>
+    </div>
+    
+    <div class="modal-actions" style="display: flex; flex-direction: column; gap: 10px;">
+      <button class="btn btn-primary" onclick="handleDuplicateChoice('create', ${duplicates.length}, ${newTasks.length})">
+        <i class="fas fa-plus"></i> Create New (${duplicates.length + newTasks.length} total tasks)
+      </button>
+      <button class="btn btn-warning" onclick="handleDuplicateChoice('update', ${duplicates.length}, ${newTasks.length})">
+        <i class="fas fa-sync-alt"></i> Update Existing (${duplicates.length} updated + ${newTasks.length} new)
+      </button>
+      <button class="btn btn-secondary" onclick="handleDuplicateChoice('cancel', ${duplicates.length}, ${newTasks.length})">
+        <i class="fas fa-times"></i> Cancel Duplicates (${newTasks.length} new only)
+      </button>
+    </div>
+  `;
   
-  xhr.open('POST', '/api/tasks/bulk-upload', true);
-  xhr.send(formData);
+  // Store in global variable for access
+  window._bulkUploadData = { duplicates, newTasks };
+  
+  createModal('Duplicate Cases Found', content, { icon: 'fa-exclamation-triangle', size: 'medium' });
+}
+
+async function handleDuplicateChoice(choice, dupCount, newCount) {
+  closeAllModals();
+  
+  const { duplicates, newTasks } = window._bulkUploadData;
+  
+  if (choice === 'create') {
+    // Create ALL tasks (including duplicates as new entries)
+    showToast('Creating all tasks...', 'info');
+    await processBulkUpload([...duplicates, ...newTasks]);
+    
+  } else if (choice === 'update') {
+    // Update duplicates + Create new
+    showToast('Updating existing and creating new tasks...', 'info');
+    await updateExistingTasks(duplicates);
+    await processBulkUpload(newTasks);
+    
+  } else if (choice === 'cancel') {
+    // Skip duplicates, only create new
+    showToast('Skipping duplicates, creating new tasks only...', 'info');
+    await processBulkUpload(newTasks);
+  }
+  
+  // Clean up
+  delete window._bulkUploadData;
+}
+
+async function updateExistingTasks(duplicates) {
+  try {
+    // Get all existing tasks
+    const response = await fetch('/api/tasks?role=admin');
+    const existingTasks = await response.json();
+    
+    let updated = 0;
+    
+    for (const dup of duplicates) {
+      const existing = existingTasks.find(t => t.title.trim().toLowerCase() === dup.title.trim().toLowerCase());
+      
+      if (existing && dup.assignedTo) {
+        // Update only the employee assignment
+        const updateResponse = await fetch(`/api/tasks/${existing.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assignedTo: dup.assignedTo,
+            userId: currentUser.id,
+            userName: currentUser.name
+          })
+        });
+        
+        if (updateResponse.ok) updated++;
+      }
+    }
+    
+    showToast(`${updated} task(s) reassigned successfully!`, 'success');
+  } catch (err) {
+    console.error('Error updating tasks:', err);
+    showToast('Some tasks failed to update', 'error');
+  }
+}
+
+async function processBulkUpload(tasks) {
+  if (!tasks || tasks.length === 0) {
+    showToast('No tasks to upload', 'info');
+    return;
+  }
+  
+  try {
+    let successCount = 0;
+    
+    for (const task of tasks) {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...task,
+          createdBy: currentUser.id,
+          createdByName: currentUser.name
+        })
+      });
+      
+      if (response.ok) successCount++;
+    }
+    
+    showToast(`✓ ${successCount} task(s) created successfully!`, 'success');
+    
+    // Redirect to unassigned pool or all tasks
+    setTimeout(() => {
+      const hasUnassigned = tasks.some(t => !t.assignedTo);
+      if (hasUnassigned) {
+        showUnassignedTasks();
+      } else {
+        showAllTasks();
+      }
+    }, 1000);
+    
+  } catch (err) {
+    console.error('Error uploading tasks:', err);
+    showToast('Failed to upload tasks', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3582,6 +3736,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
