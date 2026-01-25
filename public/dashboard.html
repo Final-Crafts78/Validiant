@@ -757,7 +757,7 @@ select.form-input {
   }
   
   /* Backdrop overlay when sidebar is open */
-  .sidebar-overlay {
+    .sidebar-overlay {
     display: none;
     position: fixed;
     top: 0;
@@ -771,8 +771,13 @@ select.form-input {
   .sidebar.open ~ .sidebar-overlay {
     display: block;
   }
+  
+  /* Hide user avatar on mobile */
+  .user-avatar {
+    display: none !important;
+  }
 }
-  </style>
+</style>
 </head>
 <body>
 
