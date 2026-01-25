@@ -1683,7 +1683,7 @@ function displayUnassignedList(tasks, employees) {
   `;
 
   tasks.forEach(t => {
-    const mapLink = (t.mapUrl || t.mapurl);
+    const mapLink = t.map_url || t.mapUrl || t.mapurl; 
     
     // Employee Dropdown for Quick Assign
     let empOptions = '<option value="">Choose Employee</option>';
@@ -3384,6 +3384,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
