@@ -1029,16 +1029,11 @@ function displayEmployeeTasks(tasks) {
         </div>
       </div>
       
-      <!-- Footer with Pincode and Distance -->
-<div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 8px;">
-  <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
-  <span style="color: #fbbf24; font-weight: 600;">
-    ${typeof task.distanceKm === 'number' ? task.distanceKm.toFixed(1) + ' km' : ''}
-  </span>
-</div>
-<div style="text-align: center; color: #60a5fa; font-size: 12px; font-weight: 500; margin-bottom: 12px;">
-  Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i>
-</div>
+      <!-- Footer with Pincode and Tap info -->
+      <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 12px;">
+        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
+        <span style="color: #60a5fa; font-weight: 500;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i></span>
+      </div>
       
       <!-- Update Status Button -->
       <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${escapeHtml(task.status)}')" 
@@ -1177,60 +1172,34 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 function reapplyDistanceSorting(tasks, userLat, userLng) {
-  // Enrich with coordinates AND distance (MapURL > Pincode > Null)
+  // Enrich with coordinates (MapURL > Pincode > Null)
   let pool = tasks.map(t => {
-    let lat = parseFloat(t.latitude),
-        lng = parseFloat(t.longitude);
-
-    if (isNaN(lat) || isNaN(lng)) {
-      if (t.pincode && pincodeData[t.pincode]) {
-        lat = pincodeData[t.pincode].lat;
-        lng = pincodeData[t.pincode].lng;
-      } else {
-        lat = NaN;
-        lng = NaN;
-      }
+    let lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
+    if ((isNaN(lat) || lat === 0) && t.pincode && pincodeData[t.pincode]) {
+      lat = pincodeData[t.pincode].lat;
+      lng = pincodeData[t.pincode].lng;
     }
-
-    // Calculate distance from employee if coords present
-    let distanceKm = null;
-    if (!isNaN(lat) && !isNaN(lng) && !isNaN(userLat) && !isNaN(userLng)) {
-      distanceKm = calculateDistance(userLat, userLng, lat, lng);
-    }
-
-    return { ...t, lat, lng, distanceKm };
+    return { ...t, _lat: lat, _lng: lng };
   });
 
-  const valid = pool.filter(t => !isNaN(t.lat) && !isNaN(t.lng));
-  const invalid = pool.filter(t => isNaN(t.lat) || isNaN(t.lng));
-
+  const valid = pool.filter(t => !isNaN(t._lat) && !isNaN(t._lng));
+  const invalid = pool.filter(t => isNaN(t._lat) || isNaN(t._lng));
+  
   // Greedy Nearest Neighbor
-  let sorted = [],
-      currLat = userLat,
-      currLng = userLng;
-
+  let sorted = [], currLat = userLat, currLng = userLng;
   while (valid.length > 0) {
-    let nearestIdx = -1,
-        minDst = Infinity;
-
-    for (let i = 0; i < valid.length; i++) {
-      const dst = calculateDistance(currLat, currLng, valid[i].lat, valid[i].lng);
-      if (dst < minDst) {
-        minDst = dst;
-        nearestIdx = i;
-      }
+    let nearestIdx = -1, minDst = Infinity;
+    for(let i=0; i<valid.length; i++) {
+      const dst = calculateDistance(currLat, currLng, valid[i]._lat, valid[i]._lng);
+      if(dst < minDst) { minDst = dst; nearestIdx = i; }
     }
-
     if (nearestIdx !== -1) {
       sorted.push(valid[nearestIdx]);
-      currLat = valid[nearestIdx].lat;
-      currLng = valid[nearestIdx].lng;
+      currLat = valid[nearestIdx]._lat;
+      currLng = valid[nearestIdx]._lng;
       valid.splice(nearestIdx, 1);
-    } else {
-      break;
     }
   }
-
   return [...sorted, ...invalid];
 }
 
@@ -2718,10 +2687,10 @@ function showBulkUpload() {
 
 // Template Download Function
 function downloadBulkUploadTemplate() {
-  const csvContent = `Case ID,Pincode,Client Name,Map URL,Latitude,Longitude,Notes,Employee ID
-CASE001,560001,ABC Company,https://maps.google.com?q=12.9716,77.5946,12.9716,77.5946,Sample task 1,101
-CASE002,560002,XYZ Corp,https://maps.google.com?q=12.9844,77.5908,12.9844,77.5908,Sample task 2,102
-CASE003,560003,Test Client,,,,Leave MapURL empty if not available,`;
+  const csvContent = `CaseID,Pincode,ClientName,MapURL,Latitude,Longitude,Notes
+CASE001,560001,ABC Company,https://maps.google.com/?q=12.9716,77.5946,12.9716,77.5946,Sample task 1
+CASE002,560002,XYZ Corp,https://maps.google.com/?q=12.9844,77.5908,12.9844,77.5908,Sample task 2
+CASE003,560003,Test Client,,,,"Leave MapURL empty if not available"`;
   
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
@@ -2777,50 +2746,46 @@ async function checkDuplicateCases(tasksFromExcel) {
 
 async function handleBulkUpload(file) {
   const reader = new FileReader();
-
-  reader.onload = async function (e) {
+  
+  reader.onload = async function(e) {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(firstSheet);
-
+      
       if (rows.length === 0) {
         showToast('Excel file is empty!', 'error');
         return;
       }
-
-      // Simple header check
-      const sample = rows[0];
-      if (!('Case ID' in sample || 'Title' in sample)) {
-        showToast('Invalid template. Please use the latest downloaded template.', 'error');
-        return;
-      }
-
-      const tasksFromExcel = rows
-        .map(row => ({
-          title: row['Case ID'] || row['Title'] || '',
-          clientName: row['Client Name'] || '',
-          pincode: row['Pincode'] || '',
-          mapUrl: row['Map URL'] || '',
-          notes: row['Notes'] || '',
-          assignedTo: row['Employee ID'] ? parseInt(row['Employee ID']) : null,
-        }))
-        .filter(t => t.title);
-
+      
+      // Parse tasks from Excel
+      const tasksFromExcel = rows.map(row => ({
+        title: row['Case ID'] || row['Title'] || '',
+        clientName: row['Client Name'] || '',
+        pincode: row['Pincode'] || '',
+        mapUrl: row['Map URL'] || '',
+        notes: row['Notes'] || '',
+        assignedTo: row['Employee ID'] ? parseInt(row['Employee ID']) : null
+      })).filter(t => t.title); // Remove empty rows
+      
+      // Check for duplicates
       const { duplicates, newTasks } = await checkDuplicateCases(tasksFromExcel);
-
+      
       if (duplicates.length > 0) {
+        // Show modal with options
         showDuplicateModal(duplicates, newTasks);
       } else {
-        await processBulkUpload(newTasks);
+        // No duplicates, proceed normally
+        processBulkUpload(newTasks);
       }
+      
     } catch (err) {
       console.error('Error reading file:', err);
       showToast('Failed to read Excel file', 'error');
     }
   };
-
+  
   reader.readAsArrayBuffer(file);
 }
 
@@ -3771,26 +3736,4 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
