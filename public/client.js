@@ -999,6 +999,9 @@ function displayEmployeeTasks(tasks) {
   tasks.forEach(task => {
     const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
     const mapLink = task.map_url || task.mapUrl || task.mapurl; // Get map URL
+    const distanceBadge = task.distanceKm 
+      ? `<span style="margin-left: 8px; background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
+      : '';
     
     html += `
     <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: all 0.3s ease;" 
@@ -1031,7 +1034,7 @@ function displayEmployeeTasks(tasks) {
       
       <!-- Footer with Pincode and Tap info -->
       <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 12px;">
-        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')}</span>
+        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')} ${distanceBadge}</span>
         <span style="color: #60a5fa; font-weight: 500;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i></span>
       </div>
       
@@ -1194,6 +1197,8 @@ function reapplyDistanceSorting(tasks, userLat, userLng) {
       if(dst < minDst) { minDst = dst; nearestIdx = i; }
     }
     if (nearestIdx !== -1) {
+      valid[nearestIdx].distanceKm = minDst.toFixed(1); 
+      
       sorted.push(valid[nearestIdx]);
       currLat = valid[nearestIdx]._lat;
       currLng = valid[nearestIdx]._lng;
@@ -3736,4 +3741,5 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
