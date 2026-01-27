@@ -2482,213 +2482,160 @@ function deleteTask(taskId) {
     });
 }
 
-function showBulkUpload() {
+// ═══════════════════════════════════════════════════════════════════════════
+// SMART BULK UPLOAD SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function showBulkUpload() {
+  // Ensure libs are loaded
+  const libsReady = await loadDependencies();
+  if (!libsReady) return;
+
   const content = `
-    <div class="bulk-upload-container">
-      <div class="upload-instructions">
-        <div class="instruction-card">
-          <i class="fas fa-file-excel" style="font-size: 2.5rem; color: #10B981; margin-bottom: 10px;"></i>
-          <h4 style="margin: 10px 0;">Upload Excel/CSV File</h4>
-          <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6;">
-            Upload tasks in bulk with <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong> format.
-            All tasks will be added to the <strong>Unassigned Pool</strong>.
-          </p>
-        </div>
-        
-        <div class="instruction-card">
-          <i class="fas fa-table" style="font-size: 2.5rem; color: #6366F1; margin-bottom: 10px;"></i>
-          <h4 style="margin: 10px 0;">Required Columns</h4>
-          <div style="text-align: left; margin-top: 15px;">
-            <div class="column-info"><span class="required">*</span> <strong>CaseID</strong> or <strong>Title</strong></div>
-            <div class="column-info"><span class="required">*</span> <strong>Pincode</strong> (6 digits)</div>
-            <div class="column-info"><span class="optional">○</span> ClientName / IndividualName</div>
-            <div class="column-info"><span class="optional">○</span> MapURL</div>
-            <div class="column-info"><span class="optional">○</span> Latitude, Longitude</div>
-            <div class="column-info"><span class="optional">○</span> Notes</div>
-          </div>
-        </div>
-        
-        <div class="instruction-card">
-          <i class="fas fa-download" style="font-size: 2.5rem; color: #8B5CF6; margin-bottom: 10px;"></i>
-          <h4 style="margin: 10px 0;">Need a Template?</h4>
-          <button class="btn btn-outline" onclick="downloadBulkUploadTemplate()" style="margin-top: 10px;">
-            <i class="fas fa-file-download"></i> Download Sample Template
-          </button>
+    <div class="smart-upload-tabs">
+      <div class="tab-header">
+        <button class="tab-btn active" onclick="switchTab('file')"><i class="fas fa-file-excel"></i> Excel/CSV</button>
+        <button class="tab-btn" onclick="switchTab('text')"><i class="fas fa-paste"></i> Paste Text</button>
+        <button class="tab-btn" onclick="switchTab('ocr')"><i class="fas fa-camera"></i> Image OCR</button>
+      </div>
+
+      <div id="tab-file" class="tab-content active">
+        <div class="file-drop-zone" id="smartDropZone">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <h4>Drag & Drop Excel/CSV</h4>
+          <p>We'll auto-detect columns like "Request ID", "Pin", "Client"</p>
+          <input type="file" id="smartFileIn" accept=".xlsx,.xls,.csv" hidden>
+          <button class="btn btn-primary" onclick="document.getElementById('smartFileIn').click()">Select File</button>
         </div>
       </div>
-      
-      <form id="bulkUploadForm" class="upload-form-section">
-        <div class="file-drop-zone" id="fileDropZone">
-          <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #6366F1; margin-bottom: 15px;"></i>
-          <h4 style="margin: 10px 0; color: #E5E7EB;">Drag & Drop File Here</h4>
-          <p style="color: #9CA3AF; font-size: 13px; margin-bottom: 15px;">or click to browse</p>
-          <input type="file" id="bulkExcelFile" accept=".xlsx,.xls,.csv" required style="display: none;" />
-          <button type="button" class="btn btn-primary" onclick="document.getElementById('bulkExcelFile').click()">
-            <i class="fas fa-folder-open"></i> Choose File
-          </button>
-          <div id="selectedFileName" style="margin-top: 15px; color: #10B981; font-weight: 500;"></div>
+
+      <div id="tab-text" class="tab-content" style="display:none">
+        <textarea id="smartTextIn" class="form-input" rows="10" placeholder="Paste data from Excel, Sheets, or Email...&#10;Example:&#10;CASE123 | 560001 | John Doe&#10;CASE124 | 560002 | Jane Smith"></textarea>
+        <div class="form-hint"><i class="fas fa-info-circle"></i> Supports Tab, Comma, or Pipe (|) separators</div>
+        <button class="btn btn-primary" style="margin-top:15px; width:100%" onclick="processSmartText()">Parse Text</button>
+      </div>
+
+      <div id="tab-ocr" class="tab-content" style="display:none">
+        <div class="file-drop-zone" id="ocrDropZone">
+          <i class="fas fa-magic"></i>
+          <h4>Upload Image of Table</h4>
+          <p>We'll extract text using AI (Tesseract.js)</p>
+          <input type="file" id="smartImgIn" accept="image/*" hidden>
+          <button class="btn btn-primary" onclick="document.getElementById('smartImgIn').click()">Select Image</button>
         </div>
-        
-        <div class="progress-container" id="uploadProgressContainer" style="display: none;">
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar-fill" id="uploadProgressBar"></div>
-          </div>
-          <p id="uploadProgressText" style="text-align: center; color: #9CA3AF; font-size: 13px; margin-top: 10px;">
-            Uploading... 0%
-          </p>
+        <div id="ocrProgress" style="display:none; margin-top:20px;">
+          <div class="progress-bar-wrapper"><div class="progress-bar-fill" id="ocrBar" style="width:0%"></div></div>
+          <p id="ocrStatus" style="text-align:center; font-size:12px; margin-top:5px; color:#9CA3AF">Initializing...</p>
         </div>
-        
-        <div class="upload-actions">
-          <button type="submit" class="btn btn-success btn-lg" id="bulkUploadBtn" disabled>
-            <i class="fas fa-upload"></i> Upload Tasks
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="closeAllModals()">
-            <i class="fas fa-times"></i> Cancel
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
     
     <style>
-      .bulk-upload-container {
-        display: grid;
-        gap: 25px;
-      }
-      .upload-instructions {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-      }
-      .instruction-card {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid #1F2937;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        transition: all 0.3s ease;
-      }
-      .instruction-card:hover {
-        border-color: #6366F1;
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
-      }
-      .column-info {
-        padding: 6px 0;
-        color: #E5E7EB;
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .required {
-        color: #EF4444;
-        font-weight: bold;
-      }
-      .optional {
-        color: #9CA3AF;
-      }
-      .file-drop-zone {
-        background: rgba(15, 23, 42, 0.8);
-        border: 2px dashed #374151;
-        border-radius: 16px;
-        padding: 40px 20px;
-        text-align: center;
-        transition: all 0.3s ease;
-        cursor: pointer;
-      }
-      .file-drop-zone:hover {
-        border-color: #6366F1;
-        background: rgba(99, 102, 241, 0.1);
-      }
-      .file-drop-zone.dragover {
-        border-color: #10B981;
-        background: rgba(16, 185, 129, 0.1);
-      }
-      .upload-form-section {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-      }
-      .progress-container {
-        padding: 20px;
-        background: rgba(15, 23, 42, 0.6);
-        border-radius: 12px;
-        border: 1px solid #1F2937;
-      }
-      .progress-bar-wrapper {
-        width: 100%;
-        height: 8px;
-        background: #1F2937;
-        border-radius: 999px;
-        overflow: hidden;
-      }
-      .progress-bar-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #10B981, #6366F1);
-        width: 0%;
-        transition: width 0.3s ease;
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-      }
-      .upload-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-      }
-      .btn-outline {
-        background: transparent;
-        border: 1px solid #6366F1;
-        color: #A5B4FC;
-        padding: 8px 16px;
-        border-radius: 8px;
-        transition: all 0.3s ease;
-      }
-      .btn-outline:hover {
-        background: rgba(99, 102, 241, 0.2);
-        border-color: #818CF8;
-        color: #C7D2FE;
-      }
+      .smart-upload-tabs { display: flex; flex-direction: column; gap: 20px; }
+      .tab-header { display: flex; border-bottom: 1px solid #374151; gap: 10px; }
+      .tab-btn { background: none; border: none; padding: 10px 20px; color: #9CA3AF; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s; }
+      .tab-btn.active { color: #6366F1; border-color: #6366F1; font-weight: 600; }
+      .tab-btn:hover { color: #E5E7EB; }
+      .file-drop-zone { border: 2px dashed #374151; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: 0.3s; }
+      .file-drop-zone:hover { border-color: #6366F1; background: rgba(99,102,241,0.05); }
+      .file-drop-zone i { font-size: 3rem; color: #6366F1; margin-bottom: 15px; }
     </style>
   `;
-  
-  createModal('Bulk Upload Tasks', content, { icon: 'fa-file-upload', size: 'large' });
-  
-  // File selection handler
-  const fileInput = document.getElementById('bulkExcelFile');
-  const uploadBtn = document.getElementById('bulkUploadBtn');
-  const fileNameDisplay = document.getElementById('selectedFileName');
-  const dropZone = document.getElementById('fileDropZone');
-  
-  fileInput.addEventListener('change', function() {
-    if (this.files.length > 0) {
-      const fileName = this.files[0].name;
-      fileNameDisplay.innerHTML = `<i class="fas fa-check-circle"></i> ${escapeHtml(fileName)}`;
-      uploadBtn.disabled = false;
+
+  createModal('Smart Import', content, { size: 'large', icon: 'fa-robot' });
+
+  // Event Listeners for Tabs
+  window.switchTab = (tab) => {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).style.display = 'block';
+    event.target.closest('button').classList.add('active');
+  };
+
+  // 1. File Handler
+  const fileIn = document.getElementById('smartFileIn');
+  fileIn.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const wb = XLSX.read(e.target.result, {type: 'binary'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws);
+        const mapped = smartColumnMapper(json);
+        showSmartPreview(mapped);
+      };
+      reader.readAsBinaryString(file);
     }
   });
-  
-  // Drag & Drop handlers
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-  });
-  
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-  });
-  
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      fileInput.files = files;
-      fileInput.dispatchEvent(new Event('change'));
+
+  // 3. OCR Handler
+  const imgIn = document.getElementById('smartImgIn');
+  imgIn.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      document.getElementById('ocrDropZone').style.display = 'none';
+      document.getElementById('ocrProgress').style.display = 'block';
+      
+      try {
+        const worker = await Tesseract.createWorker({
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              document.getElementById('ocrBar').style.width = `${m.progress * 100}%`;
+              document.getElementById('ocrStatus').innerText = `Scanning... ${Math.round(m.progress * 100)}%`;
+            }
+          }
+        });
+        
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
+        const { data: { text } } = await worker.recognize(file);
+        await worker.terminate();
+        
+        // Populate text tab with result
+        document.getElementById('smartTextIn').value = text;
+        switchTab('text');
+        showToast('Text extracted! Please check and parse.', 'success');
+        
+      } catch (err) {
+        console.error(err);
+        showToast('OCR Failed', 'error');
+        document.getElementById('ocrDropZone').style.display = 'block';
+        document.getElementById('ocrProgress').style.display = 'none';
+      }
     }
   });
-  
-  // Form submission
-  document.getElementById('bulkUploadForm').addEventListener('submit', handleBulkUploadSubmit);
 }
+
+// 2. Text Parser Logic (Exposed to Window)
+window.processSmartText = () => {
+  const text = document.getElementById('smartTextIn').value;
+  if (!text.trim()) return showToast('Please paste some data', 'warning');
+
+  // Detect delimiter
+  const lines = text.split('\n').filter(l => l.trim());
+  const firstLine = lines[0];
+  let delimiter = ',';
+  if (firstLine.includes('\t')) delimiter = '\t';
+  else if (firstLine.includes('|')) delimiter = '|';
+
+  // Parse to JSON
+  const headers = lines[0].split(delimiter).map(h => h.trim());
+  const data = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(delimiter);
+    if (values.length < 2) continue; // Skip empty/malformed
+    const row = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] ? values[idx].trim() : '';
+    });
+    data.push(row);
+  }
+
+  const mapped = smartColumnMapper(data);
+  showSmartPreview(mapped);
+};
 
 // Template Download Function
 function downloadBulkUploadTemplate() {
@@ -3678,6 +3625,223 @@ async function confirmStatusUpdate(taskId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SMART UPLOAD HELPERS (v2 - 100% Feature Complete)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. Dynamic Script Loader
+async function loadDependencies() {
+  const loadScript = (src, id) => {
+    return new Promise((resolve, reject) => {
+      if (document.getElementById(id)) return resolve();
+      const script = document.createElement('script');
+      script.src = src;
+      script.id = id;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+  try {
+    showToast('Loading intelligent parsers...', 'info');
+    await Promise.all([
+      loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'xlsx-lib'),
+      loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'tesseract-lib')
+    ]);
+    return true;
+  } catch (e) {
+    showToast('Failed to load libraries', 'error');
+    return false;
+  }
+}
+
+// 2. Intelligent Column Mapper (⭐ Features: Any Name, Any Order, Pincode Extraction)
+function smartColumnMapper(rawData) {
+  const normalized = [];
+  
+  const mapRules = {
+    title: ['caseid', 'requestid', 'id', 'title', 'case', 'ticket', 'ref', 'number'],
+    clientName: ['client', 'customer', 'individual', 'name', 'party'],
+    pincode: ['pincode', 'pin', 'zip', 'postal'],
+    address: ['address', 'location', 'addr', 'site'],
+    mapUrl: ['map', 'url', 'link', 'google', 'location_link'],
+    notes: ['notes', 'remarks', 'comments', 'desc'],
+    assignedTo: ['employee', 'empid', 'assigned', 'agent']
+  };
+
+  rawData.forEach(row => {
+    const newRow = {};
+    const rowKeys = Object.keys(row);
+    
+    const findValue = (field) => {
+      const match = rowKeys.find(k => {
+        const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return mapRules[field].some(rule => cleanKey.includes(rule));
+      });
+      return match ? row[match] : null;
+    };
+
+    newRow.title = findValue('title') || `CASE-${Math.floor(Math.random()*100000)}`;
+    newRow.clientName = findValue('clientName');
+    newRow.pincode = findValue('pincode');
+    newRow.address = findValue('address');
+    newRow.mapUrl = findValue('mapUrl');
+    newRow.notes = findValue('notes');
+    
+    // Employee Match
+    const empVal = findValue('assignedTo');
+    if (empVal) {
+      const emp = allEmployees.find(e => 
+        e.employeeId == empVal || e.name.toLowerCase().includes(String(empVal).toLowerCase())
+      );
+      newRow.assignedTo = emp ? emp.id : null;
+    } else {
+      newRow.assignedTo = null;
+    }
+
+    // ⭐ Smart Pincode Extraction from Address (if pincode column missing)
+    if (!newRow.pincode && newRow.address) {
+      const pinMatch = newRow.address.match(/\b[1-9][0-9]{5}\b/); 
+      if (pinMatch) newRow.pincode = pinMatch[0];
+    }
+    
+    if (newRow.title || newRow.pincode) {
+      normalized.push(newRow);
+    }
+  });
+
+  return normalized;
+}
+
+// 3. Smart Preview Modal (👁️ Features: Editable Table, Live Save)
+function showSmartPreview(tasks) {
+  closeAllModals();
+  
+  const content = `
+    <div class="preview-container">
+      <div class="preview-header" style="margin-bottom:15px; display:flex; justify-content:space-between;">
+        <div class="stats">
+          <span class="info-badge">Total: ${tasks.length}</span>
+          <span class="info-badge" style="color:#10B981; border-color:#10B981">Assigned: ${tasks.filter(t => t.assignedTo).length}</span>
+        </div>
+      </div>
+      
+      <div class="table-wrapper" style="max-height: 400px; overflow: auto; margin-bottom: 20px; border: 1px solid #374151; border-radius: 8px;">
+        <table class="data-table" id="previewTable" style="width:100%">
+          <thead style="position:sticky; top:0; background:#1F2937; z-index:10;">
+            <tr>
+              <th>Case ID / Title</th>
+              <th>Pincode</th>
+              <th>Client</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tasks.map((t, idx) => `
+              <tr data-idx="${idx}">
+                <td><input type="text" value="${escapeHtml(t.title)}" class="form-input text-sm" name="title"></td>
+                <td><input type="text" value="${escapeHtml(t.pincode || '')}" class="form-input text-sm" name="pincode" style="width:80px"></td>
+                <td>${escapeHtml(t.clientName || '-')}</td>
+                <td>${t.assignedTo ? '<span class="status-badge status-verified">Matched</span>' : '<span class="status-badge status-unassigned">Pool</span>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="confirmUploadBtn" class="btn btn-primary btn-lg">
+          <i class="fas fa-cloud-upload-alt"></i> Upload Valid Tasks
+        </button>
+        <button class="btn btn-secondary" onclick="showBulkUpload()">Back</button>
+      </div>
+    </div>
+  `;
+
+  createModal('Review & Edit Data', content, { size: 'large', icon: 'fa-edit' });
+
+  // ⭐ Logic to Capture Edits before Uploading
+  document.getElementById('confirmUploadBtn').onclick = () => {
+    const rows = document.querySelectorAll('#previewTable tbody tr');
+    const updatedTasks = [];
+
+    rows.forEach(row => {
+      const idx = row.getAttribute('data-idx');
+      const task = tasks[idx]; // Get original object
+      
+      // Update with values from inputs
+      task.title = row.querySelector('input[name="title"]').value;
+      task.pincode = row.querySelector('input[name="pincode"]').value;
+
+      if (task.title && task.pincode) {
+        updatedTasks.push(task);
+      }
+    });
+
+    if (updatedTasks.length === 0) return showToast('No valid tasks to upload', 'error');
+    processBulkUpload(updatedTasks); 
+  };
+}
+
+// 4. Smart Text Parser (🧠 Features: Tab, CSV, Pipe, Key-Value Pairs)
+window.processSmartText = () => {
+  const text = document.getElementById('smartTextIn').value;
+  if (!text.trim()) return showToast('Please paste some data', 'warning');
+
+  const lines = text.split('\n').filter(l => l.trim());
+  let data = [];
+
+  // Strategy A: Key-Value Pairs (e.g., "Case: 123", "Pin: 560001")
+  // Detect if lines look like key-values
+  const isKeyValue = lines.slice(0, 3).every(l => l.includes(':') || l.includes('-'));
+  
+  if (isKeyValue) {
+    let currentObj = {};
+    lines.forEach(line => {
+      // Split by first separator
+      const [key, ...valParts] = line.split(/[:\t-]+/); 
+      const val = valParts.join(' ').trim();
+      
+      if (!key || !val) return;
+      const lowerKey = key.toLowerCase();
+
+      // Start new object if we hit a "Title" field again
+      if ((lowerKey.includes('case') || lowerKey.includes('id')) && currentObj.title) {
+        data.push(currentObj);
+        currentObj = {};
+      }
+      
+      if (lowerKey.includes('case') || lowerKey.includes('id')) currentObj.title = val;
+      if (lowerKey.includes('pin')) currentObj.pincode = val;
+      if (lowerKey.includes('client')) currentObj.clientName = val;
+    });
+    if (currentObj.title) data.push(currentObj);
+
+  } else {
+    // Strategy B: Delimiter Table (Tab, Pipe, Comma)
+    const firstLine = lines[0];
+    let delimiter = ',';
+    if (firstLine.includes('\t')) delimiter = '\t';
+    else if (firstLine.includes('|')) delimiter = '|';
+
+    const headers = lines[0].split(delimiter).map(h => h.trim());
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(delimiter);
+      if (values.length < 2) continue; 
+      const row = {};
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] ? values[idx].trim() : '';
+      });
+      data.push(row);
+    }
+  }
+
+  const mapped = smartColumnMapper(data);
+  if(mapped.length === 0) return showToast('Could not parse data. Try Excel format.', 'error');
+  showSmartPreview(mapped);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 20. INITIALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3741,5 +3905,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
