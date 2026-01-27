@@ -118,20 +118,25 @@ async function sendEmail(to, subject, html) {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function logActivity(userId, userName, action, taskId = null, details = null, req = null) {
+// ═══════════════════════════════════════════════════════════════════════════
+// ACTIVITY LOGGING HELPER (Final)
+// ═══════════════════════════════════════════════════════════════════════════
+async function logActivity(userId, userName, action, taskId, details) {
   try {
-    const ip = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress) : 'System';
-    const safeDetails = details ? (typeof details === 'object' ? details : { info: details }) : null;
-    await supabase.from('activity_logs').insert({
-      user_id: userId,
-      user_name: userName,
+    // Safety check: Don't log if missing crucial info
+    if (!userId || !action) return;
+
+    await supabase.from('activity_logs').insert([{
+      user_id: userId,         // Matches your new DB schema
+      user_name: userName || 'System',
       action: action,
-      task_id: taskId,
-      details: safeDetails,
-      ip_address: ip
-    });
+      task_id: taskId || null, // Matches your new DB schema
+      details: typeof details === 'object' ? JSON.stringify(details) : details,
+      created_at: new Date()
+    }]);
   } catch (err) {
-    console.error("⚠️ Audit Log Exception:", err.message);
+    console.error('Logging failed:', err.message);
+    // Don't crash the server if logging fails
   }
 }
 
@@ -194,7 +199,13 @@ app.post("/api/users", async (req, res) => {
     }]);
 
     if (error) throw error;
-    await logActivity(null, "Admin", "USER_CREATED", null, `Created: ${email}`, req);
+    await logActivity(
+  'ADMIN', 
+  'Admin', 
+  'USER_CREATED', 
+  null, 
+  `Created employee: ${req.body.name} (${req.body.employeeId})`
+);
     res.json({ success: true, message: "User created successfully" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -211,7 +222,7 @@ app.post("/api/users/:id/reset-password", async (req, res) => {
     const { error } = await supabase.from("users").update({ password: hashedPassword, updated_at: new Date() }).eq("id", id);
     if (error) throw error;
     
-    await logActivity(adminId, adminName, "PASSWORD_RESET", null, `Reset user ID ${id}`, req);
+    await logActivity(adminId, adminName, "PASSWORD_RESET", null, `Reset user ID ${id}`);
     res.json({ success: true, tempPassword });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -299,18 +310,18 @@ app.get("/api/analytics", async (req, res) => {
 
 app.get("/api/activity-log", async (req, res) => {
   try {
-    const { data, error } = await supabase.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(50);
+    // FIX: Sorted by newest first, limited to 100, matches your table name
+    const { data, error } = await supabase
+      .from("activity_logs") // <--- Kept your table name
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
     if (error) throw error;
-    res.json(data.map(log => ({
-      id: log.id,
-      userName: log.user_name || "System",
-      action: log.action,
-      taskTitle: log.task_id ? `Task #${log.task_id}` : "System",
-      timestamp: log.created_at,
-      details: log.details || ""
-    })));
+    res.json(data);
   } catch (err) {
-    res.json([]);
+    console.error('Error fetching logs:', err);
+    res.status(500).json([]);
   }
 });
 
@@ -388,7 +399,14 @@ app.post("/api/tasks", async (req, res) => {
     }]).select();
 
     if (error) throw error;
-    await logActivity(createdBy, createdByName || "Admin", "TASK_CREATED", data[0].id, finalAssignee ? `Assigned to ${finalAssignee}` : "Unassigned Pool", req);
+    await logActivity(
+      req.body.createdBy, 
+      req.body.createdByName, 
+      'TASK_CREATED', 
+      data[0].id, 
+      `Created task: ${taskData.title}`
+    );
+
     res.json({ success: true, task: data[0] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -502,11 +520,19 @@ app.put("/api/tasks/:taskId/reassign", async (req, res) => {
 app.delete("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { adminId, adminName } = req.query;
-    await supabase.from("tasks").delete().eq("id", id);
-    if (adminId) await logActivity(adminId, adminName, "TASK_DELETED", id, "Deleted", req);
+    const { adminId, adminName } = req.query; 
+
+    // FIX: Log ONCE before deletion
+    if (adminId && adminName) {
+      await logActivity(adminId, adminName, 'TASK_DELETED', id, `Deleted task ID: ${id}`);
+    }
+
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) throw error;
+
     res.json({ success: true });
   } catch (err) {
+    console.error("Delete failed:", err);
     res.status(500).json({ success: false });
   }
 });
@@ -717,3 +743,4 @@ app.listen(PORT, HOST, () => {
   setInterval(keepAlive, 180000); // 3 minutes
 
 });
+
