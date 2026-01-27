@@ -2777,46 +2777,50 @@ async function checkDuplicateCases(tasksFromExcel) {
 
 async function handleBulkUpload(file) {
   const reader = new FileReader();
-  
-  reader.onload = async function(e) {
+
+  reader.onload = async function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(firstSheet);
-      
+
       if (rows.length === 0) {
         showToast('Excel file is empty!', 'error');
         return;
       }
-      
-      // Parse tasks from Excel
-      const tasksFromExcel = rows.map(row => ({
-        title: row['Case ID'] || row['Title'] || '',
-        clientName: row['Client Name'] || '',
-        pincode: row['Pincode'] || '',
-        mapUrl: row['Map URL'] || '',
-        notes: row['Notes'] || '',
-        assignedTo: row['Employee ID'] ? parseInt(row['Employee ID']) : null
-      })).filter(t => t.title); // Remove empty rows
-      
-      // Check for duplicates
+
+      // Simple header check
+      const sample = rows[0];
+      if (!('Case ID' in sample || 'Title' in sample)) {
+        showToast('Invalid template. Please use the latest downloaded template.', 'error');
+        return;
+      }
+
+      const tasksFromExcel = rows
+        .map(row => ({
+          title: row['Case ID'] || row['Title'] || '',
+          clientName: row['Client Name'] || '',
+          pincode: row['Pincode'] || '',
+          mapUrl: row['Map URL'] || '',
+          notes: row['Notes'] || '',
+          assignedTo: row['Employee ID'] ? parseInt(row['Employee ID']) : null,
+        }))
+        .filter(t => t.title);
+
       const { duplicates, newTasks } = await checkDuplicateCases(tasksFromExcel);
-      
+
       if (duplicates.length > 0) {
-        // Show modal with options
         showDuplicateModal(duplicates, newTasks);
       } else {
-        // No duplicates, proceed normally
-        processBulkUpload(newTasks);
+        await processBulkUpload(newTasks);
       }
-      
     } catch (err) {
       console.error('Error reading file:', err);
       showToast('Failed to read Excel file', 'error');
     }
   };
-  
+
   reader.readAsArrayBuffer(file);
 }
 
@@ -3767,6 +3771,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
