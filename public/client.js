@@ -2639,10 +2639,11 @@ window.processSmartText = () => {
 
 // Template Download Function
 function downloadBulkUploadTemplate() {
-  const csvContent = `CaseID,Pincode,ClientName,MapURL,Latitude,Longitude,Notes
-CASE001,560001,ABC Company,https://maps.google.com/?q=12.9716,77.5946,12.9716,77.5946,Sample task 1
-CASE002,560002,XYZ Corp,https://maps.google.com/?q=12.9844,77.5908,12.9844,77.5908,Sample task 2
-CASE003,560003,Test Client,,,,"Leave MapURL empty if not available"`;
+  // FIX: Added 'EmployeeID' to the header and sample data
+  const csvContent = `CaseID,Pincode,ClientName,EmployeeID,MapURL,Notes
+CASE001,560001,ABC Company,,http://maps.google.com/example,Priority task
+CASE002,560002,XYZ Corp,EMP123,,Assign to specific ID
+CASE003,560003,Test Client,,,Leave EmployeeID empty for pool`;
   
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
@@ -3905,6 +3906,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
