@@ -6,8 +6,7 @@
 
 // 1. GLOBAL STATE
 let allTasks = [];              
-let currentFilteredTasks = null;
-let allEmployees = [];       
+let currentFilteredTasks = null;       
 let currentUser = null;
 let sessionTimeout = null;
 let allEmployeeTasks = [];
@@ -3950,6 +3949,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
