@@ -5,6 +5,9 @@
  */
 
 // 1. GLOBAL STATE
+let allTasks = [];              
+let currentFilteredTasks = null;
+let allEmployees = [];       
 let currentUser = null;
 let sessionTimeout = null;
 let allEmployeeTasks = [];
@@ -1356,8 +1359,14 @@ function loadAllTasks() {
   fetch(url)
     .then(res => res.json())
     .then(tasks => {
-      allAdminTasks = Array.isArray(tasks) ? tasks : [];
-      const filtered = applyDateFilter(allAdminTasks); // Client-side date filter
+      // ✅ FIX 1: Use 'allTasks' (matches the global variable at the top)
+      allTasks = Array.isArray(tasks) ? tasks : [];
+      
+      const filtered = applyDateFilter(allTasks); 
+      
+      // ✅ FIX 2: Save 'currentFilteredTasks' so pagination knows what list to use
+      currentFilteredTasks = filtered;
+
       updateFilterChips();
       displayAllTasksList(filtered);
     })
@@ -1638,11 +1647,29 @@ function displayAllTasksList(tasks) {
 // ══════════════════════════════════════════════════════════════════════════
 // 3. PAGINATION HELPER (Required)
 // ══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// PAGINATION HELPER (Safe Version)
+// ════════════════════════════════════════════════════════════
 window.changePage = (direction) => {
+  // Safety Check: If variables aren't defined, stop to prevent crash
+  if (typeof allTasks === 'undefined') {
+    console.error("Error: 'allTasks' variable is missing. Make sure it is defined at the top of client.js");
+    return;
+  }
+
   currentTaskPage += direction;
-  // Safely use filtered tasks if searching, or all tasks if not
-  const tasksToRender = (typeof currentFilteredTasks !== 'undefined' && currentFilteredTasks) ? currentFilteredTasks : allTasks;
-  displayAllTasksList(tasksToRender);
+  
+  // Logic: Use filtered list if it exists, otherwise use allTasks
+  const listToUse = (currentFilteredTasks && currentFilteredTasks.length > 0) 
+    ? currentFilteredTasks 
+    : allTasks;
+
+  // Prevent going out of bounds
+  const totalPages = Math.ceil(listToUse.length / TASKS_PER_PAGE);
+  if (currentTaskPage < 1) currentTaskPage = 1;
+  if (currentTaskPage > totalPages) currentTaskPage = totalPages;
+
+  displayAllTasksList(listToUse);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3923,6 +3950,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
