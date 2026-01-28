@@ -404,7 +404,7 @@ app.post("/api/tasks", async (req, res) => {
       req.body.createdByName, 
       'TASK_CREATED', 
       data[0].id, 
-      `Created task: ${taskData.title}`
+      `Created task: ${title}` // ✅ FIXED: Uses the 'title' variable from line 348
     );
 
     res.json({ success: true, task: data[0] });
@@ -743,4 +743,5 @@ app.listen(PORT, HOST, () => {
   setInterval(keepAlive, 180000); // 3 minutes
 
 });
+
 
