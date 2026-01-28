@@ -2476,7 +2476,7 @@ async function showBulkUpload() {
     }
   });
 
-  // 3. OCR Handler
+  // 3. OCR Handler (Fixed for Tesseract v5+)
   const imgIn = document.getElementById('smartImgIn');
   imgIn.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -2485,17 +2485,19 @@ async function showBulkUpload() {
       document.getElementById('ocrProgress').style.display = 'block';
       
       try {
-        const worker = await Tesseract.createWorker({
+        // ✅ FIX: Use v5 Syntax -> createWorker('eng', 1, { logger: ... })
+        // We pass 'eng' directly here to avoid the DataCloneError
+        const worker = await Tesseract.createWorker('eng', 1, {
           logger: m => {
             if (m.status === 'recognizing text') {
-              document.getElementById('ocrBar').style.width = `${m.progress * 100}%`;
-              document.getElementById('ocrStatus').innerText = `Scanning... ${Math.round(m.progress * 100)}%`;
+              const pct = Math.round(m.progress * 100);
+              document.getElementById('ocrBar').style.width = `${pct}%`;
+              document.getElementById('ocrStatus').innerText = `Scanning... ${pct}%`;
             }
           }
         });
         
-        await worker.loadLanguage('eng');
-        await worker.initialize('eng');
+        // ✅ FIX: Directly recognize (initialize is handled by createWorker now)
         const { data: { text } } = await worker.recognize(file);
         await worker.terminate();
         
@@ -2505,8 +2507,9 @@ async function showBulkUpload() {
         showToast('Text extracted! Please check and parse.', 'success');
         
       } catch (err) {
-        console.error(err);
-        showToast('OCR Failed', 'error');
+        console.error("OCR Error:", err);
+        showToast('OCR Failed: ' + err.message, 'error');
+        // Reset UI on error
         document.getElementById('ocrDropZone').style.display = 'block';
         document.getElementById('ocrProgress').style.display = 'none';
       }
@@ -3949,6 +3952,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
