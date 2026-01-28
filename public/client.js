@@ -14,7 +14,6 @@ let allEmployeeTasks = [];
 let allHistoryTasks = [];
 let allAdminTasks = [];
 let allUnassignedTasks = [];
-let allEmployees = [];
 let isNearestSortActive = false;
 let savedEmployeeLocation = null;
 
@@ -3950,6 +3949,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
