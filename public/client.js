@@ -2549,7 +2549,6 @@ async function showBulkUpload() {
       }
     }
   });
-}
 
 // 2. Text Parser Logic (Exposed to Window)
 window.processSmartText = () => {
@@ -4036,6 +4035,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
