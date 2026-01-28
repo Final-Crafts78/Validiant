@@ -2453,10 +2453,21 @@ async function showBulkUpload() {
 
   // Event Listeners for Tabs
   window.switchTab = (tab) => {
+    // 1. Hide all contents
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    
+    // 2. Remove active class from all buttons
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    document.getElementById(`tab-${tab}`).style.display = 'block';
-    event.target.closest('button').classList.add('active');
+    
+    // 3. Show the selected tab
+    const targetContent = document.getElementById(`tab-${tab}`);
+    if (targetContent) targetContent.style.display = 'block';
+
+    // 4. ✅ FIX: Manually highlight the correct button (Safe for OCR auto-switch)
+    const buttons = document.querySelectorAll('.tab-btn');
+    if (tab === 'file' && buttons[0]) buttons[0].classList.add('active');
+    if (tab === 'text' && buttons[1]) buttons[1].classList.add('active');
+    if (tab === 'ocr' && buttons[2]) buttons[2].classList.add('active');
   };
 
   // 1. File Handler
@@ -2476,7 +2487,7 @@ async function showBulkUpload() {
     }
   });
 
-  // 3. OCR Handler (Fixed for Tesseract v5+)
+  // 3. OCR Handler (Smart & V5 Compatible)
   const imgIn = document.getElementById('smartImgIn');
   imgIn.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -2485,8 +2496,7 @@ async function showBulkUpload() {
       document.getElementById('ocrProgress').style.display = 'block';
       
       try {
-        // ✅ FIX: Use v5 Syntax -> createWorker('eng', 1, { logger: ... })
-        // We pass 'eng' directly here to avoid the DataCloneError
+        // Initialize Tesseract V5
         const worker = await Tesseract.createWorker('eng', 1, {
           logger: m => {
             if (m.status === 'recognizing text') {
@@ -2496,6 +2506,31 @@ async function showBulkUpload() {
             }
           }
         });
+        
+        // Recognize Text
+        const { data: { text } } = await worker.recognize(file);
+        await worker.terminate();
+        
+        // 🧠 SMART CLEANING STEP
+        // We pass the raw messy text to our helper function
+        const cleanedText = smartCleanOCR(text);
+
+        // Populate text tab with CLEANED result
+        document.getElementById('smartTextIn').value = cleanedText;
+        
+        // Switch to text tab safely
+        window.switchTab('text');
+        
+        showToast('Text extracted & Auto-corrected!', 'success');
+        
+      } catch (err) {
+        console.error("OCR Error:", err);
+        showToast('OCR Failed: ' + err.message, 'error');
+        document.getElementById('ocrDropZone').style.display = 'block';
+        document.getElementById('ocrProgress').style.display = 'none';
+      }
+    }
+  });
         
         // ✅ FIX: Directly recognize (initialize is handled by createWorker now)
         const { data: { text } } = await worker.recognize(file);
@@ -3888,11 +3923,61 @@ window.processSmartText = () => {
   showSmartPreview(mapped);
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 20. INITIALIZATION
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// 🧠 HELPER: Smart OCR Cleaner
+// ════════════════════════════════════════════════════════════
+function smartCleanOCR(text) {
+  if (!text) return "";
 
-// Start the app once DOM is ready
+  // 1. Basic Cleanup
+  let lines = text.split('\n');
+  let cleanLines = [];
+
+  lines.forEach(line => {
+    let clean = line.trim();
+    if (clean.length < 2) return; // Skip garbage lines
+
+    // 2. Fix Common OCR Label Typos (Regex)
+    // Matches "C1ient", "C1ien", "Cust0mer" -> "Client Name"
+    clean = clean.replace(/\b(c[1l]ient|cust[0o]mer|na[mn]e)\b/gi, "Client Name");
+    
+    // Matches "P1n", "Pinc0de", "P1ncode" -> "Pincode"
+    clean = clean.replace(/\b(p[1il]n|zip|p[1il]n\s*c[0o]de)\b/gi, "Pincode");
+    
+    // Matches "Addr", "Addre55" -> "Address"
+    clean = clean.replace(/\b(addr[e3s5]*)\b/gi, "Address");
+    
+    // Matches "M0bile", "Ph0ne" -> "Phone"
+    clean = clean.replace(/\b(m[0o]bi[1l]e|ph[0o]ne|c[0o]ntact)\b/gi, "Phone");
+
+    // 3. Fix Common Number Typos (0 vs O, 1 vs l, 5 vs S) in potential Pincodes/Phones
+    // Logic: If a word looks like a pincode (e.g., 56O034), fix it.
+    clean = clean.replace(/\b[0-9OIlS]{6}\b/g, (match) => {
+        // If it has mostly numbers but some letters, fix it
+        return match
+          .replace(/O/g, '0')
+          .replace(/I/g, '1')
+          .replace(/l/g, '1')
+          .replace(/S/g, '5')
+          .replace(/B/g, '8');
+    });
+
+    // 4. Ensure Formatting (Add colons if missing for clear Key: Value)
+    // Converts "Client Name John" -> "Client Name: John"
+    const knownKeys = ['Client Name', 'Pincode', 'Address', 'Phone', 'Case ID'];
+    knownKeys.forEach(key => {
+        const regex = new RegExp(`^${key}\\s+[:]?\\s*`, 'i');
+        if (regex.test(clean) && !clean.includes(':')) {
+            clean = clean.replace(regex, `${key}: `);
+        }
+    });
+
+    cleanLines.push(clean);
+  });
+
+  return cleanLines.join('\n');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PAGE INITIALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3952,6 +4037,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
