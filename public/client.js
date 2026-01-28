@@ -3419,7 +3419,8 @@ function showEditMapModal(taskId) {
 // BULK ASSIGN TASKS
 // ═══════════════════════════════════════════════════════════════════════════
 async function bulkAssignTasks() {
-  const selected = Array.from(document.querySelectorAll('.taskCheckbox:checked')).map(cb => cb.value);
+  // FIX: Changed '.taskCheckbox:checked' to '.task-checkbox:checked' to match HTML
+  const selected = Array.from(document.querySelectorAll('.task-checkbox:checked')).map(cb => cb.value);
   
   if (selected.length === 0) {
     showToast('No tasks selected', 'warning');
@@ -3437,7 +3438,7 @@ async function bulkAssignTasks() {
     
     let employeeOptions = '';
     employees.forEach(emp => {
-      employeeOptions += `<option value="${emp.id}">${emp.name} (${emp.employeeId || emp.employee_id})</option>`;
+      employeeOptions += `<option value="${emp.id}">${escapeHtml(emp.name)} (${emp.employeeId || 'No ID'})</option>`;
     });
     
     const modalHtml = `
@@ -3511,7 +3512,8 @@ async function confirmBulkAssign() {
 // BULK DELETE TASKS
 // ═══════════════════════════════════════════════════════════════════════════
 async function bulkDeleteTasks() {
-  const selected = Array.from(document.querySelectorAll('.taskCheckbox:checked')).map(cb => parseInt(cb.value));
+  // FIX: Changed '.taskCheckbox:checked' to '.task-checkbox:checked'
+  const selected = Array.from(document.querySelectorAll('.task-checkbox:checked')).map(cb => parseInt(cb.value));
   
   if (selected.length === 0) {
     showToast('No tasks selected', 'warning');
@@ -3549,7 +3551,6 @@ async function bulkDeleteTasks() {
   
   // Refresh task list
   if (typeof loadAllTasks === 'function') loadAllTasks();
-  if (typeof fetchAndDisplayTasks === 'function') fetchAndDisplayTasks();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3716,6 +3717,7 @@ function smartColumnMapper(rawData) {
 }
 
 // 3. Smart Preview Modal (👁️ Features: Editable Table, Live Save)
+// 3. Smart Preview Modal (👁️ Features: Editable, Loading State, Duplicate Check)
 function showSmartPreview(tasks) {
   closeAllModals();
   
@@ -3755,21 +3757,26 @@ function showSmartPreview(tasks) {
         <button id="confirmUploadBtn" class="btn btn-primary btn-lg">
           <i class="fas fa-cloud-upload-alt"></i> Upload Valid Tasks
         </button>
-        <button class="btn btn-secondary" onclick="showBulkUpload()">Back</button>
+        <button id="cancelUploadBtn" class="btn btn-secondary" onclick="showBulkUpload()">Back</button>
       </div>
     </div>
   `;
 
   createModal('Review & Edit Data', content, { size: 'large', icon: 'fa-edit' });
 
-  // ⭐ Logic to Capture Edits before Uploading
-  document.getElementById('confirmUploadBtn').onclick = () => {
+  // ⭐ UPDATED LOGIC: Capture Edits -> Loading State -> Check Duplicates -> Upload
+  document.getElementById('confirmUploadBtn').onclick = async () => {
+    const btn = document.getElementById('confirmUploadBtn');
+    const cancelBtn = document.getElementById('cancelUploadBtn');
+    const originalText = btn.innerHTML;
+
+    // 1. Gather Data from Inputs
     const rows = document.querySelectorAll('#previewTable tbody tr');
     const updatedTasks = [];
 
     rows.forEach(row => {
       const idx = row.getAttribute('data-idx');
-      const task = tasks[idx]; // Get original object
+      const task = tasks[idx]; // Get original object ref
       
       // Update with values from inputs
       task.title = row.querySelector('input[name="title"]').value;
@@ -3781,11 +3788,39 @@ function showSmartPreview(tasks) {
     });
 
     if (updatedTasks.length === 0) return showToast('No valid tasks to upload', 'error');
-    processBulkUpload(updatedTasks); 
+
+    // 2. UI Feedback: LOCK BUTTONS
+    btn.disabled = true;
+    cancelBtn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking Duplicates...';
+
+    try {
+      // 3. Check for Duplicates First
+      const { duplicates, newTasks } = await checkDuplicateCases(updatedTasks);
+      
+      if (duplicates.length > 0) {
+        // If duplicates found, switch to duplicate modal
+        closeAllModals(); 
+        showDuplicateModal(duplicates, newTasks);
+      } else {
+        // 4. No duplicates? Upload Immediately
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+        await processBulkUpload(newTasks);
+        closeAllModals();
+      }
+
+    } catch (err) {
+      console.error(err);
+      showToast('Error processing upload', 'error');
+      // Restore buttons on error
+      btn.disabled = false;
+      cancelBtn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   };
 }
 
-// 4. Smart Text Parser (🧠 Features: Tab, CSV, Pipe, Key-Value Pairs)
+// 4. Smart Text Parser (Kept mostly same, matches your existing logic)
 window.processSmartText = () => {
   const text = document.getElementById('smartTextIn').value;
   if (!text.trim()) return showToast('Please paste some data', 'warning');
@@ -3793,21 +3828,18 @@ window.processSmartText = () => {
   const lines = text.split('\n').filter(l => l.trim());
   let data = [];
 
-  // Strategy A: Key-Value Pairs (e.g., "Case: 123", "Pin: 560001")
-  // Detect if lines look like key-values
+  // Strategy A: Key-Value Pairs
   const isKeyValue = lines.slice(0, 3).every(l => l.includes(':') || l.includes('-'));
   
   if (isKeyValue) {
     let currentObj = {};
     lines.forEach(line => {
-      // Split by first separator
       const [key, ...valParts] = line.split(/[:\t-]+/); 
       const val = valParts.join(' ').trim();
       
       if (!key || !val) return;
       const lowerKey = key.toLowerCase();
 
-      // Start new object if we hit a "Title" field again
       if ((lowerKey.includes('case') || lowerKey.includes('id')) && currentObj.title) {
         data.push(currentObj);
         currentObj = {};
@@ -3820,7 +3852,7 @@ window.processSmartText = () => {
     if (currentObj.title) data.push(currentObj);
 
   } else {
-    // Strategy B: Delimiter Table (Tab, Pipe, Comma)
+    // Strategy B: Delimiter Table
     const firstLine = lines[0];
     let delimiter = ',';
     if (firstLine.includes('\t')) delimiter = '\t';
@@ -3908,6 +3940,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
