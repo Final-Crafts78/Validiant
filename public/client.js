@@ -2490,6 +2490,15 @@ async function showBulkUpload() {
   // Ensure libs are loaded
   const libsReady = await loadDependencies();
   if (!libsReady) return;
+  if (!allEmployees || allEmployees.length === 0) {
+    try {
+      showToast('Loading employee database...', 'info');
+      const response = await fetch('/api/users');
+      allEmployees = await response.json();
+    } catch (e) {
+      console.error('Failed to load employees', e);
+    }
+  }
 
   const content = `
     <div class="smart-upload-tabs">
@@ -3940,6 +3949,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
