@@ -1410,10 +1410,19 @@ function updateFilterChips() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 1. PAGINATION STATE (Global Variables)
+// ══════════════════════════════════════════════════════════════════════════
+let currentTaskPage = 1;
+const TASKS_PER_PAGE = 25;
+
+// ══════════════════════════════════════════════════════════════════════════
+// 2. MAIN DISPLAY FUNCTION
+// ══════════════════════════════════════════════════════════════════════════
 function displayAllTasksList(tasks) {
   const list = document.getElementById('allTasksList');
   
-  if (tasks.length === 0) {
+  if (!tasks || tasks.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
         <i class="fas fa-inbox" style="font-size: 3rem; color: #6B7280; margin-bottom: 15px;"></i>
@@ -1424,177 +1433,168 @@ function displayAllTasksList(tasks) {
     return;
   }
 
+  // ---------------------------------------------------------
+  // 🧠 LOGIC: Pagination & Filtering
+  // ---------------------------------------------------------
+  const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
+  if (currentTaskPage > totalPages) currentTaskPage = 1; 
+  
+  const startIndex = (currentTaskPage - 1) * TASKS_PER_PAGE;
+  const endIndex = startIndex + TASKS_PER_PAGE;
+  const tasksToDisplay = tasks.slice(startIndex, endIndex);
+
+  // ---------------------------------------------------------
+  // 🎨 UI: Header & Table Construction
+  // ---------------------------------------------------------
   let html = `
     <div class="table-header-info">
       <div class="info-badge">
-        <i class="fas fa-tasks"></i>
-        <span>Found <strong>${tasks.length}</strong> ${tasks.length === 1 ? 'task' : 'tasks'}</span>
+        <i class="fas fa-list"></i>
+        <span>Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks</span>
       </div>
     </div>
   `;
   
+  // Wrapper adds horizontal scroll support
   html += `
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
           <tr>
-            <th class="checkbox-col">
-              <input type="checkbox" id="selectAllTasks" onchange="toggleSelectAll(this)" title="Select all">
-            </th>
-            <th class="case-id-col">Case ID</th>
+            <th class="checkbox-col"><input type="checkbox" id="selectAllTasks" onchange="toggleSelectAll(this)"></th>
+            <th style="min-width: 100px;">Date</th> <th class="case-id-col">Case ID</th>
             <th class="client-col">Client</th>
             <th class="employee-col">Employee</th>
             <th class="pincode-col">Pincode</th>
-            <th class="map-col">Map URL</th>
+            <th class="map-col">Map</th>
             <th class="status-col">Status</th>
-            <th class="sla-col">SLA (72h)</th> <th class="actions-col">Actions</th>
+            <th class="sla-col">SLA (72h)</th>
+            <th class="actions-col">Actions</th>
           </tr>
         </thead>
         <tbody>
   `;
 
-  tasks.forEach(t => {
+  tasksToDisplay.forEach(t => {
+    // Logic: Date Format
+    let dateStr = '-';
+    if(t.created_at) {
+       dateStr = new Date(t.created_at).toLocaleDateString('en-IN', {day:'2-digit', month:'short'});
+    }
+
+    // Logic: Status & Assignment
     const statusClass = `status-${t.status.toLowerCase().replace(/ /g, '-')}`;
     const assignedTo = t.assignedToName 
       ? `<span class="employee-name">${escapeHtml(t.assignedToName)}</span>` 
       : `<span class="unassigned-label">Unassigned</span>`;
 
-    // 🕒 SLA Calculation Logic
+    // Logic: Map Button
+    const mapLink = t.map_url || t.mapUrl || '';
+    const mapDisplay = mapLink 
+      ? `<a href="${mapLink}" target="_blank" class="map-link"><i class="fas fa-map-marker-alt"></i> View</a>`
+      : `<span class="no-map">No map</span>`;
+
+    // Logic: SLA Calculation
     let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
-    
     if (t.status !== 'Unassigned' && t.assigned_date) {
-      const assigned = new Date(t.assigned_date).getTime();
-      const now = new Date().getTime();
-      let end = now;
+        const assignedTime = new Date(t.assigned_date).getTime();
+        let endTime = new Date().getTime(); // Default to now
+        
+        // If completed/verified, stop the clock
+        if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
+           endTime = new Date(t.completed_at || t.verified_at).getTime();
+        }
 
-      // If finished, use completion time
-      if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
-        end = new Date(t.completed_at || t.verified_at).getTime();
-      }
-
-      // Calculate hours elapsed
-      const hours = (end - assigned) / (1000 * 60 * 60);
-      
-      if (hours <= 72) {
-        slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);">
-          <i class="fas fa-check"></i> On Time
-        </span>`;
-      } else {
-        const daysOver = Math.floor(hours / 24);
-        slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);">
-          <i class="fas fa-exclamation-circle"></i> ${daysOver}d Overdue
-        </span>`;
-      }
-    }
-
-    // Map URL display logic
-    let mapDisplay;
-    const mapLink = t.map_url || t.mapUrl || t.mapurl;
-
-    if (mapLink && mapLink.trim() !== '') {
-      mapDisplay = `
-        <div class="map-actions">
-          <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
-            <i class="fas fa-map-marker-alt"></i> View
-          </a>
-          <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink).replace(/'/g, "\\'")}', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Edit Map URL">
-            <i class="fas fa-pen"></i>
-          </button>
-        </div>
-      `;
-    } else {
-      mapDisplay = `
-        <div class="map-actions">
-          <span class="no-map">No map</span>
-          <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Add Map URL">
-            <i class="fas fa-plus"></i>
-          </button>
-        </div>
-      `;
+        const hours = (endTime - assignedTime) / (1000 * 60 * 60);
+        if (hours <= 72) {
+          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);"><i class="fas fa-check"></i> On Time</span>`;
+        } else {
+          const days = Math.floor(hours/24);
+          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-circle"></i> ${days}d Overdue</span>`;
+        }
     }
 
     html += `
       <tr class="task-row">
-        <td class="checkbox-col">
-          <input type="checkbox" class="task-checkbox" value="${t.id}" onchange="updateBulkActions()">
-        </td>
-        <td class="case-id-col">
-          <strong class="case-id">${escapeHtml(t.title)}</strong>
-        </td>
+        <td class="checkbox-col"><input type="checkbox" class="task-checkbox" value="${t.id}" onchange="updateBulkActions()"></td>
+        <td style="color:#D1D5DB; padding:12px;">${dateStr}</td>
+        <td class="case-id-col"><strong class="case-id">${escapeHtml(t.title)}</strong></td>
         <td class="client-col">${escapeHtml(t.clientName || '-')}</td>
         <td class="employee-col">${assignedTo}</td>
-        <td class="pincode-col">
-          <span class="pincode-badge">${escapeHtml(t.pincode)}</span>
+        <td class="pincode-col"><span class="pincode-badge">${escapeHtml(t.pincode || '-')}</span></td>
+        <td class="map-col">
+           <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
+             ${mapDisplay}
+             <button onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink)}', '${escapeHtml(t.title)}')" style="border:none; background:none; color:#6B7280; cursor:pointer;" title="Edit Map"><i class="fas fa-pen" style="font-size:12px"></i></button>
+           </div>
         </td>
-        <td class="map-col">${mapDisplay}</td>
-        <td class="status-col">
-          <span class="status-badge ${statusClass}">${escapeHtml(t.status)}</span>
-        </td>
-        <td class="sla-col" style="text-align:center;">${slaBadge}</td> <td class="actions-col">
+        <td class="status-col"><span class="status-badge ${statusClass}">${t.status}</span></td>
+        <td class="sla-col" style="text-align:center;">${slaBadge}</td>
+        <td class="actions-col">
           <div class="action-buttons">
-            <button class="btn-icon btn-warning" onclick="openReassignModal(${t.id})" title="Reassign">
-              <i class="fas fa-sync-alt"></i>
-            </button>
-            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/'/g, "\\'")}', '${escapeHtml(t.clientName || '')}')" title="Unassign">
-              <i class="fas fa-times"></i>
-            </button>
-            <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete">
-              <i class="fas fa-trash"></i>
-            </button>
+            <button class="btn-icon btn-warning" onclick="openReassignModal(${t.id})" title="Reassign"><i class="fas fa-sync-alt"></i></button>
+            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title)}', '${escapeHtml(t.clientName || '')}')" title="Unassign"><i class="fas fa-times"></i></button>
+            <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
           </div>
         </td>
       </tr>
     `;
   });
 
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
+  html += `</tbody></table></div>`;
 
-  // Bulk action panel
+  // ---------------------------------------------------------
+  // 🦶 UI: Pagination Footer (New Feature)
+  // ---------------------------------------------------------
+  if (totalPages > 1) {
+    html += `
+      <div class="pagination-controls" style="display:flex; justify-content:flex-end; align-items:center; gap:15px; margin-top:15px;">
+        <span style="color:#9CA3AF; font-size:13px;">Page ${currentTaskPage} of ${totalPages}</span>
+        <div class="btn-group" style="display:flex; gap:5px;">
+          <button class="btn btn-secondary btn-sm" ${currentTaskPage === 1 ? 'disabled' : ''} onclick="changePage(-1)">
+            <i class="fas fa-chevron-left"></i> Prev
+          </button>
+          <button class="btn btn-secondary btn-sm" ${currentTaskPage === totalPages ? 'disabled' : ''} onclick="changePage(1)">
+            Next <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ---------------------------------------------------------
+  // 🔨 UI: Bulk Actions & Styling (Restored from your Original)
+  // ---------------------------------------------------------
   html += `
     <div id="bulkActions" class="bulk-actions-panel">
       <div class="bulk-info">
-        <i class="fas fa-check-square"></i>
-        <span id="selectedCount">0</span> tasks selected
+        <i class="fas fa-check-square"></i> <span id="selectedCount">0</span> tasks selected
       </div>
       <div class="bulk-buttons">
-        <button onclick="bulkAssignTasks()" class="btn btn-primary btn-sm">
-          <i class="fas fa-user-plus"></i> Bulk Assign
-        </button>
-        <button onclick="bulkDeleteTasks()" class="btn btn-danger btn-sm">
-          <i class="fas fa-trash"></i> Bulk Delete
-        </button>
-        <button onclick="clearSelection()" class="btn btn-secondary btn-sm">
-          <i class="fas fa-times"></i> Clear
-        </button>
+        <button onclick="bulkAssignTasks()" class="btn btn-primary btn-sm"><i class="fas fa-user-plus"></i> Bulk Assign</button>
+        <button onclick="bulkDeleteTasks()" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Bulk Delete</button>
+        <button onclick="clearSelection()" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Clear</button>
       </div>
     </div>
   `;
   
   html += `
     <style>
-      /* ... Existing styles ... */
-      
-      .sla-col {
-        width: 110px;
-        text-align: center;
-      }
-      
-      /* ... Rest of your existing CSS ... */
-      
       .table-header-info { margin-bottom: 15px; }
       .info-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); padding: 8px 16px; border-radius: 8px; color: #A5B4FC; font-size: 13px; }
       .info-badge strong { color: #C7D2FE; }
-      .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid #1F2937; background: rgba(15, 23, 42, 0.6); }
-      .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      
+      /* ✅ SCROLLABLE TABLE CSS */
+      .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid #1F2937; background: rgba(15, 23, 42, 0.6); width: 100%; }
+      .data-table { width: 100%; min-width: 1200px; border-collapse: collapse; font-size: 13px; }
+      
       .data-table thead { background: rgba(31, 41, 55, 0.8); border-bottom: 2px solid #374151; }
       .data-table th { padding: 14px 12px; text-align: left; color: #E5E7EB; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
       .data-table tbody tr { border-bottom: 1px solid #1F2937; transition: background 0.2s ease; }
       .data-table tbody tr:hover { background: rgba(99, 102, 241, 0.05); }
       .data-table td { padding: 12px; color: #D1D5DB; vertical-align: middle; }
+      
+      /* Column Widths */
       .checkbox-col { width: 40px; text-align: center; }
       .case-id-col { min-width: 150px; }
       .client-col { min-width: 120px; }
@@ -1602,7 +1602,10 @@ function displayAllTasksList(tasks) {
       .pincode-col { width: 100px; text-align: center; }
       .map-col { width: 100px; text-align: center; }
       .status-col { width: 120px; text-align: center; }
+      .sla-col { width: 110px; text-align: center; }
       .actions-col { width: 130px; }
+      
+      /* Badges & Text */
       .case-id { color: #E5E7EB; font-weight: 500; }
       .employee-name { color: #A5B4FC; }
       .unassigned-label { color: #9CA3AF; font-style: italic; font-size: 12px; }
@@ -1610,6 +1613,8 @@ function displayAllTasksList(tasks) {
       .map-link { display: inline-flex; align-items: center; gap: 4px; color: #3B82F6; text-decoration: none; padding: 4px 8px; border-radius: 6px; transition: all 0.2s ease; }
       .map-link:hover { background: rgba(59, 130, 246, 0.1); color: #60A5FA; }
       .no-map { color: #6B7280; font-size: 12px; }
+      
+      /* Buttons */
       .action-buttons { display: flex; gap: 6px; justify-content: center; }
       .btn-icon { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 13px; }
       .btn-icon.btn-warning { background: rgba(245, 158, 11, 0.2); color: #FCD34D; }
@@ -1618,6 +1623,8 @@ function displayAllTasksList(tasks) {
       .btn-icon.btn-secondary:hover { background: rgba(107, 114, 128, 0.3); transform: translateY(-1px); }
       .btn-icon.btn-danger { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
       .btn-icon.btn-danger:hover { background: rgba(239, 68, 68, 0.3); transform: translateY(-1px); }
+      
+      /* Bulk Panel */
       .bulk-actions-panel { display: none; margin-top: 20px; padding: 15px 20px; background: rgba(31, 41, 55, 0.8); border: 1px solid #374151; border-radius: 10px; align-items: center; justify-content: space-between; }
       .bulk-info { display: flex; align-items: center; gap: 8px; color: #E5E7EB; font-weight: 500; }
       .bulk-info i { color: #6366F1; }
@@ -1627,6 +1634,16 @@ function displayAllTasksList(tasks) {
 
   list.innerHTML = html;
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3. PAGINATION HELPER (Required)
+// ══════════════════════════════════════════════════════════════════════════
+window.changePage = (direction) => {
+  currentTaskPage += direction;
+  // Safely use filtered tasks if searching, or all tasks if not
+  const tasksToRender = (typeof currentFilteredTasks !== 'undefined' && currentFilteredTasks) ? currentFilteredTasks : allTasks;
+  displayAllTasksList(tasksToRender);
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 13. ADMIN: UNASSIGNED TASKS POOL (Feature #4)
@@ -3078,6 +3095,90 @@ function showActivityLog() {
     list.innerHTML = html;
   });
 }
+async function showActivityLog() {
+  const container = document.getElementById('mainContainer');
+  container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
+
+  try {
+    const response = await fetch('/api/activity-log');
+    const logs = await response.json();
+
+    if (logs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-history" style="font-size: 3rem; color: #6B7280; margin-bottom: 15px;"></i>
+          <h3 style="color: #9CA3AF;">No Activity Found</h3>
+        </div>`;
+      return;
+    }
+
+    let html = `
+      <div class="header-actions" style="margin-bottom: 20px;">
+        <h2 style="margin:0; color: #E5E7EB;"><i class="fas fa-history"></i> System Activity Log</h2>
+        <span class="info-badge">Last 100 Events</span>
+      </div>
+      
+      <div class="table-wrapper" style="overflow-x: auto; border: 1px solid #374151; border-radius: 8px;">
+        <table class="data-table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="width: 180px;">Time</th>
+              <th style="width: 150px;">User</th>
+              <th style="width: 150px;">Action</th>
+              <th style="width: 100px;">Ref ID</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    logs.forEach(log => {
+      // ✅ FIX: "Invalid Date" issue
+      // We explicitly check if created_at exists, otherwise show '-'
+      let dateDisplay = '-';
+      if (log.created_at) {
+        try {
+           dateDisplay = new Date(log.created_at).toLocaleString('en-IN', {
+             day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+           });
+        } catch (e) {
+           dateDisplay = 'Invalid Date';
+        }
+      }
+
+      // ✅ FIX: Handle different Action colors
+      let actionColor = '#9CA3AF'; // Default Grey
+      if (log.action.includes('CREATED')) actionColor = '#34D399'; // Green
+      if (log.action.includes('DELETED')) actionColor = '#F87171'; // Red
+      if (log.action.includes('UPDATED')) actionColor = '#60A5FA'; // Blue
+      if (log.action.includes('LOGIN')) actionColor = '#FBBF24';   // Yellow
+
+      // Format Details (clean up quotes if it's a JSON string)
+      let detailsText = log.details || '-';
+      if (typeof detailsText === 'string' && detailsText.startsWith('"')) {
+        detailsText = detailsText.replace(/"/g, '');
+      }
+
+      html += `
+        <tr>
+          <td style="color:#D1D5DB; font-size:13px;">${dateDisplay}</td>
+          <td style="font-weight:500; color:#E5E7EB;">${escapeHtml(log.user_name || 'System')}</td>
+          <td><span class="status-badge" style="background:${actionColor}20; color:${actionColor}; border:1px solid ${actionColor}40">${escapeHtml(log.action)}</span></td>
+          <td style="font-family:monospace; color:#9CA3AF;">${log.task_id || '-'}</td>
+          <td style="color:#9CA3AF; font-size:13px;">${escapeHtml(detailsText)}</td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+
+  } catch (error) {
+    console.error('Log Error:', error);
+    container.innerHTML = `<div class="error-state">Failed to load activity logs</div>`;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // REASSIGN TASK MODAL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3804,6 +3905,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
