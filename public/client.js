@@ -2512,7 +2512,6 @@ async function showBulkUpload() {
         await worker.terminate();
         
         // 🧠 SMART CLEANING STEP
-        // We pass the raw messy text to our helper function
         const cleanedText = smartCleanOCR(text);
 
         // Populate text tab with CLEANED result
@@ -2523,7 +2522,7 @@ async function showBulkUpload() {
         
         showToast('Text extracted & Auto-corrected!', 'success');
         
-      } catch (err) {
+      } catch (err) { // ✅ This brace '}' above closes the 'try' block
         console.error("OCR Error:", err);
         showToast('OCR Failed: ' + err.message, 'error');
         document.getElementById('ocrDropZone').style.display = 'block';
@@ -4037,6 +4036,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
