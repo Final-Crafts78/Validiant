@@ -164,7 +164,17 @@ app.post("/api/login", async (req, res) => {
     if (!isMatch) return res.status(401).json({ success: false, message: "Invalid credentials" });
 
     await supabase.from("users").update({ last_active: new Date() }).eq("id", user.id);
-    await logActivity(user.id, user.name, "LOGIN_SUCCESS", null, null, req);
+
+    // ✅ FIX: Log specific details (User Agent) and ensure Name is passed
+    const userAgent = req.headers['user-agent'] ? (req.headers['user-agent'].includes('Mobile') ? 'Mobile App' : 'Web Browser') : 'Unknown Device';
+    
+    await logActivity(
+        user.id, 
+        user.name, 
+        "LOGIN_SUCCESS", 
+        null, 
+        `Logged in via ${userAgent}`
+    );
 
     res.json({ success: true, user: { id: user.id, name: user.name, role: user.role, employeeId: user.employee_id } });
   } catch (err) {
@@ -419,31 +429,44 @@ app.put("/api/tasks/:id", async (req, res) => {
     const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName } = req.body;
     const updateData = { updated_at: new Date() };
 
-    if (title) updateData.title = title;
-    if (pincode) updateData.pincode = pincode;
-    if (address) updateData.address = address;
-    if (clientName) updateData.client_name = clientName;
-    if (notes) updateData.notes = notes;
+    // Track what specifically changed for the log
+    let changes = [];
+
+    if (title) { updateData.title = title; changes.push("Title"); }
+    if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
+    if (address) { updateData.address = address; changes.push("Address"); }
+    if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
+    if (notes) { updateData.notes = notes; changes.push("Notes"); }
     
     // Handle both camelCase and snake_case for map URL
     const finalMapUrl = map_url || mapUrl;
     if (finalMapUrl !== undefined) {
       updateData.map_url = finalMapUrl;
-      console.log('✅ Updating map_url to:', finalMapUrl);
+      changes.push("Map URL");
     }
+
     if (status) {
       updateData.status = status;
+      changes.push(`Status: ${status}`);
       if (status === 'Completed') updateData.completed_at = new Date();
       if (status === 'Verified') updateData.verified_at = new Date();
     }
+
     if (assignedTo) {
         updateData.assigned_to = assignedTo;
+        changes.push("Reassigned Employee");
         if (status === "Unassigned") updateData.status = "Pending";
     }
 
     const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
     if (error) throw error;
-    if (userId) await logActivity(userId, userName, "TASK_UPDATED", id, "Details updated", req);
+
+    // ✅ FIX: Log the specific changes list
+    if (userId) {
+        const logDetail = changes.length > 0 ? `Updated: ${changes.join(", ")}` : "Task details updated";
+        await logActivity(userId, userName, "TASK_UPDATED", id, logDetail);
+    }
+
     res.json({ success: true, message: "Updated" });
   } catch (err) {
     res.status(500).json({ success: false, message: "Failed" });
@@ -743,6 +766,7 @@ app.listen(PORT, HOST, () => {
   setInterval(keepAlive, 180000); // 3 minutes
 
 });
+
 
 
 
