@@ -3763,7 +3763,61 @@ function smartColumnMapper(rawData) {
   return normalized;
 }
 
-// 3. Smart Preview Modal (👁️ Features: Editable Table, Live Save)
+// ════════════════════════════════════════════════════════════
+// 🧠 HELPER: Smart OCR Cleaner
+// ════════════════════════════════════════════════════════════
+function smartCleanOCR(text) {
+  if (!text) return "";
+
+  // 1. Basic Cleanup
+  let lines = text.split('\n');
+  let cleanLines = [];
+
+  lines.forEach(line => {
+    let clean = line.trim();
+    if (clean.length < 2) return; // Skip garbage lines
+
+    // 2. Fix Common OCR Label Typos (Regex)
+    // Matches "C1ient", "C1ien", "Cust0mer" -> "Client Name"
+    clean = clean.replace(/\b(c[1l]ient|cust[0o]mer|na[mn]e)\b/gi, "Client Name");
+    
+    // Matches "P1n", "Pinc0de", "P1ncode" -> "Pincode"
+    clean = clean.replace(/\b(p[1il]n|zip|p[1il]n\s*c[0o]de)\b/gi, "Pincode");
+    
+    // Matches "Addr", "Addre55" -> "Address"
+    clean = clean.replace(/\b(addr[e3s5]*)\b/gi, "Address");
+    
+    // Matches "M0bile", "Ph0ne" -> "Phone"
+    clean = clean.replace(/\b(m[0o]bi[1l]e|ph[0o]ne|c[0o]ntact)\b/gi, "Phone");
+
+    // 3. Fix Common Number Typos (0 vs O, 1 vs l, 5 vs S) in potential Pincodes/Phones
+    // Logic: If a word looks like a pincode (e.g., 56O034), fix it.
+    clean = clean.replace(/\b[0-9OIlS]{6}\b/g, (match) => {
+        // If it has mostly numbers but some letters, fix it
+        return match
+          .replace(/O/g, '0')
+          .replace(/I/g, '1')
+          .replace(/l/g, '1')
+          .replace(/S/g, '5')
+          .replace(/B/g, '8');
+    });
+
+    // 4. Ensure Formatting (Add colons if missing for clear Key: Value)
+    // Converts "Client Name John" -> "Client Name: John"
+    const knownKeys = ['Client Name', 'Pincode', 'Address', 'Phone', 'Case ID'];
+    knownKeys.forEach(key => {
+        const regex = new RegExp(`^${key}\\s+[:]?\\s*`, 'i');
+        if (regex.test(clean) && !clean.includes(':')) {
+            clean = clean.replace(regex, `${key}: `);
+        }
+    });
+
+    cleanLines.push(clean);
+  });
+
+  return cleanLines.join('\n');
+}
+
 // 3. Smart Preview Modal (👁️ Features: Editable, Loading State, Duplicate Check)
 function showSmartPreview(tasks) {
   closeAllModals();
@@ -3923,60 +3977,6 @@ window.processSmartText = () => {
   showSmartPreview(mapped);
 };
 
-// ════════════════════════════════════════════════════════════
-// 🧠 HELPER: Smart OCR Cleaner
-// ════════════════════════════════════════════════════════════
-function smartCleanOCR(text) {
-  if (!text) return "";
-
-  // 1. Basic Cleanup
-  let lines = text.split('\n');
-  let cleanLines = [];
-
-  lines.forEach(line => {
-    let clean = line.trim();
-    if (clean.length < 2) return; // Skip garbage lines
-
-    // 2. Fix Common OCR Label Typos (Regex)
-    // Matches "C1ient", "C1ien", "Cust0mer" -> "Client Name"
-    clean = clean.replace(/\b(c[1l]ient|cust[0o]mer|na[mn]e)\b/gi, "Client Name");
-    
-    // Matches "P1n", "Pinc0de", "P1ncode" -> "Pincode"
-    clean = clean.replace(/\b(p[1il]n|zip|p[1il]n\s*c[0o]de)\b/gi, "Pincode");
-    
-    // Matches "Addr", "Addre55" -> "Address"
-    clean = clean.replace(/\b(addr[e3s5]*)\b/gi, "Address");
-    
-    // Matches "M0bile", "Ph0ne" -> "Phone"
-    clean = clean.replace(/\b(m[0o]bi[1l]e|ph[0o]ne|c[0o]ntact)\b/gi, "Phone");
-
-    // 3. Fix Common Number Typos (0 vs O, 1 vs l, 5 vs S) in potential Pincodes/Phones
-    // Logic: If a word looks like a pincode (e.g., 56O034), fix it.
-    clean = clean.replace(/\b[0-9OIlS]{6}\b/g, (match) => {
-        // If it has mostly numbers but some letters, fix it
-        return match
-          .replace(/O/g, '0')
-          .replace(/I/g, '1')
-          .replace(/l/g, '1')
-          .replace(/S/g, '5')
-          .replace(/B/g, '8');
-    });
-
-    // 4. Ensure Formatting (Add colons if missing for clear Key: Value)
-    // Converts "Client Name John" -> "Client Name: John"
-    const knownKeys = ['Client Name', 'Pincode', 'Address', 'Phone', 'Case ID'];
-    knownKeys.forEach(key => {
-        const regex = new RegExp(`^${key}\\s+[:]?\\s*`, 'i');
-        if (regex.test(clean) && !clean.includes(':')) {
-            clean = clean.replace(regex, `${key}: `);
-        }
-    });
-
-    cleanLines.push(clean);
-  });
-
-  return cleanLines.join('\n');
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PAGE INITIALIZATION
@@ -4037,6 +4037,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
