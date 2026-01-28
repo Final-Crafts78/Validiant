@@ -3701,7 +3701,9 @@ function smartColumnMapper(rawData) {
 
     // ⭐ Smart Pincode Extraction from Address (if pincode column missing)
     if (!newRow.pincode && newRow.address) {
-      const pinMatch = newRow.address.match(/\b[1-9][0-9]{5}\b/); 
+      // FIX: Force address to string before using .match()
+      const addressStr = String(newRow.address);
+      const pinMatch = addressStr.match(/\b[1-9][0-9]{5}\b/); 
       if (pinMatch) newRow.pincode = pinMatch[0];
     }
     
@@ -3906,6 +3908,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
