@@ -1447,7 +1447,7 @@ function displayAllTasksList(tasks) {
             <th class="pincode-col">Pincode</th>
             <th class="map-col">Map URL</th>
             <th class="status-col">Status</th>
-            <th class="actions-col">Actions</th>
+            <th class="sla-col">SLA (72h)</th> <th class="actions-col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -1459,31 +1459,60 @@ function displayAllTasksList(tasks) {
       ? `<span class="employee-name">${escapeHtml(t.assignedToName)}</span>` 
       : `<span class="unassigned-label">Unassigned</span>`;
 
-    // Map URL display logic with edit button
-let mapDisplay;
-const mapLink = t.map_url || t.mapUrl || t.mapurl;  // ← Added map_url first!
+    // 🕒 SLA Calculation Logic
+    let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
+    
+    if (t.status !== 'Unassigned' && t.assigned_date) {
+      const assigned = new Date(t.assigned_date).getTime();
+      const now = new Date().getTime();
+      let end = now;
 
-if (mapLink && mapLink.trim() !== '') {
-  mapDisplay = `
-    <div class="map-actions">
-      <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
-        <i class="fas fa-map-marker-alt"></i> View
-      </a>
-      <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink).replace(/'/g, "\\'")}', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Edit Map URL">
-        <i class="fas fa-pen"></i>
-      </button>
-    </div>
-  `;
-} else {
-  mapDisplay = `
-    <div class="map-actions">
-      <span class="no-map">No map</span>
-      <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Add Map URL">
-        <i class="fas fa-plus"></i>
-      </button>
-    </div>
-  `;
-}
+      // If finished, use completion time
+      if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
+        end = new Date(t.completed_at || t.verified_at).getTime();
+      }
+
+      // Calculate hours elapsed
+      const hours = (end - assigned) / (1000 * 60 * 60);
+      
+      if (hours <= 72) {
+        slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);">
+          <i class="fas fa-check"></i> On Time
+        </span>`;
+      } else {
+        const daysOver = Math.floor(hours / 24);
+        slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);">
+          <i class="fas fa-exclamation-circle"></i> ${daysOver}d Overdue
+        </span>`;
+      }
+    }
+
+    // Map URL display logic
+    let mapDisplay;
+    const mapLink = t.map_url || t.mapUrl || t.mapurl;
+
+    if (mapLink && mapLink.trim() !== '') {
+      mapDisplay = `
+        <div class="map-actions">
+          <a href="${escapeHtml(mapLink)}" target="_blank" class="map-link" title="Open in Google Maps">
+            <i class="fas fa-map-marker-alt"></i> View
+          </a>
+          <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink).replace(/'/g, "\\'")}', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Edit Map URL">
+            <i class="fas fa-pen"></i>
+          </button>
+        </div>
+      `;
+    } else {
+      mapDisplay = `
+        <div class="map-actions">
+          <span class="no-map">No map</span>
+          <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '', '${escapeHtml(t.title).replace(/'/g, "\\'")}');" title="Add Map URL">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      `;
+    }
+
     html += `
       <tr class="task-row">
         <td class="checkbox-col">
@@ -1501,13 +1530,12 @@ if (mapLink && mapLink.trim() !== '') {
         <td class="status-col">
           <span class="status-badge ${statusClass}">${escapeHtml(t.status)}</span>
         </td>
-        <td class="actions-col">
+        <td class="sla-col" style="text-align:center;">${slaBadge}</td> <td class="actions-col">
           <div class="action-buttons">
             <button class="btn-icon btn-warning" onclick="openReassignModal(${t.id})" title="Reassign">
               <i class="fas fa-sync-alt"></i>
             </button>
-            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/'/g, "\\'")}', '${escapeHtml(t.clientName || '')}')
-" title="Unassign">
+            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/'/g, "\\'")}', '${escapeHtml(t.clientName || '')}')" title="Unassign">
               <i class="fas fa-times"></i>
             </button>
             <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete">
@@ -1548,225 +1576,52 @@ if (mapLink && mapLink.trim() !== '') {
   
   html += `
     <style>
-      .table-header-info {
-        margin-bottom: 15px;
-      }
-      .info-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(99, 102, 241, 0.1);
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        padding: 8px 16px;
-        border-radius: 8px;
-        color: #A5B4FC;
-        font-size: 13px;
-      }
-      .info-badge strong {
-        color: #C7D2FE;
-      }
+      /* ... Existing styles ... */
       
-      .table-wrapper {
-        overflow-x: auto;
-        border-radius: 12px;
-        border: 1px solid #1F2937;
-        background: rgba(15, 23, 42, 0.6);
-      }
-      
-      .data-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-      }
-      
-      .data-table thead {
-        background: rgba(31, 41, 55, 0.8);
-        border-bottom: 2px solid #374151;
-      }
-      
-      .data-table th {
-        padding: 14px 12px;
-        text-align: left;
-        color: #E5E7EB;
-        font-weight: 600;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      
-      .data-table tbody tr {
-        border-bottom: 1px solid #1F2937;
-        transition: background 0.2s ease;
-      }
-      
-      .data-table tbody tr:hover {
-        background: rgba(99, 102, 241, 0.05);
-      }
-      
-      .data-table td {
-        padding: 12px;
-        color: #D1D5DB;
-        vertical-align: middle;
-      }
-      
-      .checkbox-col {
-        width: 40px;
+      .sla-col {
+        width: 110px;
         text-align: center;
       }
       
-      .case-id-col {
-        min-width: 150px;
-      }
+      /* ... Rest of your existing CSS ... */
       
-      .client-col {
-        min-width: 120px;
-      }
-      
-      .employee-col {
-        min-width: 130px;
-      }
-      
-      .pincode-col {
-        width: 100px;
-        text-align: center;
-      }
-      
-      .map-col {
-        width: 100px;
-        text-align: center;
-      }
-      
-      .status-col {
-        width: 120px;
-        text-align: center;
-      }
-      
-      .actions-col {
-        width: 130px;
-      }
-      
-      .case-id {
-        color: #E5E7EB;
-        font-weight: 500;
-      }
-      
-      .employee-name {
-        color: #A5B4FC;
-      }
-      
-      .unassigned-label {
-        color: #9CA3AF;
-        font-style: italic;
-        font-size: 12px;
-      }
-      
-      .pincode-badge {
-        background: rgba(139, 92, 246, 0.2);
-        color: #C4B5FD;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: 500;
-        font-family: 'Courier New', monospace;
-      }
-      
-      .map-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: #3B82F6;
-        text-decoration: none;
-        padding: 4px 8px;
-        border-radius: 6px;
-        transition: all 0.2s ease;
-      }
-      
-      .map-link:hover {
-        background: rgba(59, 130, 246, 0.1);
-        color: #60A5FA;
-      }
-      
-      .no-map {
-        color: #6B7280;
-        font-size: 12px;
-      }
-      
-      .action-buttons {
-        display: flex;
-        gap: 6px;
-        justify-content: center;
-      }
-      
-      .btn-icon {
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 13px;
-      }
-      
-      .btn-icon.btn-warning {
-        background: rgba(245, 158, 11, 0.2);
-        color: #FCD34D;
-      }
-      
-      .btn-icon.btn-warning:hover {
-        background: rgba(245, 158, 11, 0.3);
-        transform: translateY(-1px);
-      }
-      
-      .btn-icon.btn-secondary {
-        background: rgba(107, 114, 128, 0.2);
-        color: #D1D5DB;
-      }
-      
-      .btn-icon.btn-secondary:hover {
-        background: rgba(107, 114, 128, 0.3);
-        transform: translateY(-1px);
-      }
-      
-      .btn-icon.btn-danger {
-        background: rgba(239, 68, 68, 0.2);
-        color: #FCA5A5;
-      }
-      
-      .btn-icon.btn-danger:hover {
-        background: rgba(239, 68, 68, 0.3);
-        transform: translateY(-1px);
-      }
-      
-      .bulk-actions-panel {
-        display: none;
-        margin-top: 20px;
-        padding: 15px 20px;
-        background: rgba(31, 41, 55, 0.8);
-        border: 1px solid #374151;
-        border-radius: 10px;
-        align-items: center;
-        justify-content: space-between;
-      }
-      
-      .bulk-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #E5E7EB;
-        font-weight: 500;
-      }
-      
-      .bulk-info i {
-        color: #6366F1;
-      }
-      
-      .bulk-buttons {
-        display: flex;
-        gap: 10px;
-      }
+      .table-header-info { margin-bottom: 15px; }
+      .info-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); padding: 8px 16px; border-radius: 8px; color: #A5B4FC; font-size: 13px; }
+      .info-badge strong { color: #C7D2FE; }
+      .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid #1F2937; background: rgba(15, 23, 42, 0.6); }
+      .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .data-table thead { background: rgba(31, 41, 55, 0.8); border-bottom: 2px solid #374151; }
+      .data-table th { padding: 14px 12px; text-align: left; color: #E5E7EB; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .data-table tbody tr { border-bottom: 1px solid #1F2937; transition: background 0.2s ease; }
+      .data-table tbody tr:hover { background: rgba(99, 102, 241, 0.05); }
+      .data-table td { padding: 12px; color: #D1D5DB; vertical-align: middle; }
+      .checkbox-col { width: 40px; text-align: center; }
+      .case-id-col { min-width: 150px; }
+      .client-col { min-width: 120px; }
+      .employee-col { min-width: 130px; }
+      .pincode-col { width: 100px; text-align: center; }
+      .map-col { width: 100px; text-align: center; }
+      .status-col { width: 120px; text-align: center; }
+      .actions-col { width: 130px; }
+      .case-id { color: #E5E7EB; font-weight: 500; }
+      .employee-name { color: #A5B4FC; }
+      .unassigned-label { color: #9CA3AF; font-style: italic; font-size: 12px; }
+      .pincode-badge { background: rgba(139, 92, 246, 0.2); color: #C4B5FD; padding: 4px 10px; border-radius: 6px; font-weight: 500; font-family: 'Courier New', monospace; }
+      .map-link { display: inline-flex; align-items: center; gap: 4px; color: #3B82F6; text-decoration: none; padding: 4px 8px; border-radius: 6px; transition: all 0.2s ease; }
+      .map-link:hover { background: rgba(59, 130, 246, 0.1); color: #60A5FA; }
+      .no-map { color: #6B7280; font-size: 12px; }
+      .action-buttons { display: flex; gap: 6px; justify-content: center; }
+      .btn-icon { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 13px; }
+      .btn-icon.btn-warning { background: rgba(245, 158, 11, 0.2); color: #FCD34D; }
+      .btn-icon.btn-warning:hover { background: rgba(245, 158, 11, 0.3); transform: translateY(-1px); }
+      .btn-icon.btn-secondary { background: rgba(107, 114, 128, 0.2); color: #D1D5DB; }
+      .btn-icon.btn-secondary:hover { background: rgba(107, 114, 128, 0.3); transform: translateY(-1px); }
+      .btn-icon.btn-danger { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
+      .btn-icon.btn-danger:hover { background: rgba(239, 68, 68, 0.3); transform: translateY(-1px); }
+      .bulk-actions-panel { display: none; margin-top: 20px; padding: 15px 20px; background: rgba(31, 41, 55, 0.8); border: 1px solid #374151; border-radius: 10px; align-items: center; justify-content: space-between; }
+      .bulk-info { display: flex; align-items: center; gap: 8px; color: #E5E7EB; font-weight: 500; }
+      .bulk-info i { color: #6366F1; }
+      .bulk-buttons { display: flex; gap: 10px; }
     </style>
   `;
 
@@ -3949,6 +3804,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
