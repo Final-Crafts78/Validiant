@@ -3625,6 +3625,7 @@ async function loadDependencies() {
 function smartColumnMapper(rawData) {
   const normalized = [];
   
+  // 1. Define synonyms for column headers
   const mapRules = {
     title: ['caseid', 'requestid', 'id', 'title', 'case', 'ticket', 'ref', 'number'],
     clientName: ['client', 'customer', 'individual', 'name', 'party'],
@@ -3632,13 +3633,14 @@ function smartColumnMapper(rawData) {
     address: ['address', 'location', 'addr', 'site'],
     mapUrl: ['map', 'url', 'link', 'google', 'location_link'],
     notes: ['notes', 'remarks', 'comments', 'desc'],
-    assignedTo: ['employee', 'empid', 'assigned', 'agent']
+    assignedTo: ['employee', 'empid', 'assigned', 'agent', 'field_executive', 'fe']
   };
 
   rawData.forEach(row => {
     const newRow = {};
     const rowKeys = Object.keys(row);
     
+    // Helper to find value based on synonyms
     const findValue = (field) => {
       const match = rowKeys.find(k => {
         const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -3654,25 +3656,41 @@ function smartColumnMapper(rawData) {
     newRow.mapUrl = findValue('mapUrl');
     newRow.notes = findValue('notes');
     
-    // Employee Match
+    // ═════════════════════════════════════════════════════════════════════
+    // ⭐ UPDATED: Robust Employee Matching (ID OR Name)
+    // ═════════════════════════════════════════════════════════════════════
     const empVal = findValue('assignedTo');
-    if (empVal) {
-      const emp = allEmployees.find(e => 
-        e.employeeId == empVal || e.name.toLowerCase().includes(String(empVal).toLowerCase())
-      );
+    
+    if (empVal && allEmployees && allEmployees.length > 0) {
+      // 1. "Clean" the input from Excel
+      // "Name D." -> "named" | "EMP-001" -> "emp001"
+      const cleanInput = String(empVal).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      const emp = allEmployees.find(e => {
+        // 2. "Clean" the DB values to match the input format
+        const dbId = String(e.employeeId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const dbName = String(e.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        // 3. The Match Logic: Does Input match ID OR Name?
+        // We use 'includes' for name to handle "John" matching "John Doe" if preferred, 
+        // OR strict equality for precision. Here I use strict equality on the cleaned string for safety.
+        return (dbId === cleanInput) || (dbName === cleanInput);
+      });
+      
       newRow.assignedTo = emp ? emp.id : null;
     } else {
       newRow.assignedTo = null;
     }
+    // ═════════════════════════════════════════════════════════════════════
 
-    // ⭐ Smart Pincode Extraction from Address (if pincode column missing)
+    // Smart Pincode Extraction from Address (if pincode column missing)
     if (!newRow.pincode && newRow.address) {
-      // FIX: Force address to string before using .match()
       const addressStr = String(newRow.address);
       const pinMatch = addressStr.match(/\b[1-9][0-9]{5}\b/); 
       if (pinMatch) newRow.pincode = pinMatch[0];
     }
     
+    // Only add valid rows
     if (newRow.title || newRow.pincode) {
       normalized.push(newRow);
     }
@@ -3905,6 +3923,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
