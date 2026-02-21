@@ -470,6 +470,7 @@ menu.querySelector('.menu-item')?.classList.add('active');
     // EMPLOYEE MENU
     const buttons = [
       { icon: 'fa-tasks', text: "Today's Tasks", action: 'showTodayTasks', class: 'btn-primary' },
+      { icon: 'fa-map-marked-alt', text: 'Map Routing', action: 'showMapRouting', class: 'btn-info' },
       { icon: 'fa-history', text: 'Task History', action: 'showTaskHistory', class: 'btn-primary' }
     ];
     
@@ -3974,6 +3975,147 @@ window.processSmartText = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 21. EMPLOYEE: MAP ROUTING VIEW
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function showMapRouting() {
+  const content = document.getElementById('mainContainer');
+  
+  content.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2><i class="fas fa-map-marked-alt"></i> Live Route Map</h2>
+      <button class="btn btn-info btn-sm" onclick="showMapRouting()"><i class="fas fa-sync"></i> Refresh Map</button>
+    </div>
+    
+    <div id="mapLoading" class="loading-spinner show" style="justify-content:center; padding:50px; text-align:center;">
+      <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:#6366f1; margin-bottom:15px; display:block;"></i>
+      <p>Acquiring GPS and loading map engine...</p>
+    </div>
+    
+    <div id="routingMap" style="width: 100%; height: 65vh; border-radius: 12px; border: 2px solid #374151; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 1;"></div>
+  `;
+
+  // 1. Dynamically load Leaflet.js (Free Map Library) if not already loaded
+  if (!window.L) {
+    await new Promise(resolve => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = resolve;
+      document.head.appendChild(script);
+    });
+  }
+
+  // 2. Get Employee's Current GPS Location
+  if (!navigator.geolocation) {
+    document.getElementById('mapLoading').innerHTML = '<h3 style="color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> Geolocation is not supported by your browser.</h3>';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('mapLoading').style.display = 'none';
+      const mapEl = document.getElementById('routingMap');
+      mapEl.style.display = 'block';
+
+      const userLat = pos.coords.latitude;
+      const userLng = pos.coords.longitude;
+
+      // 3. Initialize the Map
+      const map = L.map('routingMap').setView([userLat, userLng], 13);
+      
+      // Use OpenStreetMap (100% Free)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      // 4. Create Employee Location Marker (Blue)
+      L.marker([userLat, userLng])
+        .addTo(map)
+        .bindPopup('<b style="color:#2563eb; font-size:14px;">📍 You Are Here</b>')
+        .openPopup();
+
+      // 5. Plot Tasks & Draw Route
+      const waypoints = [[userLat, userLng]];
+      
+      // Filter out verified/completed tasks
+      const activeTasks = allEmployeeTasks.filter(t => {
+        const s = (t.status || '').toLowerCase();
+        return s !== 'verified' && s !== 'completed';
+      });
+
+      activeTasks.forEach((t, index) => {
+        // Find coordinates (from map URL, direct coords, or fallback to pincode)
+        let lat = parseFloat(t.latitude) || parseFloat(t._lat);
+        let lng = parseFloat(t.longitude) || parseFloat(t._lng);
+        
+        if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+          lat = pincodeData[t.pincode].lat;
+          lng = pincodeData[t.pincode].lng;
+        }
+
+        if (lat && lng) {
+          waypoints.push([lat, lng]);
+          
+          // Create custom red icon for tasks
+          const taskIcon = L.divIcon({
+            className: 'custom-task-icon',
+            html: `<div style="background-color: #ef4444; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+
+          const mapLink = t.map_url || t.mapUrl || t.mapurl;
+
+          L.marker([lat, lng], { icon: taskIcon }).addTo(map)
+            .bindPopup(`
+              <div style="font-family: sans-serif;">
+                <b style="color:#111827; font-size:14px; display:block; margin-bottom:5px;">Stop #${index + 1}: ${escapeHtml(t.title)}</b>
+                <span style="color:#6b7280; font-size:12px; display:block; margin-bottom:8px;"><i class="fas fa-map-pin"></i> ${escapeHtml(t.pincode)}</span>
+                <span style="background:#fef3c7; color:#d97706; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${escapeHtml(t.status)}</span>
+                ${mapLink ? `<a href="${escapeHtml(mapLink)}" target="_blank" style="display:block; margin-top:10px; background:#3b82f6; color:white; padding:5px; text-align:center; border-radius:5px; text-decoration:none; font-size:12px;"><i class="fas fa-location-arrow"></i> Navigate</a>` : ''}
+              </div>
+            `);
+        }
+      });
+
+      // 6. Draw dashed line connecting the route
+      if (waypoints.length > 1) {
+        const routeLine = L.polyline(waypoints, {
+          color: '#6366f1', // Indigo color
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '10, 10', // Makes it a dashed line
+          lineJoin: 'round'
+        }).addTo(map);
+
+        // Auto-zoom the map so all stops fit on the screen
+        map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+      } else if (activeTasks.length > 0) {
+        showToast('Tasks found, but no valid map coordinates or pincodes to plot.', 'warning');
+      } else {
+        showToast('No active tasks to plot!', 'info');
+      }
+    },
+    (err) => {
+      document.getElementById('mapLoading').innerHTML = `
+        <h3 style="color:#ef4444; text-align:center;">
+          <i class="fas fa-exclamation-triangle" style="font-size:3rem; margin-bottom:10px; display:block;"></i>
+          Location Access Denied
+        </h3>
+        <p style="color:#9ca3af; font-size:14px;">Please enable GPS/Location permissions in your browser to view the routing map.</p>
+      `;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 20. INITIALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -4037,6 +4179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
