@@ -765,8 +765,8 @@ app.post("/api/tasks/optimize", async (req, res) => {
       vehicles: [{
         id: 1,
         profile: "driving-car",
-        start: [employeeLocation.lng, employeeLocation.lat],
-        end: [employeeLocation.lng, employeeLocation.lat]
+        start: [employeeLocation.lng, employeeLocation.lat]
+        // 🚨 REMOVED the 'end' array to prevent zigzag round-trips
       }],
       jobs: routableTasks.map((task, index) => ({
         id: index,
