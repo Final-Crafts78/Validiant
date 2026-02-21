@@ -977,8 +977,14 @@ function loadTodayTasks(searchTerm) {
         return s !== 'verified' && s !== 'completed';
       });
       
-      // Persist "Nearest" sort if active
-      if (isNearestSortActive && savedEmployeeLocation) {
+      // 🚨 Persist the exact Elite route sequence if active
+      if (isNearestSortActive && window.eliteRouteIds) {
+        allEmployeeTasks.sort((a, b) => {
+          let idxA = window.eliteRouteIds.indexOf(a.id);
+          let idxB = window.eliteRouteIds.indexOf(b.id);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+      } else if (isNearestSortActive && savedEmployeeLocation) {
         allEmployeeTasks = reapplyDistanceSorting(allEmployeeTasks, savedEmployeeLocation.latitude, savedEmployeeLocation.longitude);
       }
       
@@ -1271,6 +1277,7 @@ function sortByNearest() {
           }).filter(t => t);
           
           allEmployeeTasks = optimizedOrder;
+          window.eliteRouteIds = optimizedOrder.map(t => t.id); // 🚨 Save the perfect route sequence
           displayEmployeeTasks(allEmployeeTasks);
           showToast('✓ Route optimized successfully!', 'success');
         } else {
@@ -4179,6 +4186,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
