@@ -753,6 +753,33 @@ app.get("/health", (req, res) => res.json({ status: "healthy", uptime: process.u
 app.get("/test", (req, res) => res.send("OK"));
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NAMED CLEAN ROUTES (extensionless page URLs)
+// Executives and users can bookmark /signin and /dashboard without
+// needing to remember or type the .html extension.
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('/signin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'signin.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CATCH-ALL FALLBACK — MUST BE LAST ROUTE
+// Any unrecognised GET route (bookmarked links, direct navigation,
+// mistyped URLs, browser refresh on clean paths) is served index.html.
+// API routes (/api/*) are explicitly skipped so they continue returning
+// their own JSON error responses and are never shadowed by this handler.
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SERVER STARTUP (Skipping HTML Routes)
 // ═══════════════════════════════════════════════════════════════════════════
 
