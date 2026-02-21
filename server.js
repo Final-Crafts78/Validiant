@@ -746,6 +746,59 @@ app.put("/api/tasks/:taskId/status", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// VRP OPTIMIZATION ENDPOINT (ORS)
+// ═══════════════════════════════════════════════════════════════════════════
+app.post("/api/tasks/optimize", async (req, res) => {
+  try {
+    const { employeeLocation, tasks } = req.body;
+
+    // Separate routable tasks from unroutable ones
+    const routableTasks = tasks.filter(t => t._lat != null && t._lng != null);
+    const unroutableTasks = tasks.filter(t => t._lat == null || t._lng == null);
+
+    if (routableTasks.length === 0) {
+      return res.json({ success: true, optimizedTasks: unroutableTasks });
+    }
+
+    const orsPayload = {
+      vehicles: [{
+        id: 1,
+        profile: "driving-car",
+        start: [employeeLocation.lng, employeeLocation.lat],
+        end: [employeeLocation.lng, employeeLocation.lat]
+      }],
+      jobs: routableTasks.map((task, index) => ({
+        id: index,
+        location: [task._lng, task._lat]
+      }))
+    };
+
+    const response = await fetch("https://api.openrouteservice.org/optimization", {
+      method: "POST",
+      headers: {
+        "Authorization": process.env.ORS_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(orsPayload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) throw new Error(data.error || "ORS API Failed");
+
+    const steps = data.routes[0].steps.filter(s => s.type === "job");
+    const optimizedTasks = steps.map(step => routableTasks[step.job]);
+    const finalTasks = [...optimizedTasks, ...unroutableTasks];
+
+    res.json({ success: true, optimizedTasks: finalTasks });
+
+  } catch (err) {
+    console.error("❌ ORS Error:", err.message);
+    res.status(500).json({ success: false, message: "Route optimization failed" });
+  }
+});
+
 app.get("/health", (req, res) => res.json({ status: "healthy", uptime: process.uptime() }));
 app.get("/test", (req, res) => res.send("OK"));
 
@@ -766,7 +819,3 @@ app.listen(PORT, HOST, () => {
   setInterval(keepAlive, 180000); // 3 minutes
 
 });
-
-
-
-
