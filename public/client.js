@@ -968,7 +968,13 @@ function loadTodayTasks(searchTerm) {
   fetch(url)
     .then(res => res.json())
     .then(tasks => {
-      allEmployeeTasks = Array.isArray(tasks) ? tasks : [];
+      const rawTasks = Array.isArray(tasks) ? tasks : [];
+      
+      // Strictly filter out inactive tasks
+      allEmployeeTasks = rawTasks.filter(task => {
+        const s = (task.status || '').toLowerCase();
+        return s !== 'verified' && s !== 'completed';
+      });
       
       // Persist "Nearest" sort if active
       if (isNearestSortActive && savedEmployeeLocation) {
@@ -1211,16 +1217,85 @@ function reapplyDistanceSorting(tasks, userLat, userLng) {
 }
 
 function sortByNearest() {
-  if (!navigator.geolocation) return showToast('Geolocation not supported', 'error');
-  showToast('Acquiring GPS...', 'info');
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported by your browser', 'error');
+    return;
+  }
   
-  navigator.geolocation.getCurrentPosition(pos => {
-    savedEmployeeLocation = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    isNearestSortActive = true;
-    allEmployeeTasks = reapplyDistanceSorting(allEmployeeTasks, pos.coords.latitude, pos.coords.longitude);
-    displayEmployeeTasks(allEmployeeTasks);
-    showToast('Route optimized!', 'success');
-  }, err => showToast('Location access denied', 'error'));
+  showToast('Calculating elite route...', 'info');
+  const sortBtn = event ? event.target : null;
+  if (sortBtn) {
+    sortBtn.disabled = true;
+    sortBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Optimizing...';
+  }
+  
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        savedEmployeeLocation = { latitude: userLat, longitude: userLng };
+        isNearestSortActive = true;
+        
+        const enrichedTasks = allEmployeeTasks.map(t => {
+          let lat = parseFloat(t.latitude) || null;
+          let lng = parseFloat(t.longitude) || null;
+          if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+            lat = pincodeData[t.pincode].lat;
+            lng = pincodeData[t.pincode].lng;
+          }
+          return { ...t, _lat: lat, _lng: lng };
+        });
+        
+        const requestPayload = {
+          employeeLocation: { lat: userLat, lng: userLng },
+          tasks: enrichedTasks.map(t => ({
+            id: t.id, _lat: t._lat, _lng: t._lng, title: t.title, pincode: t.pincode
+          }))
+        };
+        
+        const response = await fetch('/api/tasks/optimize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.optimizedTasks) {
+          const optimizedOrder = result.optimizedTasks.map(opt => {
+            const task = allEmployeeTasks.find(t => t.id === opt.id);
+            if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
+            return task;
+          }).filter(t => t);
+          
+          allEmployeeTasks = optimizedOrder;
+          displayEmployeeTasks(allEmployeeTasks);
+          showToast('✓ Route optimized successfully!', 'success');
+        } else {
+          throw new Error('Optimization failed');
+        }
+      } catch (error) {
+        console.error('VRP Error:', error);
+        showToast('Optimization failed, using fallback sorting', 'warning');
+        allEmployeeTasks = reapplyDistanceSorting(allEmployeeTasks, pos.coords.latitude, pos.coords.longitude);
+        displayEmployeeTasks(allEmployeeTasks);
+      }
+      
+      if (sortBtn) {
+        sortBtn.disabled = false;
+        sortBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Sort by Nearest';
+      }
+    },
+    (err) => {
+      showToast('Location access denied. Please enable GPS.', 'error');
+      if (sortBtn) {
+        sortBtn.disabled = false;
+        sortBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Sort by Nearest';
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
 }
 
 function sortByPincode() {
@@ -3605,10 +3680,23 @@ async function confirmStatusUpdate(taskId) {
     const result = await response.json();
     
     if (result.success) {
+      // 1. Update the local task status
+      const idx = allEmployeeTasks.findIndex(t => String(t.id) === String(taskId));
+      if (idx !== -1) {
+        allEmployeeTasks[idx].status = newStatus;
+      }
+      
+      // 2. Remove the task from the view if it was marked as verified or completed
+      allEmployeeTasks = allEmployeeTasks.filter(task => {
+        const s = (task.status || '').toLowerCase();
+        return s !== 'verified' && s !== 'completed';
+      });
+
       showToast(`✓ Status updated to ${newStatus}`, 'success');
       document.getElementById('statusModal').remove();
-      // Refresh employee tasks
-      if (typeof renderEmployeeTasks === 'function') renderEmployeeTasks();
+      
+      // 3. Reactively re-render
+      displayEmployeeTasks(allEmployeeTasks);
     } else {
       showToast(result.message || 'Update failed', 'error');
     }
@@ -3949,6 +4037,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
