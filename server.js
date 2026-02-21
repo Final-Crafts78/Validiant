@@ -335,6 +335,13 @@ app.get("/api/activity-log", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// API ROUTES - TASKS
+// Order: collection → create → bulk-upload → unassigned →
+//        sub-path actions (assign/reassign/status/unassign) →
+//        generic /:id CRUD (PUT then DELETE) — specific ALWAYS before generic
+// ═══════════════════════════════════════════════════════════════════════════
+
 app.get("/api/tasks", async (req, res) => {
   try {
     const { status, employeeId, pincode, search } = req.query;
@@ -423,147 +430,7 @@ app.post("/api/tasks", async (req, res) => {
   }
 });
 
-app.put("/api/tasks/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName } = req.body;
-    const updateData = { updated_at: new Date() };
-
-    // Track what specifically changed for the log
-    let changes = [];
-
-    if (title) { updateData.title = title; changes.push("Title"); }
-    if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
-    if (address) { updateData.address = address; changes.push("Address"); }
-    if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
-    if (notes) { updateData.notes = notes; changes.push("Notes"); }
-    
-    // Handle both camelCase and snake_case for map URL
-    const finalMapUrl = map_url || mapUrl;
-    if (finalMapUrl !== undefined) {
-      updateData.map_url = finalMapUrl;
-      changes.push("Map URL");
-    }
-
-    if (status) {
-      updateData.status = status;
-      changes.push(`Status: ${status}`);
-      if (status === 'Completed') updateData.completed_at = new Date();
-      if (status === 'Verified') updateData.verified_at = new Date();
-    }
-
-    if (assignedTo) {
-        updateData.assigned_to = assignedTo;
-        changes.push("Reassigned Employee");
-        if (status === "Unassigned") updateData.status = "Pending";
-    }
-
-    const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
-    if (error) throw error;
-
-    // ✅ FIX: Log the specific changes list
-    if (userId) {
-        const logDetail = changes.length > 0 ? `Updated: ${changes.join(", ")}` : "Task details updated";
-        await logActivity(userId, userName, "TASK_UPDATED", id, logDetail);
-    }
-
-    res.json({ success: true, message: "Updated" });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Failed" });
-  }
-});
-
-app.get("/api/tasks/unassigned", async (req, res) => {
-  try {
-    const { data, error } = await supabase.from("tasks").select("*").eq("status", "Unassigned").order("created_at", { ascending: false });
-    if (error) throw error;
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NEW: UNASSIGN TASK (Move back to pool)
-// ═══════════════════════════════════════════════════════════════════════════
-app.post("/api/tasks/:taskId/unassign", async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { userId, userName } = req.body;
-
-    await supabase.from("tasks").update({
-      assigned_to: null,
-      status: "Unassigned",
-      updated_at: new Date()
-    }).eq("id", taskId);
-
-    await logActivity(userId, userName, "TASK_UNASSIGNED", taskId, "Moved to unassigned pool", req);
-    res.json({ success: true, message: "Task moved to unassigned pool" });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NEW: REASSIGN TASK (Change employee)
-// ═══════════════════════════════════════════════════════════════════════════
-app.put("/api/tasks/:taskId/reassign", async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { newEmployeeId, userId, userName } = req.body;
-
-    if (!newEmployeeId) {
-      return res.status(400).json({ success: false, message: "Employee ID required" });
-    }
-
-    const { data: employee } = await supabase
-      .from("users")
-      .select("name")
-      .eq("id", newEmployeeId)
-      .single();
-
-    if (!employee) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
-    }
-
-    await supabase.from("tasks").update({
-      assigned_to: newEmployeeId,
-      assigned_date: new Date().toISOString().split('T')[0],
-      status: "Pending",
-      updated_at: new Date()
-    }).eq("id", taskId);
-
-    await logActivity(userId, userName, "TASK_REASSIGNED", taskId, `Reassigned to ${employee.name}`, req);
-    res.json({ success: true, message: `Reassigned to ${employee.name}` });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-app.delete("/api/tasks/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminId, adminName } = req.query; 
-
-    // FIX: Log ONCE before deletion
-    if (adminId && adminName) {
-      await logActivity(adminId, adminName, 'TASK_DELETED', id, `Deleted task ID: ${id}`);
-    }
-
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
-    if (error) throw error;
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Delete failed:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// BULK UPLOAD & EXPORT
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ── BULK UPLOAD (specific POST — must stay above POST /:taskId/* and generic /:id) ──
 app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file." });
@@ -625,6 +492,182 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// ── UNASSIGNED POOL (specific GET — must stay above generic GET /:id if ever added) ──
+app.get("/api/tasks/unassigned", async (req, res) => {
+  try {
+    const { data, error } = await supabase.from("tasks").select("*").eq("status", "Unassigned").order("created_at", { ascending: false });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── SUB-PATH ACTIONS (/:taskId/action — specific, before generic /:id) ──
+
+app.post("/api/tasks/:taskId/assign", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { employeeId, adminId, adminName } = req.body;
+    const { data: employee } = await supabase.from("users").select("name").eq("id", employeeId).single();
+    
+    await supabase.from("tasks").update({
+      assigned_to: employeeId,
+      assigned_date: new Date().toISOString().split('T')[0],
+      status: "Pending",
+      updated_at: new Date()
+    }).eq("id", taskId);
+
+    await logActivity(adminId, adminName, "TASK_ASSIGNED", taskId, `Assigned to ${employee?.name}`, req);
+    res.json({ success: true, message: "Assigned" });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.put("/api/tasks/:taskId/reassign", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { newEmployeeId, userId, userName } = req.body;
+
+    if (!newEmployeeId) {
+      return res.status(400).json({ success: false, message: "Employee ID required" });
+    }
+
+    const { data: employee } = await supabase
+      .from("users")
+      .select("name")
+      .eq("id", newEmployeeId)
+      .single();
+
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    await supabase.from("tasks").update({
+      assigned_to: newEmployeeId,
+      assigned_date: new Date().toISOString().split('T')[0],
+      status: "Pending",
+      updated_at: new Date()
+    }).eq("id", taskId);
+
+    await logActivity(userId, userName, "TASK_REASSIGNED", taskId, `Reassigned to ${employee.name}`, req);
+    res.json({ success: true, message: `Reassigned to ${employee.name}` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put("/api/tasks/:taskId/status", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, userId, userName } = req.body;
+    const updateData = { status, updated_at: new Date() };
+    if (status === 'Completed') updateData.completed_at = new Date();
+    if (status === 'Verified') updateData.verified_at = new Date();
+
+    await supabase.from("tasks").update(updateData).eq("id", taskId);
+    await logActivity(userId, userName, `TASK_${status.toUpperCase()}`, taskId, null, req);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.post("/api/tasks/:taskId/unassign", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { userId, userName } = req.body;
+
+    await supabase.from("tasks").update({
+      assigned_to: null,
+      status: "Unassigned",
+      updated_at: new Date()
+    }).eq("id", taskId);
+
+    await logActivity(userId, userName, "TASK_UNASSIGNED", taskId, "Moved to unassigned pool", req);
+    res.json({ success: true, message: "Task moved to unassigned pool" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GENERIC CRUD (/:id — always LAST in task group) ──
+
+app.put("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName } = req.body;
+    const updateData = { updated_at: new Date() };
+
+    // Track what specifically changed for the log
+    let changes = [];
+
+    if (title) { updateData.title = title; changes.push("Title"); }
+    if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
+    if (address) { updateData.address = address; changes.push("Address"); }
+    if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
+    if (notes) { updateData.notes = notes; changes.push("Notes"); }
+    
+    // Handle both camelCase and snake_case for map URL
+    const finalMapUrl = map_url || mapUrl;
+    if (finalMapUrl !== undefined) {
+      updateData.map_url = finalMapUrl;
+      changes.push("Map URL");
+    }
+
+    if (status) {
+      updateData.status = status;
+      changes.push(`Status: ${status}`);
+      if (status === 'Completed') updateData.completed_at = new Date();
+      if (status === 'Verified') updateData.verified_at = new Date();
+    }
+
+    if (assignedTo) {
+        updateData.assigned_to = assignedTo;
+        changes.push("Reassigned Employee");
+        if (status === "Unassigned") updateData.status = "Pending";
+    }
+
+    const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
+    if (error) throw error;
+
+    // ✅ FIX: Log the specific changes list
+    if (userId) {
+        const logDetail = changes.length > 0 ? `Updated: ${changes.join(", ")}` : "Task details updated";
+        await logActivity(userId, userName, "TASK_UPDATED", id, logDetail);
+    }
+
+    res.json({ success: true, message: "Updated" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed" });
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId, adminName } = req.query; 
+
+    // FIX: Log ONCE before deletion
+    if (adminId && adminName) {
+      await logActivity(adminId, adminName, 'TASK_DELETED', id, `Deleted task ID: ${id}`);
+    }
+
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete failed:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT & CONTACT
+// ═══════════════════════════════════════════════════════════════════════════
 
 app.get("/api/export", async (req, res) => {
   try {
@@ -706,48 +749,35 @@ app.post("/api/contact", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TASK ACTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-
-app.post("/api/tasks/:taskId/assign", async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { employeeId, adminId, adminName } = req.body;
-    const { data: employee } = await supabase.from("users").select("name").eq("id", employeeId).single();
-    
-    await supabase.from("tasks").update({
-      assigned_to: employeeId,
-      assigned_date: new Date().toISOString().split('T')[0],
-      status: "Pending",
-      updated_at: new Date()
-    }).eq("id", taskId);
-
-    await logActivity(adminId, adminName, "TASK_ASSIGNED", taskId, `Assigned to ${employee?.name}`, req);
-    res.json({ success: true, message: "Assigned" });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-app.put("/api/tasks/:taskId/status", async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { status, userId, userName } = req.body;
-    const updateData = { status, updated_at: new Date() };
-    if (status === 'Completed') updateData.completed_at = new Date();
-    if (status === 'Verified') updateData.verified_at = new Date();
-
-    await supabase.from("tasks").update(updateData).eq("id", taskId);
-    await logActivity(userId, userName, `TASK_${status.toUpperCase()}`, taskId, null, req);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
 app.get("/health", (req, res) => res.json({ status: "healthy", uptime: process.uptime() }));
 app.get("/test", (req, res) => res.send("OK"));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAMED CLEAN ROUTES (extensionless page URLs)
+// Executives and users can bookmark /signin and /dashboard without
+// needing to remember or type the .html extension.
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('/signin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'signin.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CATCH-ALL FALLBACK — MUST BE LAST ROUTE
+// Any unrecognised GET route (bookmarked links, direct navigation,
+// mistyped URLs, browser refresh on clean paths) is served index.html.
+// API routes (/api/*) are explicitly skipped so they continue returning
+// their own JSON error responses and are never shadowed by this handler.
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SERVER STARTUP (Skipping HTML Routes)
@@ -766,7 +796,3 @@ app.listen(PORT, HOST, () => {
   setInterval(keepAlive, 180000); // 3 minutes
 
 });
-
-
-
-
