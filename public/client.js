@@ -1068,9 +1068,10 @@ function displayEmployeeTasks(tasks) {
 function searchTodayTasks() {
   const term = document.getElementById('todayTaskSearch').value.toLowerCase();
   const filtered = allEmployeeTasks.filter(t => 
-    t.title.toLowerCase().includes(term) || 
+    (t.title || '').toLowerCase().includes(term) || 
     (t.pincode || '').includes(term) || 
-    (t.address || '').toLowerCase().includes(term)
+    (t.address || '').toLowerCase().includes(term) ||
+    (t.clientName || t.client_name || '').toLowerCase().includes(term)
   );
   displayEmployeeTasks(filtered);
 }
@@ -1308,7 +1309,7 @@ function sortByNearest() {
 function sortByPincode() {
   isNearestSortActive = false;
   savedEmployeeLocation = null;
-  allEmployeeTasks.sort((a, b) => (a.pincode || '999999').localeCompare(b.pincode || '999999'));
+  allEmployeeTasks.sort((a, b) => String(a.pincode || '999999').localeCompare(String(b.pincode || '999999')));
   displayEmployeeTasks(allEmployeeTasks);
   showToast('Grouped by Pincode', 'success');
 }
@@ -4180,6 +4181,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
