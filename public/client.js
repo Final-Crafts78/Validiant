@@ -132,6 +132,12 @@ function closeAllModals() {
     modal.classList.remove('show');
     setTimeout(() => modal.remove(), 300);
   });
+  
+  // 🚨 Prevent Mobile RAM Leaks by destroying the ghost listeners
+  if (window._modalEscHandler) {
+    document.removeEventListener('keydown', window._modalEscHandler);
+    window._modalEscHandler = null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -168,14 +174,13 @@ function createModal(title, content, options = {}) {
     if (e.target === modal) closeAllModals();
   });
   
-  // Close on ESC key
-  const escHandler = (e) => {
+  // Close on ESC key (Attached globally so it can be cleanly destroyed)
+  window._modalEscHandler = (e) => {
     if (e.key === 'Escape') {
       closeAllModals();
-      document.removeEventListener('keydown', escHandler);
     }
   };
-  document.addEventListener('keydown', escHandler);
+  document.addEventListener('keydown', window._modalEscHandler);
   
   return modal;
 }
@@ -281,9 +286,8 @@ function openTaskDetailsModal(taskId) {
 function cleanupCurrentView() {
   closeAllModals();
   
-  // Clear any active filters
-  isNearestSortActive = false;
-  savedEmployeeLocation = null;
+  // 🚨 REMOVED the code that wiped the routing data. 
+  // The executive's Elite Route will now persist across all tabs!
   
   // Remove any temporary elements
   const tempElements = document.querySelectorAll('.temp-edit-section, .inline-edit-form');
@@ -4186,6 +4190,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
