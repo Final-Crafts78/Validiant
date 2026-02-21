@@ -1029,12 +1029,16 @@ function displayEmployeeTasks(tasks) {
       
       <!-- Header with Title and Status/Map -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-        <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
-          <i class="fas fa-clipboard-list" style="color: #818cf8; margin-right: 8px;"></i>
-          ${escapeHtml(task.title)}
-        </h3>
+        <div>
+          <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
+            <i class="fas fa-clipboard-list" style="color: #818cf8; margin-right: 8px;"></i>
+            ${escapeHtml(task.title)}
+          </h3>
+          <div style="margin-top: 6px; color: #9ca3af; font-size: 13px; font-weight: 500;">
+            <i class="fas fa-user-tie" style="margin-right: 5px;"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client Name')}
+          </div>
+        </div>
         
-        <!-- Right side: Map button + Status -->
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
           ${mapLink ? `
             <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
@@ -1051,19 +1055,10 @@ function displayEmployeeTasks(tasks) {
         </div>
       </div>
       
-      <!-- Footer with Pincode and Tap info -->
-      <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-top: 15px;">
         <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')} ${distanceBadge}</span>
-        <span style="color: #60a5fa; font-weight: 500;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px;"></i></span>
+        <span style="color: #60a5fa; font-weight: 500; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 20px;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px; margin-left: 3px;"></i></span>
       </div>
-      
-      <!-- Update Status Button -->
-      <button onclick="event.stopPropagation(); openStatusUpdateModal(${task.id}, '${escapeHtml(task.status)}')" 
-              style="width: 100%; padding: 10px; background: #10B981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease;"
-              onmouseover="this.style.background='#059669';"
-              onmouseout="this.style.background='#10B981';">
-        <i class="fas fa-sync-alt"></i> Update Status
-      </button>
     </div>`;
   });
   
@@ -4084,14 +4079,9 @@ async function showMapRouting() {
           const mapLink = t.map_url || t.mapUrl || t.mapurl;
 
           L.marker([lat, lng], { icon: taskIcon }).addTo(map)
-            .bindPopup(`
-              <div style="font-family: sans-serif;">
-                <b style="color:#111827; font-size:14px; display:block; margin-bottom:5px;">Stop #${index + 1}: ${escapeHtml(t.title)}</b>
-                <span style="color:#6b7280; font-size:12px; display:block; margin-bottom:8px;"><i class="fas fa-map-pin"></i> ${escapeHtml(t.pincode)}</span>
-                <span style="background:#fef3c7; color:#d97706; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${escapeHtml(t.status)}</span>
-                ${mapLink ? `<a href="${escapeHtml(mapLink)}" target="_blank" style="display:block; margin-top:10px; background:#3b82f6; color:white; padding:5px; text-align:center; border-radius:5px; text-decoration:none; font-size:12px;"><i class="fas fa-location-arrow"></i> Navigate</a>` : ''}
-              </div>
-            `);
+            .on('click', () => {
+              openTaskDetailsModal(t.id);
+            });
         }
       });
 
@@ -4190,6 +4180,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
