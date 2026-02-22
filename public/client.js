@@ -4095,6 +4095,9 @@ async function showMapRouting() {
       const userLat = pos.coords.latitude;
       const userLng = pos.coords.longitude;
 
+      // 🚨 CRITICAL FIX: Prevent fatal crash if the executive switched tabs while GPS was loading
+      if (!document.getElementById('routingMap')) return;
+
       // 3. Initialize the Map and save to global window for memory cleanup
       window.routingMapInstance = L.map('routingMap').setView([userLat, userLng], 13);
       const map = window.routingMapInstance;
@@ -4245,6 +4248,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
