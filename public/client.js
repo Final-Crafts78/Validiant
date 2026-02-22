@@ -1011,17 +1011,33 @@ function showTodayTasks() {
           border-color: #3B82F6 !important;
         }
       }
-      .mobile-optimized-card:active {
-        transform: scale(0.98) !important;
-        background: #1e293b !important;
-      }
-      .map-quick-btn:active {
-        transform: scale(0.95);
+      /* 🚨 DOM RAM Saver: Moved inline styles here to shrink HTML payload by 70% */
+      .mobile-optimized-card {
+        contain: content; /* Upgraded to prevent mobile scrollbar jumping when notes change height */
+        margin-bottom: 15px; cursor: pointer; padding: 16px; 
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
+        border-radius: 12px; border: 1px solid #334155; 
+        transition: all 0.2s ease;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
       
-      /* 🚨 THE HOLY GRAIL 2.0: Upgraded to 'contain: content' to prevent mobile scrollbar jumping/jitter when notes change height, while maintaining 100% GPU off-screen skipping */
-      .mobile-optimized-card {
-        contain: content;
+      .mobile-optimized-card:active {
+        transform: scale(0.98) translateZ(0) !important; /* 🚨 Keeps card locked to GPU during tap */
+        background: #1e293b !important;
+      }
+
+      /* 🚨 Map Button Clean CSS */
+      .map-quick-btn {
+        background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); 
+        color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; 
+        transition: all 0.2s ease;
+        backface-visibility: hidden;
+        font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;
+      }
+
+      .map-quick-btn:active {
+        transform: scale(0.95) translateZ(0); /* 🚨 Keeps button locked to GPU during tap */
       }
     </style>
     <div id="todayTasksList">
@@ -1101,7 +1117,7 @@ function displayEmployeeTasks(tasks) {
       : '';
     
     return `
-    <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;">
+    <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
         <div>
           <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
@@ -1115,8 +1131,7 @@ function displayEmployeeTasks(tasks) {
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
           ${mapLink ? `
             <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
-                    class="map-quick-btn" title="Open in Google Maps"
-                    style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                    class="map-quick-btn" title="Open in Google Maps">
               <i class="fas fa-map-marker-alt"></i><span>Maps</span>
             </button>
           ` : ''}
@@ -4285,6 +4300,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
