@@ -1126,7 +1126,10 @@ function displayEmployeeTasks(tasks) {
     </div>`;
   });
   
-  list.innerHTML = html;
+  // 🚨 Hardware Acceleration: Allow UI animations to finish painting before locking the CPU to render HTML
+  requestAnimationFrame(() => {
+    list.innerHTML = html;
+  });
 }
 
 function searchTodayTasks() {
@@ -4271,6 +4274,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
