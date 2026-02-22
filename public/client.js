@@ -1019,10 +1019,9 @@ function showTodayTasks() {
         transform: scale(0.95);
       }
       
-      /* 🚨 THE HOLY GRAIL: Completely bypasses GPU rendering for off-screen tasks */
+      /* 🚨 THE HOLY GRAIL 2.0: Upgraded to 'contain: content' to prevent mobile scrollbar jumping/jitter when notes change height, while maintaining 100% GPU off-screen skipping */
       .mobile-optimized-card {
-        content-visibility: auto;
-        contain-intrinsic-size: 0 150px; /* Tells the browser to reserve space to prevent scrollbar jumping */
+        contain: content;
       }
     </style>
     <div id="todayTasksList">
@@ -4093,7 +4092,8 @@ async function showMapRouting() {
   `;
 
   // 1. Dynamically load Leaflet.js (Free Map Library) if not already loaded
-  if (!window.L) {
+  if (!window.L && !window._isMapLoading) {
+    window._isMapLoading = true; // 🚨 Locks the thread to prevent double-tap injection crashes
     await new Promise(resolve => {
       const css = document.createElement('link');
       css.rel = 'stylesheet';
@@ -4102,7 +4102,7 @@ async function showMapRouting() {
 
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = resolve;
+      script.onload = () => { window._isMapLoading = false; resolve(); }; // 🚨 Releases the lock
       document.head.appendChild(script);
     });
   }
@@ -4285,6 +4285,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
