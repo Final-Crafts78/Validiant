@@ -981,6 +981,20 @@ function showTodayTasks() {
         <i class="fas fa-sync"></i> Refresh
       </button>
     </div>
+    <style>
+      /* Mobile Native Feel: Hover on desktop, tactile tap on mobile */
+      @media (hover: hover) {
+        .mobile-optimized-card:hover {
+          border-color: #6366f1 !important;
+          transform: translateY(-2px) !important;
+          box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3) !important;
+        }
+      }
+      .mobile-optimized-card:active {
+        transform: scale(0.98) !important;
+        background: #1e293b !important;
+      }
+    </style>
     <div id="todayTasksList">
       <div class="loading-spinner show"><i class="fas fa-spinner"></i> Loading your tasks...</div>
     </div>
@@ -1057,9 +1071,7 @@ function displayEmployeeTasks(tasks) {
       : '';
     
     html += `
-    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; will-change: transform;" 
-         onmouseover="this.style.borderColor='#6366f1'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.3)';" 
-         onmouseout="this.style.borderColor='#334155'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+    <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; will-change: transform;">
       
       <!-- Header with Title and Status/Map -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -1343,7 +1355,7 @@ function sortByNearest() {
         sortBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Sort by Nearest';
       }
     },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 } // 🚨 30s cache for instant loads
   );
 }
 
@@ -4031,6 +4043,12 @@ window.processSmartText = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function showMapRouting() {
+  // 🚨 CRITICAL FIX: Prevent RAM Leak if user clicks "Refresh Map" while already on the map tab
+  if (window.routingMapInstance) {
+    window.routingMapInstance.remove();
+    window.routingMapInstance = null;
+  }
+
   const content = document.getElementById('mainContainer');
   
   content.innerHTML = `
@@ -4159,7 +4177,7 @@ async function showMapRouting() {
         <p style="color:#9ca3af; font-size:14px;">Please enable GPS/Location permissions in your browser to view the routing map.</p>
       `;
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 } // 🚨 30s cache for instant loads
   );
 }
 
@@ -4227,6 +4245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
