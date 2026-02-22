@@ -156,6 +156,10 @@ function closeAllModals() {
     setTimeout(() => modal.remove(), 300);
   });
   
+  // 🚨 Restore Background Scrolling
+  const contentArea = document.querySelector('.content-area');
+  if (contentArea) contentArea.style.overflowY = 'auto';
+  
   // 🚨 Prevent Mobile RAM Leaks by destroying the ghost listeners
   if (window._modalEscHandler) {
     document.removeEventListener('keydown', window._modalEscHandler);
@@ -170,6 +174,10 @@ function closeAllModals() {
 function createModal(title, content, options = {}) {
   // Remove any existing modals first
   closeAllModals();
+  
+  // 🚨 Lock Background Scrolling (Stops Scroll Bleed)
+  const contentArea = document.querySelector('.content-area');
+  if (contentArea) contentArea.style.overflowY = 'hidden';
   
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -1071,7 +1079,7 @@ function displayEmployeeTasks(tasks) {
       : '';
     
     html += `
-    <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; will-change: transform;">
+    <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;">
       
       <!-- Header with Title and Status/Map -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -4248,6 +4256,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
