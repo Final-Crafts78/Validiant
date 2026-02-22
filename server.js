@@ -338,7 +338,11 @@ app.get("/api/activity-log", async (req, res) => {
 app.get("/api/tasks", async (req, res) => {
   try {
     const { status, employeeId, pincode, search } = req.query;
-    let query = supabase.from("tasks").select("*").order("created_at", { ascending: false });
+    
+    // 🚨 Lean Payload: Excludes massive 'notes' and 'address' strings unless actively searching
+    const selectFields = search ? "*" : "id, title, status, pincode, client_name, latitude, longitude, map_url, assigned_to, created_at, assigned_date, verified_at, completed_at, notes";
+    
+    let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
     
     if (status && status !== "all") query = query.eq("status", status);
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
