@@ -25,7 +25,9 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
     
     body { 
-      background-color: var(--bg-dark); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; overscroll-behavior-y: none; 
+      background-color: var(--bg-dark); color: var(--text-main); display: flex; 
+      /* 🚨 Absolute Viewport Lock: Stops Android/iOS keyboards from squishing the UI */
+      position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior-y: none; 
       /* 🚨 Native UI Lock: Prevents accidental text highlighting and magnifying glass popups */
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -323,7 +325,8 @@ select.form-input {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  /* 🚨 Stop GPU Thrashing: Only animate hardware-accelerated properties */
+  transition: transform 0.1s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   border: none;
   outline: none;
 }
@@ -700,7 +703,8 @@ select.form-input {
   border-radius: 8px;
   cursor: pointer;
   color: var(--text-muted);
-  transition: all 0.2s ease;
+  /* 🚨 Stop GPU Thrashing: Only animate colors */
+  transition: background-color 0.2s ease, color 0.2s ease, border-left 0.2s ease;
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
@@ -881,6 +885,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
