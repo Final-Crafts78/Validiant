@@ -157,7 +157,10 @@ function closeAllModals() {
   const modals = document.querySelectorAll('.modal-overlay, .modal.show');
   modals.forEach(modal => {
     modal.classList.remove('show');
-    setTimeout(() => modal.remove(), 300);
+    // 🚨 Memory Leak Proof: Only remove if the node actually still exists in the DOM
+    setTimeout(() => { 
+      if (modal && modal.parentNode) modal.remove(); 
+    }, 300);
   });
   
   // 🚨 Restore Background Scrolling
@@ -1014,6 +1017,12 @@ function showTodayTasks() {
       .map-quick-btn:active {
         transform: scale(0.95);
       }
+      
+      /* 🚨 THE HOLY GRAIL: Completely bypasses GPU rendering for off-screen tasks */
+      .mobile-optimized-card {
+        content-visibility: auto;
+        contain-intrinsic-size: 0 150px; /* Tells the browser to reserve space to prevent scrollbar jumping */
+      }
     </style>
     <div id="todayTasksList">
       <div class="loading-spinner show"><i class="fas fa-spinner"></i> Loading your tasks...</div>
@@ -1126,9 +1135,9 @@ function displayEmployeeTasks(tasks) {
     </div>`;
   });
   
-  // 🚨 Hardware Acceleration: Allow UI animations to finish painting before locking the CPU to render HTML
+  // 🚨 Hardware Acceleration: Wait for animations to finish before locking CPU to render HTML
   requestAnimationFrame(() => {
-    list.innerHTML = html;
+    if (list) list.innerHTML = html;
   });
 }
 
@@ -4274,6 +4283,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
