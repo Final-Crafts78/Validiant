@@ -803,9 +803,10 @@ function showAssignTask() {
         border: 1px solid #374151;
         border-radius: 10px;
         color: #E5E7EB;
-        font-size: 14px;
-        transition: all 0.3s ease;
+        font-size: 16px; /* 🚨 16px absolutely prevents the iOS Safari Auto-Zoom Trap */
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
         outline: none;
+        font-family: inherit;
       }
       
       .form-input:focus {
@@ -4283,6 +4284,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
