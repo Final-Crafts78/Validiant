@@ -4156,8 +4156,10 @@ async function showMapRouting() {
         return s !== 'verified' && s !== 'completed';
       });
 
+      // 🚨 Batch Rendering: Create a background array to hold markers
+      const mapMarkers = [];
+
       activeTasks.forEach((t, index) => {
-        // Find coordinates (from map URL, direct coords, or fallback to pincode)
         let lat = parseFloat(t.latitude) || parseFloat(t._lat);
         let lng = parseFloat(t.longitude) || parseFloat(t._lng);
         
@@ -4169,7 +4171,6 @@ async function showMapRouting() {
         if (lat && lng) {
           waypoints.push([lat, lng]);
           
-          // Create custom red icon for tasks
           const taskIcon = L.divIcon({
             className: 'custom-task-icon',
             html: `<div style="background-color: #ef4444; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
@@ -4177,14 +4178,16 @@ async function showMapRouting() {
             iconAnchor: [12, 12]
           });
 
-          const mapLink = t.map_url || t.mapUrl || t.mapurl;
-
-          L.marker([lat, lng], { icon: taskIcon }).addTo(map)
-            .on('click', () => {
-              openTaskDetailsModal(t.id);
-            });
+          // Build the marker in background RAM, do NOT add to map yet
+          const marker = L.marker([lat, lng], { icon: taskIcon }).on('click', () => {
+            openTaskDetailsModal(t.id);
+          });
+          mapMarkers.push(marker);
         }
       });
+
+      // 🚨 Batch Rendering: Stamp all markers onto the map perfectly simultaneously
+      L.layerGroup(mapMarkers).addTo(map);
 
       // 6. Draw dashed line connecting the route
       if (waypoints.length > 1) {
@@ -4281,6 +4284,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
