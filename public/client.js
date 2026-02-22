@@ -122,11 +122,15 @@ updateActivity();
 checkSession();
 
 // 5. UTILITY FUNCTIONS
+// 🚨 HYPER-OPTIMIZED: Uses pure Regex instead of creating heavy DOM nodes
 function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  if (typeof text !== 'string') return text || '';
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function showToast(message, type) {
@@ -997,10 +1001,18 @@ function showTodayTasks() {
           transform: translateY(-2px) !important;
           box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3) !important;
         }
+        /* 🚨 Map Button Hardware Acceleration */
+        .map-quick-btn:hover {
+          background: rgba(59, 130, 246, 0.3) !important;
+          border-color: #3B82F6 !important;
+        }
       }
       .mobile-optimized-card:active {
         transform: scale(0.98) !important;
         background: #1e293b !important;
+      }
+      .map-quick-btn:active {
+        transform: scale(0.95);
       }
     </style>
     <div id="todayTasksList">
@@ -1098,9 +1110,7 @@ function displayEmployeeTasks(tasks) {
             <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
                     class="map-quick-btn"
                     title="Open in Google Maps"
-                    style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;"
-                    onmouseover="this.style.background='rgba(59, 130, 246, 0.3)'; this.style.borderColor='#3B82F6';"
-                    onmouseout="this.style.background='rgba(59, 130, 246, 0.2)'; this.style.borderColor='rgba(59, 130, 246, 0.4)';">
+                    style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
               <i class="fas fa-map-marker-alt"></i>
               <span>Maps</span>
             </button>
@@ -4261,6 +4271,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
