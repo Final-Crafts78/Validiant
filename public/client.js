@@ -309,8 +309,11 @@ function openTaskDetailsModal(taskId) {
 function cleanupCurrentView() {
   closeAllModals();
   
-  // 🚨 REMOVED the code that wiped the routing data. 
-  // The executive's Elite Route will now persist across all tabs!
+  // 🚨 Prevent Map Memory Leaks: Destroy Leaflet engine if it exists in background
+  if (window.routingMapInstance) {
+    window.routingMapInstance.remove();
+    window.routingMapInstance = null;
+  }
   
   // Remove any temporary elements
   const tempElements = document.querySelectorAll('.temp-edit-section, .inline-edit-form');
@@ -985,7 +988,13 @@ function showTodayTasks() {
   
   content.innerHTML = html;
   
-  document.getElementById('todayTaskSearch').addEventListener('input', searchTodayTasks);
+  // 🚨 Debounce Search: Wait 300ms after typing stops before rebuilding UI
+  let searchTimeout;
+  document.getElementById('todayTaskSearch').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(searchTodayTasks, 300);
+  });
+  
   loadTodayTasks();
 }
 
@@ -1048,7 +1057,7 @@ function displayEmployeeTasks(tasks) {
       : '';
     
     html += `
-    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: all 0.3s ease;" 
+    <div class="task-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; will-change: transform;" 
          onmouseover="this.style.borderColor='#6366f1'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.3)';" 
          onmouseout="this.style.borderColor='#334155'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
       
@@ -4068,8 +4077,9 @@ async function showMapRouting() {
       const userLat = pos.coords.latitude;
       const userLng = pos.coords.longitude;
 
-      // 3. Initialize the Map
-      const map = L.map('routingMap').setView([userLat, userLng], 13);
+      // 3. Initialize the Map and save to global window for memory cleanup
+      window.routingMapInstance = L.map('routingMap').setView([userLat, userLng], 13);
+      const map = window.routingMapInstance;
       
       // Use OpenStreetMap (100% Free)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -4217,6 +4227,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
