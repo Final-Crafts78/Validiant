@@ -1242,7 +1242,8 @@ function updateTaskStatus(taskId) {
     navigator.geolocation.getCurrentPosition(
       pos => sendUpdate({ completedLat: pos.coords.latitude, completedLng: pos.coords.longitude }),
       err => { console.warn(err); sendUpdate(); },
-      { timeout: 5000 }
+      // 🚨 Zero-Lag GPS: Instantly grab recent location to prevent 5-second UI freezes in low signal areas
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 } 
     );
   } else {
     sendUpdate();
@@ -4284,6 +4285,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
