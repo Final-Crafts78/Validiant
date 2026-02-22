@@ -737,9 +737,16 @@ app.post("/api/tasks/:taskId/assign", async (req, res) => {
 app.put("/api/tasks/:taskId/status", async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { status, userId, userName } = req.body;
+    const { status, userId, userName, completedLat, completedLng } = req.body;
     const updateData = { status, updated_at: new Date() };
-    if (status === 'Completed') updateData.completed_at = new Date();
+    
+    if (status === 'Completed') {
+      updateData.completed_at = new Date();
+      if (completedLat && completedLng) {
+        updateData.completed_lat = completedLat;
+        updateData.completed_lng = completedLng;
+      }
+    }
     if (status === 'Verified') updateData.verified_at = new Date();
 
     await supabase.from("tasks").update(updateData).eq("id", taskId);
