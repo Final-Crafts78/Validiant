@@ -53,7 +53,7 @@
     .logout-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.2s; }
     .logout-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
-    .content-area { flex: 1; padding: 30px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .content-area { flex: 1; padding: 30px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; } /* 🚨 Traps iOS scroll bouncing */
 
     /* CARDS & FORMS */
     .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
@@ -134,7 +134,8 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   max-height: 90vh;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch; /* 🚨 Enables native frictionless scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain; /* 🚨 Completely isolates modal scroll physics from the background */
   transform: scale(0.9);
   transition: transform 0.3s ease;
   width: 100%;
@@ -232,7 +233,7 @@
   border-radius: 10px;
   color: #E5E7EB;
   font-size: 14px;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease; /* 🚨 Stops keyboard popup stutter */
   outline: none;
   font-family: inherit;
 }
@@ -792,6 +793,12 @@ select.form-input {
   .user-avatar {
     display: none !important;
   }
+  /* 🚨 Stop GPU Modal Stutter: Disable heavy background blurring on mobile */
+  .modal-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, 0.9) !important; /* Solid dark tint instead of blur */
+  }
 }
     /* Add new status badge colors */
 .status-unable-to-verify {
@@ -858,6 +865,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
