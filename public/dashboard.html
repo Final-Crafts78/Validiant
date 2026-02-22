@@ -21,6 +21,11 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background-color: var(--bg-dark); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; overscroll-behavior-y: none; }
+    
+    /* 🚨 Instant Touch Physics: Destroys the 300ms mobile tap delay */
+    button, a, select, input, .menu-item, .task-card, .mobile-optimized-card { 
+      touch-action: manipulation; 
+    }
 
     /* SIDEBAR */
     .sidebar { width: 260px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; transition: 0.3s; z-index: 100; }
@@ -759,6 +764,14 @@ select.form-input {
     justify-content: center;
   }
   
+  /* 🚨 Stop GPU Stutter: Disable heavy background blurring while scrolling on mobile */
+  .header {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(15, 23, 42, 0.98) !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+  
   /* Backdrop overlay when sidebar is open */
   .sidebar-overlay {
     display: none;
@@ -845,6 +858,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
