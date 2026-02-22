@@ -982,10 +982,11 @@ function loadTodayTasks(searchTerm) {
       });
       
       // 🚨 Persist the exact Elite route sequence if active
+      // 🚨 Persist the exact Elite route sequence if active
       if (isNearestSortActive && window.eliteRouteIds) {
         allEmployeeTasks.sort((a, b) => {
-          let idxA = window.eliteRouteIds.indexOf(a.id);
-          let idxB = window.eliteRouteIds.indexOf(b.id);
+          let idxA = window.eliteRouteIds.indexOf(String(a.id));
+          let idxB = window.eliteRouteIds.indexOf(String(b.id));
           return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
         });
       } else if (isNearestSortActive && savedEmployeeLocation) {
@@ -1002,6 +1003,7 @@ function loadTodayTasks(searchTerm) {
 
 function displayEmployeeTasks(tasks) {
   const list = document.getElementById('todayTasksList');
+  if (!list) return; // ✅ Prevents background crashes when on the Map tab
   
   if (tasks.length === 0) {
     list.innerHTML = `<div class="empty-state">
@@ -1271,14 +1273,21 @@ function sortByNearest() {
         
         if (result.success && result.optimizedTasks) {
           const optimizedOrder = result.optimizedTasks.map(opt => {
-            const task = allEmployeeTasks.find(t => t.id === opt.id);
+            const task = allEmployeeTasks.find(t => String(t.id) === String(opt.id));
             if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
             return task;
           }).filter(t => t);
           
           allEmployeeTasks = optimizedOrder;
-          window.eliteRouteIds = optimizedOrder.map(t => t.id); // 🚨 Save the perfect route sequence
-          displayEmployeeTasks(allEmployeeTasks);
+          window.eliteRouteIds = optimizedOrder.map(t => String(t.id)); // Force string IDs for safety
+          
+          // Reactively update the active view
+          if (document.getElementById('todayTasksList')) {
+            displayEmployeeTasks(allEmployeeTasks);
+          } else if (document.getElementById('routingMap')) {
+            showMapRouting();
+          }
+          
           showToast('✓ Route optimized successfully!', 'success');
         } else {
           throw new Error('Optimization failed');
@@ -3703,8 +3712,12 @@ async function confirmStatusUpdate(taskId) {
       showToast(`✓ Status updated to ${newStatus}`, 'success');
       document.getElementById('statusModal').remove();
       
-      // 3. Reactively re-render
-      displayEmployeeTasks(allEmployeeTasks);
+      // 3. Reactively re-render the active tab
+      if (document.getElementById('todayTasksList')) {
+        displayEmployeeTasks(allEmployeeTasks);
+      } else if (document.getElementById('routingMap')) {
+        showMapRouting();
+      }
     } else {
       showToast(result.message || 'Update failed', 'error');
     }
@@ -4181,6 +4194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
