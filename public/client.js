@@ -1870,7 +1870,7 @@ window.changePage = (direction) => {
   currentTaskPage += direction;
   
   // Logic: Use filtered list if it exists, otherwise use allTasks
-  const listToUse = (currentFilteredTasks && currentFilteredTasks.length > 0) 
+  const listToUse = currentFilteredTasks !== null ? currentFilteredTasks : allTasks; 
     ? currentFilteredTasks 
     : allTasks;
 
@@ -3601,7 +3601,7 @@ function confirmUnassign(taskId) {
 
 function showEditMapModal(taskId) {
   // Find the task to get its current map URL and title
-  fetch(`/api/tasks?roleadmin`)
+  fetch(`/api/tasks?role=admin`)
     .then(r => r.json())
     .then(tasks => {
       const task = tasks.find(t => t.id === taskId);
@@ -3670,7 +3670,7 @@ async function bulkAssignTasks() {
 }
 
 async function confirmBulkAssign() {
-  const selected = Array.from(document.querySelectorAll('.taskCheckbox:checked')).map(cb => parseInt(cb.value));
+  const selected = Array.from(document.querySelectorAll('.task-checkbox:checked')).map(cb => parseInt(cb.value));
   const employeeId = parseInt(document.getElementById('bulkEmployeeSelect').value);
   
   let successCount = 0;
@@ -4344,6 +4344,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
