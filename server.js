@@ -261,7 +261,7 @@ app.delete("/api/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { adminPassword } = req.body;
-    const { data: admin } = await supabase.from("users").select("*").eq("email", "admin@validiant.com").single();
+    const { data: admin } = await supabase.from("users").select("*").eq("email", "abc@gmail.com").single();
     
     if (!admin || !(await bcrypt.compare(adminPassword, admin.password))) {
       return res.status(401).json({ success: false, message: "Invalid admin password" });
