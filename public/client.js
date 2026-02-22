@@ -84,19 +84,42 @@ if (!currentUser || !currentUser.role) {
   window.location.href = '/signin.html'; // <--- UPDATED
 }
 
-// 4. SESSION TIMEOUT (15 Minutes)
-function resetSessionTimeout() {
-  clearTimeout(sessionTimeout);
-  sessionTimeout = setTimeout(() => {
-    showToast('Session expired. Please login again.', 'error');
-    setTimeout(() => logout(), 2000);
-  }, 900000); // 15 mins
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. SESSION MANAGEMENT (30 Minutes + Mobile Throttling)
+// ═══════════════════════════════════════════════════════════════════════════
+let lastActivityTime = Date.now();
+const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+function checkSession() {
+  // If 30 minutes have passed since the last tracked activity, expire the session
+  if (Date.now() - lastActivityTime >= SESSION_DURATION) {
+    showToast('Session expired due to inactivity. Please login again.', 'error');
+    setTimeout(() => logout(true), 2000);
+  } else {
+    // Otherwise, check again in 10 seconds
+    clearTimeout(sessionTimeout);
+    sessionTimeout = setTimeout(checkSession, 10000);
+  }
 }
 
-document.addEventListener('click', resetSessionTimeout);
-document.addEventListener('keypress', resetSessionTimeout);
-document.addEventListener('mousemove', resetSessionTimeout);
-resetSessionTimeout(); // Start timer
+// Throttle activity updates to once every 60 seconds to maximize mobile battery life
+let throttleTimer;
+function updateActivity() {
+  if (throttleTimer) return;
+  throttleTimer = setTimeout(() => {
+    lastActivityTime = Date.now();
+    throttleTimer = null;
+  }, 60000); // 60,000 milliseconds = 60 seconds
+}
+
+// Comprehensive event listeners (Desktop + Mobile Touches + Scrolling)
+['click', 'keypress', 'mousemove', 'scroll', 'touchstart', 'touchmove'].forEach(eventType => {
+  document.addEventListener(eventType, updateActivity, { passive: true });
+});
+
+// Start the engine
+updateActivity();
+checkSession();
 
 // 5. UTILITY FUNCTIONS
 function escapeHtml(text) {
@@ -4194,6 +4217,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
