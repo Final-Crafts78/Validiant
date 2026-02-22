@@ -1090,20 +1090,19 @@ function displayEmployeeTasks(tasks) {
     return;
   }
 
-  let html = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px">
+  const headerHtml = `<p style="color:#e5e7eb; font-size:13px; margin-bottom:14px">
     <i class="fas fa-info-circle"></i> You have ${tasks.length} task(s) for today</p>`;
   
-  tasks.forEach(task => {
+  // 🚨 V8 Engine Optimization: Uses Array.map and join() instead of RAM-heavy string concatenation
+  const tasksHtml = tasks.map(task => {
     const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
-    const mapLink = task.map_url || task.mapUrl || task.mapurl; // Get map URL
+    const mapLink = task.map_url || task.mapUrl || task.mapurl;
     const distanceBadge = task.distanceKm 
       ? `<span style="margin-left: 8px; background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
     
-    html += `
+    return `
     <div class="task-card mobile-optimized-card" onclick="openTaskDetailsModal(${task.id})" style="margin-bottom: 15px; cursor: pointer; padding: 16px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;">
-      
-      <!-- Header with Title and Status/Map -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
         <div>
           <h3 style="margin: 0; font-size: 16px; color: #e5e7eb; font-weight: 600;">
@@ -1114,31 +1113,27 @@ function displayEmployeeTasks(tasks) {
             <i class="fas fa-user-tie" style="margin-right: 5px;"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client Name')}
           </div>
         </div>
-        
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
           ${mapLink ? `
             <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
-                    class="map-quick-btn"
-                    title="Open in Google Maps"
+                    class="map-quick-btn" title="Open in Google Maps"
                     style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60A5FA; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
-              <i class="fas fa-map-marker-alt"></i>
-              <span>Maps</span>
+              <i class="fas fa-map-marker-alt"></i><span>Maps</span>
             </button>
           ` : ''}
           <span class="status-badge ${statusClass}">${escapeHtml(task.status)}</span>
         </div>
       </div>
-      
       <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-top: 15px;">
         <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')} ${distanceBadge}</span>
         <span style="color: #60a5fa; font-weight: 500; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 20px;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px; margin-left: 3px;"></i></span>
       </div>
     </div>`;
-  });
+  }).join('');
   
-  // 🚨 Hardware Acceleration: Wait for animations to finish before locking CPU to render HTML
+  // 🚨 Hardware Acceleration: Allow UI animations to finish painting before locking the CPU to render HTML
   requestAnimationFrame(() => {
-    if (list) list.innerHTML = html;
+    if (list) list.innerHTML = headerHtml + tasksHtml;
   });
 }
 
@@ -4141,7 +4136,9 @@ async function showMapRouting() {
       // Use OpenStreetMap (100% Free)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+        maxZoom: 19,
+        updateWhenIdle: true,  /* 🚨 Only loads tiles when CPU is free */
+        keepBuffer: 4          /* 🚨 Pre-warms street images off-screen to prevent panning stutter */
       }).addTo(map);
 
       // 4. Create Employee Location Marker (Blue)
@@ -4284,6 +4281,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
