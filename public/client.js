@@ -129,7 +129,7 @@ if (navigator.geolocation && currentUser && currentUser.role !== 'admin') {
   navigator.geolocation.watchPosition(
     (pos) => { lastKnownLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
     (err) => { console.warn('Background GPS sleeping:', err.message); },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 } // 🚨 Switched to false to stop severe battery drain
   );
 }
 
@@ -1116,6 +1116,7 @@ const cardObserver = new IntersectionObserver((entries) => {
 }, { rootMargin: '50px' });
 
 function displayEmployeeTasks(tasks) {
+  if (window.cardObserver) window.cardObserver.disconnect(); // 🚨 Explicitly clear memory to prevent mobile RAM leaks over long shifts
   const list = document.getElementById('todayTasksList');
   if (!list) return; // ✅ Prevents background crashes when on the Map tab
   
@@ -1870,9 +1871,7 @@ window.changePage = (direction) => {
   currentTaskPage += direction;
   
   // Logic: Use filtered list if it exists, otherwise use allTasks
-  const listToUse = currentFilteredTasks !== null ? currentFilteredTasks : allTasks; 
-    ? currentFilteredTasks 
-    : allTasks;
+  const listToUse = currentFilteredTasks !== null ? currentFilteredTasks : allTasks;
 
   // Prevent going out of bounds
   const totalPages = Math.ceil(listToUse.length / TASKS_PER_PAGE);
@@ -3305,33 +3304,8 @@ function exportTasks() {
 // 19. ACTIVITY LOG & DIGITAL KYC
 // ═══════════════════════════════════════════════════════════════════════════
 
-function showActivityLog() {
-  const content = document.getElementById('mainContainer');
-  content.innerHTML = `
-    <h2><i class="fas fa-history"></i> Activity Log</h2>
-    <div id="activityLogList"><div class="loading-spinner show">Loading...</div></div>
-  `;
-  
-  fetch('/api/activity-log').then(r => r.json()).then(logs => {
-    const list = document.getElementById('activityLogList');
-    if (logs.length === 0) {
-      list.innerHTML = '<div class="empty-state"><h3>No Activity Found</h3></div>';
-      return;
-    }
-    
-    let html = '<table class="table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>';
-    logs.forEach(l => {
-      html += `<tr>
-        <td style="white-space:nowrap; color:#9ca3af; font-size:11px;">${new Date(l.timestamp).toLocaleString()}</td>
-        <td><strong>${escapeHtml(l.userName)}</strong></td>
-        <td><span class="status-badge status-pending">${escapeHtml(l.action)}</span></td>
-        <td style="font-size:11px; color:#d1d5db;">${escapeHtml(typeof l.details === 'object' ? JSON.stringify(l.details) : l.details)}</td>
-      </tr>`;
-    });
-    html += '</tbody></table>';
-    list.innerHTML = html;
-  });
-}
+// 🚨 Deprecated synchronous version of showActivityLog removed to prevent hoisting conflicts and memory issues
+
 async function showActivityLog() {
   const container = document.getElementById('mainContainer');
   container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
@@ -4344,6 +4318,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
