@@ -1253,17 +1253,19 @@ function updateTaskStatus(taskId) {
   btn.disabled = true;
   btn.innerHTML = '...';
 
-  // Helper to send update
+  // Helper to send update (🚨 Added Offline Resilience Queue)
   const sendUpdate = (coords = {}) => {
+    const payload = {
+      status: newStatus,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      ...coords
+    };
+
     fetch(`/api/tasks/${taskId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: newStatus,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        ...coords
-      })
+      body: JSON.stringify(payload)
     })
     .then(res => res.json())
     .then(data => {
@@ -1275,6 +1277,31 @@ function updateTaskStatus(taskId) {
         showToast('Update failed', 'error');
         btn.disabled = false;
         btn.innerHTML = 'Update';
+      }
+    })
+    .catch(err => {
+      console.warn('Network offline. Saving to local queue.');
+      
+      // 🚨 Push to Offline Queue to prevent data loss in basements/elevators
+      const offlineQueue = JSON.parse(localStorage.getItem('offlineTaskQueue') || '[]');
+      offlineQueue.push({ taskId, payload, timestamp: Date.now() });
+      localStorage.setItem('offlineTaskQueue', JSON.stringify(offlineQueue));
+      
+      showToast(`Saved offline. Will sync when connection returns.`, 'warning');
+      closeTaskPanel();
+      
+      // 🚨 Auto-sync when network is restored
+      if (!window._offlineSyncAttached) {
+        window.addEventListener('online', () => {
+          const queue = JSON.parse(localStorage.getItem('offlineTaskQueue') || '[]');
+          if (queue.length > 0) {
+            showToast(`Syncing ${queue.length} offline tasks...`, 'info');
+            localStorage.removeItem('offlineTaskQueue');
+            // Force list refresh to true up state with the server
+            setTimeout(loadTodayTasks, 1500);
+          }
+        });
+        window._offlineSyncAttached = true;
       }
     });
   };
@@ -4318,6 +4345,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
