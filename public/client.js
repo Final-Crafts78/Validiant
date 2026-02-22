@@ -4110,6 +4110,11 @@ async function showMapRouting() {
       window.routingMapInstance = L.map('routingMap').setView([userLat, userLng], 13);
       const map = window.routingMapInstance;
       
+      // 🚨 CRITICAL FIX: Force Leaflet to recalculate container bounds to prevent grey/broken map tiles
+      setTimeout(() => { 
+        if (window.routingMapInstance) window.routingMapInstance.invalidateSize(); 
+      }, 250);
+      
       // Use OpenStreetMap (100% Free)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -4256,6 +4261,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('✓ Dashboard initialization complete!');
 });
+
 
 
 
