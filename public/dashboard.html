@@ -160,7 +160,7 @@
 }
 
 .modal-overlay.show .modal-container {
-  transform: scale(1);
+  transform: scale(1) translateZ(0); /* 🚨 Maintains GPU hardware acceleration through the entire animation */
 }
 
 .modal-container.small {
@@ -885,6 +885,7 @@ select.form-input {
   <script src="kyc_service.js"></script> 
 </body>
 </html>
+
 
 
 
