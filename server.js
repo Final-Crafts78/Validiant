@@ -344,7 +344,13 @@ app.get("/api/tasks", async (req, res) => {
     
     let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
     
-    if (status && status !== "all") query = query.eq("status", status);
+    if (status && status !== "all") {
+      if (status === "active") {
+        query = query.not("status", "in", '("Completed","Verified")');
+      } else {
+        query = query.eq("status", status);
+      }
+    }
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
     if (pincode) query = query.eq("pincode", pincode);
     
@@ -520,20 +526,25 @@ app.put("/api/tasks/:taskId/reassign", async (req, res) => {
       return res.status(400).json({ success: false, message: "Employee ID required" });
     }
 
-    const { data: employee } = await supabase
-      .from("users")
-      .select("name")
-      .eq("id", newEmployeeId)
-      .single();
+    const [empRes, taskRes] = await Promise.all([
+      supabase.from("users").select("name").eq("id", newEmployeeId).single(),
+      supabase.from("tasks").select("status").eq("id", taskId).single()
+    ]);
+
+    const employee = empRes.data;
+    const currentTask = taskRes.data;
 
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
+    const terminalStatuses = ['Completed', 'Verified'];
+    const newStatus = terminalStatuses.includes(currentTask?.status) ? currentTask.status : "Pending";
+
     await supabase.from("tasks").update({
       assigned_to: newEmployeeId,
       assigned_date: new Date().toISOString().split('T')[0],
-      status: "Pending",
+      status: newStatus,
       updated_at: new Date()
     }).eq("id", taskId);
 
@@ -718,12 +729,21 @@ app.post("/api/tasks/:taskId/assign", async (req, res) => {
   try {
     const { taskId } = req.params;
     const { employeeId, adminId, adminName } = req.body;
-    const { data: employee } = await supabase.from("users").select("name").eq("id", employeeId).single();
-    
+    const [empRes, taskRes] = await Promise.all([
+      supabase.from("users").select("name").eq("id", employeeId).single(),
+      supabase.from("tasks").select("status").eq("id", taskId).single()
+    ]);
+
+    const employee = empRes.data;
+    const currentTask = taskRes.data;
+
+    const terminalStatuses = ['Completed', 'Verified'];
+    const newStatus = terminalStatuses.includes(currentTask?.status) ? currentTask.status : "Pending";
+
     await supabase.from("tasks").update({
       assigned_to: employeeId,
       assigned_date: new Date().toISOString().split('T')[0],
-      status: "Pending",
+      status: newStatus,
       updated_at: new Date()
     }).eq("id", taskId);
 
