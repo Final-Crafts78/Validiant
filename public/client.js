@@ -1070,10 +1070,17 @@ function showTodayTasks() {
 }
 
 function loadTodayTasks(searchTerm) {
-  // Use employeeId filter for security
-  const url = `/api/tasks?role=employee&status=Pending&employeeId=${currentUser.id}` + (searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '');
+  const ts = Date.now();
+  const url = `/api/tasks?role=employee&status=active&employeeId=${currentUser.id}&_t=${ts}` + 
+              (searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '');
   
-  fetch(url)
+  fetch(url, {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  })
     .then(res => res.json())
     .then(tasks => {
       const rawTasks = Array.isArray(tasks) ? tasks : [];
@@ -1292,13 +1299,34 @@ function updateTaskStatus(taskId) {
       
       // 🚨 Auto-sync when network is restored
       if (!window._offlineSyncAttached) {
-        window.addEventListener('online', () => {
+        window.addEventListener('online', async () => {
           const queue = JSON.parse(localStorage.getItem('offlineTaskQueue') || '[]');
           if (queue.length > 0) {
             showToast(`Syncing ${queue.length} offline tasks...`, 'info');
+            let failCount = 0;
+            
+            for (const item of queue) {
+              try {
+                const res = await fetch(`/api/tasks/${item.taskId}/status`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(item.payload)
+                });
+                if (!res.ok) failCount++;
+              } catch (e) {
+                failCount++;
+              }
+            }
+            
             localStorage.removeItem('offlineTaskQueue');
-            // Force list refresh to true up state with the server
-            setTimeout(loadTodayTasks, 1500);
+            
+            if (failCount > 0) {
+              showToast(`⚠️ ${failCount} tasks failed to sync`, 'warning');
+            } else {
+              showToast('✓ All offline tasks synced!', 'success');
+            }
+            
+            setTimeout(loadTodayTasks, 1000);
           }
         });
         window._offlineSyncAttached = true;
