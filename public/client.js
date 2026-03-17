@@ -1374,6 +1374,16 @@ function reapplyDistanceSorting(tasks, userLat, userLng) {
   // Enrich with coordinates (MapURL > Pincode > Null)
   let pool = tasks.map(t => {
     let lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
+    
+    // ✅ FIX: On-the-fly extraction for sorting
+    if (isNaN(lat) || isNaN(lng) || lat === 0) {
+      const link = t.map_url || t.mapUrl || t.mapurl;
+      if (link) {
+        const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+        if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+      }
+    }
+
     if ((isNaN(lat) || lat === 0) && t.pincode && pincodeData[t.pincode]) {
       lat = pincodeData[t.pincode].lat;
       lng = pincodeData[t.pincode].lng;
@@ -1428,6 +1438,16 @@ function sortByNearest() {
         const enrichedTasks = allEmployeeTasks.map(t => {
           let lat = parseFloat(t.latitude) || null;
           let lng = parseFloat(t.longitude) || null;
+          
+          // ✅ FIX: On-the-fly extraction for Elite Routing Engine
+          if (!lat || !lng) {
+            const link = t.map_url || t.mapUrl || t.mapurl;
+            if (link) {
+              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+              if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+            }
+          }
+
           if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
             lat = pincodeData[t.pincode].lat;
             lng = pincodeData[t.pincode].lng;
@@ -2205,8 +2225,19 @@ function showEditMapModalClean(taskId, currentMapUrl, taskTitle) {
           value="${escapeHtml(currentMapUrl)}"
         />
         <small class="form-hint">
-          <i class="fas fa-lightbulb"></i> Right-click on location in Google Maps and copy link
+          <i class="fas fa-lightbulb"></i> Auto-extracts coordinates from long links
         </small>
+      </div>
+
+      <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="form-group">
+          <label for="editLatitude"><i class="fas fa-globe"></i> Latitude</label>
+          <input type="number" id="editLatitude" step="any" placeholder="Manual Lat" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label for="editLongitude"><i class="fas fa-globe"></i> Longitude</label>
+          <input type="number" id="editLongitude" step="any" placeholder="Manual Lng" class="form-input" />
+        </div>
       </div>
       
       <div class="modal-actions">
@@ -2259,12 +2290,33 @@ function showEditMapModalClean(taskId, currentMapUrl, taskTitle) {
   
   createModal('Edit Map URL', content, { icon: 'fa-map-marked-alt', size: 'medium' });
   
-  // Focus on input
+  // Focus and setup Auto-Extract
   setTimeout(() => {
-    const input = document.getElementById('editMapUrl');
-    if (input) {
-      input.focus();
-      input.select();
+    const mapInput = document.getElementById('editMapUrl');
+    const latInput = document.getElementById('editLatitude');
+    const lngInput = document.getElementById('editLongitude');
+    
+    if (mapInput) {
+      mapInput.focus();
+      mapInput.select();
+      
+      mapInput.addEventListener('input', function() {
+        const url = this.value;
+        if (url) {
+          const latMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+          const qMatch = url.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+          
+          if (latMatch) {
+            latInput.value = latMatch[1];
+            lngInput.value = latMatch[2];
+          } else if (qMatch) {
+            latInput.value = qMatch[1];
+            lngInput.value = qMatch[2];
+          } else {
+            showToast('Short link detected. Please enter Lat/Lng manually.', 'warning');
+          }
+        }
+      });
     }
   }, 100);
 }
@@ -4255,6 +4307,15 @@ async function showMapRouting() {
         let lat = parseFloat(t.latitude) || parseFloat(t._lat);
         let lng = parseFloat(t.longitude) || parseFloat(t._lng);
         
+        // ✅ FIX: On-the-fly extraction if database coords are missing
+        if (!lat || !lng) {
+          const link = t.map_url || t.mapUrl || t.mapurl;
+          if (link) {
+            const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+            if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+          }
+        }
+
         if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
           lat = pincodeData[t.pincode].lat;
           lng = pincodeData[t.pincode].lng;
