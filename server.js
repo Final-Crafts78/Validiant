@@ -436,13 +436,17 @@ app.post("/api/tasks", async (req, res) => {
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName } = req.body;
+    // ✅ FIX: Added latitude and longitude to the destructured body
+    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, userId, userName, latitude, longitude } = req.body;
     const updateData = { updated_at: new Date() };
 
     // Track what specifically changed for the log
     let changes = [];
 
     if (title) { updateData.title = title; changes.push("Title"); }
+    // ✅ FIX: Process coordinate updates
+    if (latitude !== undefined) { updateData.latitude = latitude ? parseFloat(latitude) : null; changes.push("Coordinates"); }
+    if (longitude !== undefined) { updateData.longitude = longitude ? parseFloat(longitude) : null; }
     if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
     if (address) { updateData.address = address; changes.push("Address"); }
     if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
