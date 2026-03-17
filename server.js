@@ -351,7 +351,6 @@ app.get("/api/tasks", async (req, res) => {
     query = query.eq("status", status);
   }
 }
-    }
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
     if (pincode) query = query.eq("pincode", pincode);
     
