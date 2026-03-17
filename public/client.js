@@ -1824,7 +1824,7 @@ function displayAllTasksList(tasks) {
         <td class="map-col">
            <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
              ${mapDisplay}
-             <button onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink)}', '${escapeHtml(t.title)}')" style="border:none; background:none; color:#6B7280; cursor:pointer;" title="Edit Map"><i class="fas fa-pen" style="font-size:12px"></i></button>
+             <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/&#039;/g, "\\'")}', '${escapeHtml(t.clientName || '').replace(/&#039;/g, "\\'")}')" title="Unassign"><i class="fas fa-times"></i></button>
            </div>
         </td>
         <td class="status-col"><span class="status-badge ${statusClass}">${t.status}</span></td>
@@ -1832,8 +1832,7 @@ function displayAllTasksList(tasks) {
         <td class="actions-col">
           <div class="action-buttons">
             <button class="btn-icon btn-warning" onclick="openReassignModal(${t.id})" title="Reassign"><i class="fas fa-sync-alt"></i></button>
-            <button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title)}', '${escapeHtml(t.clientName || '')}')" title="Unassign"><i class="fas fa-times"></i></button>
-            <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
+<button class="btn-icon btn-secondary" onclick="openUnassignModal(${t.id}, '${escapeHtml(t.title).replace(/&#039;/g, "\\'")}', '${escapeHtml(t.clientName || '').replace(/&#039;/g, "\\'")}')" title="Unassign"><i class="fas fa-times"></i></button>            <button class="btn-icon btn-danger" onclick="deleteTask(${t.id})" title="Delete"><i class="fas fa-trash"></i></button>
           </div>
         </td>
       </tr>
@@ -2092,8 +2091,7 @@ function displayUnassignedList(tasks, employees) {
                  </a>` 
               : `<span class="no-map">No map</span>`
             }
-            <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink || '')}', '${escapeHtml(t.title).replace(/'/g, "\\'")}')
-" title="Edit Map URL">
+            <button class="btn-icon btn-edit" onclick="showEditMapModalClean(${t.id}, '${escapeHtml(mapLink || '').replace(/&#039;/g, "\\'")}', '${escapeHtml(t.title).replace(/&#039;/g, "\\'")}')" title="Edit Map URL">
               <i class="fas fa-pen"></i>
             </button>
           </div>
