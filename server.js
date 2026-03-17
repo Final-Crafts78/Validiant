@@ -344,10 +344,10 @@ app.get("/api/tasks", async (req, res) => {
     
     let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
     
-    if (status && status !== "all") {
-      if (status === "active") {
-        query = query.not("status", "in", '("Completed","Verified")');
-      } else {
+    if (status === "active") {
+  // Only show genuinely workable tasks
+  query = query.in("status", ["Pending", "In Progress"]);
+   } else {
         query = query.eq("status", status);
       }
     }
