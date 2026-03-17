@@ -686,9 +686,8 @@ function showAssignTask() {
                   type="number" 
                   id="latitude" 
                   step="any" 
-                  placeholder="Auto-filled"
+                  placeholder="Enter Latitude"
                   class="form-input"
-                  readonly
                 />
               </div>
               
@@ -700,9 +699,8 @@ function showAssignTask() {
                   type="number" 
                   id="longitude" 
                   step="any" 
-                  placeholder="Auto-filled"
+                  placeholder="Enter Longitude"
                   class="form-input"
-                  readonly
                 />
               </div>
             </div>
@@ -917,9 +915,11 @@ function showAssignTask() {
         if (qMatch) {
           latInput.value = qMatch[1];
           lngInput.value = qMatch[2];
-          latInput.removeAttribute('readonly');
-          lngInput.removeAttribute('readonly');
+          return;
         }
+        
+        // ✅ FIX: Warn admin that the short-link requires manual coordinates
+        showToast('Could not auto-extract coordinates. Please enter Lat/Lng manually for accurate routing!', 'warning');
       }
     });
   }
@@ -1086,10 +1086,10 @@ function loadTodayTasks(searchTerm) {
       const rawTasks = Array.isArray(tasks) ? tasks : [];
       
       // Strictly filter out inactive tasks
-      allEmployeeTasks = rawTasks.filter(task => {
+        allEmployeeTasks = rawTasks.filter(task => {
         const s = (task.status || '').toLowerCase();
-        return s !== 'verified' && s !== 'completed';
-      });
+        return s === 'pending' || s === 'in progress';
+     });
       
       // 🚨 Persist the exact Elite route sequence if active
       // 🚨 Persist the exact Elite route sequence if active
@@ -1143,6 +1143,10 @@ function displayEmployeeTasks(tasks) {
   const tasksHtml = tasks.map(task => {
     const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
     const mapLink = task.map_url || task.mapUrl || task.mapurl;
+    const isApprox = (!parseFloat(task.latitude) || !parseFloat(task.longitude)) && task.pincode && pincodeData[task.pincode];
+const approxBadge = isApprox
+  ? `<span style="margin-left:8px;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;" title="No exact coords. Pin shows pincode center."><i class="fas fa-exclamation-triangle"></i> Approx Area</span>`
+  : '';
     const distanceBadge = task.distanceKm 
       ? `<span style="margin-left: 8px; background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
@@ -1170,7 +1174,7 @@ function displayEmployeeTasks(tasks) {
         </div>
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 13px; margin-top: 15px;">
-        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')} ${distanceBadge}</span>
+        <span><i class="fas fa-map-pin" style="color: #60a5fa;"></i> ${escapeHtml(task.pincode || 'N/A')} ${distanceBadge} ${approxBadge}</span>
         <span style="color: #60a5fa; font-weight: 500; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 20px;">Tap for details <i class="fas fa-chevron-right" style="font-size: 10px; margin-left: 3px;"></i></span>
       </div>
     </div>`;
@@ -4259,9 +4263,13 @@ async function showMapRouting() {
         if (lat && lng) {
           waypoints.push([lat, lng]);
           
+          // ✅ FIX: Make the map pin Orange if it's using the inaccurate Pincode fallback
+          const isApproxLocation = (!parseFloat(t.latitude) || !parseFloat(t.longitude)) && t.pincode && pincodeData[t.pincode];
+          const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444'; // Orange for Approx, Red for Exact
+          
           const taskIcon = L.divIcon({
             className: 'custom-task-icon',
-            html: `<div style="background-color: #ef4444; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
+            html: `<div style="background-color: ${pinColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
