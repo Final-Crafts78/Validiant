@@ -344,12 +344,13 @@ app.get("/api/tasks", async (req, res) => {
     
     let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
     
-    if (status === "active") {
-  // Only show genuinely workable tasks
-  query = query.in("status", ["Pending", "In Progress"]);
-   } else {
-        query = query.eq("status", status);
-      }
+    if (status && status !== "all") {
+  if (status === "active") {
+    query = query.in("status", ["Pending", "In Progress"]);
+  } else {
+    query = query.eq("status", status);
+  }
+}
     }
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
     if (pincode) query = query.eq("pincode", pincode);
