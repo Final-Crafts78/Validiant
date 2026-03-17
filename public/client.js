@@ -2332,6 +2332,10 @@ function saveEditedMapUrl(taskId) {
   
   const url = input.value.trim();
   
+  // ✅ FIX: Grab the values from the new Lat/Lng boxes
+  const latVal = document.getElementById('editLatitude').value;
+  const lngVal = document.getElementById('editLongitude').value;
+  
   console.log('💾 Saving map URL for task', taskId);
   console.log('New URL:', url);
   
@@ -2346,7 +2350,10 @@ function saveEditedMapUrl(taskId) {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      map_url: url,  // ← Correct database column name
+      map_url: url,
+      // ✅ FIX: Send the coordinates to your newly updated server route
+      latitude: latVal ? parseFloat(latVal) : null,
+      longitude: lngVal ? parseFloat(lngVal) : null,
       userId: currentUser.id,
       userName: currentUser.name
     })
