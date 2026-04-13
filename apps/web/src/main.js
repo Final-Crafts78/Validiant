@@ -225,21 +225,6 @@ function setupEventDelegation() {
         case 'admin:exportTasks':
           exportTasks();
           break;
-      
-        case 'admin:viewEmployeeTasks':
-          if(id) {
-            await fullCleanup();
-            showAllTasks();
-            // After showing the UI, we wait a tick to ensure DOM is ready, then set filter
-            setTimeout(() => {
-              const filterSelect = document.getElementById('allTasksEmployeeFilter');
-              if (filterSelect) {
-                filterSelect.value = id;
-                loadAllTasks();
-              }
-            }, 50);
-          }
-          break;
 
         // ADMIN TASK ACTIONS (Single)
         case 'admin:openTaskDetails':

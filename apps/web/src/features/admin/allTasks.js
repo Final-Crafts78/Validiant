@@ -114,16 +114,7 @@ export async function loadAllTasks() {
     const res = await fetch(url);
     const tasks = await res.json();
     
-    let rawTasks = Array.isArray(tasks) ? tasks : [];
-    
-    // ABSOLUTE PRECISION: Enforce Default Descending Sort by Date (Most Recent First)
-    rawTasks.sort((a, b) => {
-      const dateA = new Date(a.created_at || a.assigned_date || 0);
-      const dateB = new Date(b.created_at || b.assigned_date || 0);
-      return dateB - dateA;
-    });
-
-    state.allAdminTasks = rawTasks;
+    state.allAdminTasks = Array.isArray(tasks) ? tasks : [];
     const filtered = applyDateFilter(state.allAdminTasks); 
     state.currentFilteredTasks = filtered;
 

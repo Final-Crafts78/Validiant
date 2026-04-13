@@ -58,6 +58,7 @@ export function searchTodayTasks() {
 }
 
 
+export async function loadTodayTasks(searchTerm = "") {
   try {
     const list = document.getElementById('todayTasksList');
     if (list) list.innerHTML = renderTaskSkeleton();
@@ -174,10 +175,8 @@ export function displayEmployeeTasks(tasks) {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        requestAnimationFrame(() => {
-          entry.target.style.opacity = "1";
-          entry.target.style.transform = "translateY(0)";
-        });
+        entry.target.style.opacity = "1";
+        entry.target.style.transform = "translateY(0)";
         observer.unobserve(entry.target);
       }
     });
