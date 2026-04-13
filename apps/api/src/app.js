@@ -1,0 +1,43 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const path = require("path");
+
+// Routes
+const authRoutes = require("./routes/auth.routes");
+const taskRoutes = require("./routes/task.routes");
+const userRoutes = require("./routes/user.routes");
+const adminRoutes = require("./routes/admin.routes");
+
+const app = express();
+
+// Middlewares
+app.use(cors());
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Generic routes
+app.get("/health", (req, res) => res.json({ status: "healthy", uptime: process.uptime() }));
+app.get("/test", (req, res) => res.send("OK"));
+
+// Feature routes
+app.use("/api", authRoutes);
+app.use("/api/tasks", taskRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api", adminRoutes);
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('❌ Server Error:', err.message);
+  console.error(err.stack);
+  res.status(500).json({ success: false, message: "Internal Server Error" });
+});
+
+module.exports = app;
