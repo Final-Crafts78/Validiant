@@ -26,7 +26,7 @@ export async function showAssignTask() {
     <div class="form-container">
       <form id="taskForm" class="modern-form">
         <div class="form-grid">
-          <!-- Left Column: Task Information -->
+          <!-- Left Column -->
           <div class="form-section">
             <h4 class="section-title">
               <i class="fas fa-info-circle"></i> Task Information
@@ -72,7 +72,7 @@ export async function showAssignTask() {
                 pattern="[0-9]{6}"
                 class="form-input"
               />
-              <small class="form-hint" style="color: #94A3B8; font-size: 11px;">Enter valid 6-digit Indian pincode</small>
+              <small class="form-hint">Enter valid 6-digit Indian pincode</small>
             </div>
             
             <div class="form-group">
@@ -88,7 +88,7 @@ export async function showAssignTask() {
             </div>
           </div>
           
-          <!-- Right Column: Location & Assignment -->
+          <!-- Right Column -->
           <div class="form-section">
             <h4 class="section-title">
               <i class="fas fa-map-marked-alt"></i> Location Details
@@ -101,15 +101,15 @@ export async function showAssignTask() {
               <input 
                 type="url" 
                 id="mapUrl" 
-                placeholder="Paste Google Maps link (auto-extracts coordinates)"
+                placeholder="Paste Google Maps link (coordinates extracted automatically)"
                 class="form-input"
               />
-              <small class="form-hint" style="color: #6366F1; font-size: 11px;">
+              <small class="form-hint">
                 <i class="fas fa-lightbulb"></i> Coordinates will be auto-extracted from Maps URL
               </small>
             </div>
-
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            
+            <div class="form-row">
               <div class="form-group">
                 <label for="latitude">
                   <i class="fas fa-globe"></i> Latitude
@@ -138,19 +138,19 @@ export async function showAssignTask() {
             </div>
             
             <div class="form-group">
-              <label for="assignedTo">
-                <i class="fas fa-user-plus"></i> Assign To Employee
+              <label for="employee">
+                <i class="fas fa-user"></i> Assign to Employee
               </label>
-              <select id="assignedTo" class="form-input">
-                <option value="Unassigned">-- Leave Unassigned --</option>
+              <select id="employee" class="form-input">
+                <option value="">-- Leave Unassigned --</option>
                 <option disabled>Loading employees...</option>
               </select>
-              <small class="form-hint" style="color: #94A3B8; font-size: 11px;">Leave unassigned to add task to pool</small>
+              <small class="form-hint">Leave unassigned to add task to pool</small>
             </div>
           </div>
         </div>
         
-        <div class="form-actions" style="display: flex; gap: 12px; justify-content: center; padding-top: 20px; border-top: 1px solid #1F2937; margin-top: 30px;">
+        <div class="form-actions">
           <button type="submit" class="btn btn-primary btn-lg">
             <i class="fas fa-check"></i> Create Task
           </button>
@@ -160,10 +160,149 @@ export async function showAssignTask() {
         </div>
       </form>
     </div>
+    
+    <style>
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #1F2937;
+      }
+      
+      .form-container {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid #1F2937;
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      }
+      
+      .modern-form {
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+      
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 30px;
+      }
+      
+      .form-section {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      .section-title {
+        color: #E5E7EB;
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #374151;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .section-title i {
+        color: #6366F1;
+      }
+      
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .form-group label {
+        color: #E5E7EB;
+        font-size: 13px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      
+      .form-group label i {
+        color: #9CA3AF;
+        font-size: 12px;
+      }
+      
+      .required {
+        color: #EF4444;
+        font-weight: bold;
+      }
+      
+      .form-input {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid #374151;
+        border-radius: 10px;
+        color: #E5E7EB;
+        font-size: 16px; 
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        outline: none;
+        font-family: inherit;
+      }
+      
+      .form-input:focus {
+        border-color: #6366F1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        background: rgba(15, 23, 42, 0.95);
+      }
+      
+      .form-input::placeholder {
+        color: #6B7280;
+      }
+      
+      .form-input[readonly] {
+        background: rgba(31, 41, 55, 0.5);
+        cursor: not-allowed;
+        color: #9CA3AF;
+      }
+      
+      .form-hint {
+        color: #9CA3AF;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      
+      .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        padding-top: 20px;
+        border-top: 1px solid #1F2937;
+      }
+      
+      @media (max-width: 768px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .page-header {
+          flex-direction: column;
+          gap: 15px;
+        }
+      }
+    </style>
   `;
   content.innerHTML = html;
-  
-  // Auto-coordinate extraction logic
+
+  // Auto-coordinate extraction logic (Restored Legacy Perfection)
   const mapUrlInput = document.getElementById('mapUrl');
   if (mapUrlInput) {
     mapUrlInput.addEventListener('input', function() {
@@ -187,6 +326,9 @@ export async function showAssignTask() {
           lngInput.value = qMatch[2];
           return;
         }
+
+        // Warning for non-extractable links
+        showToast('Could not auto-extract coordinates. Please enter Lat/Lng manually for accurate routing!', 'warning');
       }
     });
   }
@@ -203,13 +345,14 @@ async function populateEmployeesDropdown() {
     const res = await fetch('/api/users');
     const employees = await res.json();
     state.allEmployees = employees;
-    const select = document.getElementById('assignedTo');
+    const select = document.getElementById('employee');
     if (!select) return;
     
+    select.innerHTML = '<option value="">-- Leave Unassigned --</option>';
     employees.forEach(emp => {
       const opt = document.createElement('option');
       opt.value = emp.id;
-      opt.textContent = `${escapeHtml(emp.name)} ${emp.employee_id ? '(' + emp.employee_id + ')' : '(No ID)'}`;
+      opt.textContent = `${escapeHtml(emp.name)} ${emp.employee_id ? '(' + emp.employee_id + ')' : emp.employeeId ? '(' + emp.employeeId + ')' : '(No ID)'}`;
       select.appendChild(opt);
     });
   } catch (err) {
@@ -219,19 +362,27 @@ async function populateEmployeesDropdown() {
 
 async function handleTaskSubmit(e) {
   e.preventDefault();
+
+  const pincode = document.getElementById('pincode').value;
+  if (!/^[0-9]{6}$/.test(pincode)) {
+    showToast('Pincode must be exactly 6 digits', 'error');
+    return;
+  }
+
   const btn = e.target.querySelector('button[type="submit"]');
+  const originalText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
   const payload = {
     title: document.getElementById('caseId').value,
-    clientName: document.getElementById('clientName').value,
-    pincode: document.getElementById('pincode').value,
-    notes: document.getElementById('notes').value,
-    mapUrl: document.getElementById('mapUrl').value,
+    clientName: document.getElementById('clientName').value || null,
+    pincode: pincode,
+    notes: document.getElementById('notes').value || null,
+    mapUrl: document.getElementById('mapUrl').value || null,
     latitude: document.getElementById('latitude').value ? parseFloat(document.getElementById('latitude').value) : null,
     longitude: document.getElementById('longitude').value ? parseFloat(document.getElementById('longitude').value) : null,
-    assignedTo: document.getElementById('assignedTo').value,
+    assignedTo: document.getElementById('employee').value ? parseInt(document.getElementById('employee').value) : null,
     createdBy: state.currentUser.id,
     createdByName: state.currentUser.name
   };
@@ -244,8 +395,9 @@ async function handleTaskSubmit(e) {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('Task created and assigned successfully!', 'success');
+      showToast(payload.assignedTo ? '✓ Task created and assigned successfully!' : '✓ Task created as unassigned!', 'success');
       e.target.reset();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       showToast('Error: ' + data.message, 'error');
     }
@@ -253,6 +405,7 @@ async function handleTaskSubmit(e) {
     showToast('Network error, please try again.', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Create & Assign Task';
+    btn.innerHTML = originalText;
   }
 }
+

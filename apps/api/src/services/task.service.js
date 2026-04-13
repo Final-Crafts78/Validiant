@@ -101,6 +101,10 @@ class TaskService {
    */
   async updateTask(id, updateFields, userId, userName) {
     const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude } = updateFields;
+    
+    // Fetch current task state to detect transitions
+    const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to").eq("id", id).single();
+    
     const updateData = { updated_at: new Date() };
     let changes = [];
 
@@ -125,10 +129,15 @@ class TaskService {
       if (status === 'Verified') updateData.verified_at = new Date();
     }
 
-    if (assignedTo) {
+    if (assignedTo && assignedTo !== currentTask?.assigned_to) {
         updateData.assigned_to = assignedTo;
-        changes.push("Reassigned Employee");
-        if (status === "Unassigned") updateData.status = "Pending";
+        updateData.assigned_date = new Date().toISOString().split('T')[0];
+        changes.push("Assigned Employee");
+        
+        // If it was unassigned, move to Pending
+        if (currentTask?.status === "Unassigned" || !status) {
+          updateData.status = "Pending";
+        }
     }
 
     const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
