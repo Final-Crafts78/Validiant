@@ -32,16 +32,8 @@
       background-color: var(--bg-dark); color: var(--text-main); display: flex; 
       /* 🚨 Absolute Viewport Lock: Stops Android/iOS keyboards from squishing the UI */
       position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior-y: none; 
-      /* 🚨 Native UI Lock: Prevents accidental text highlighting and magnifying glass popups */
+      /* 🚨 Native UI Lock: Prevents accidental text highlighting and magnifying glass popups (DISABLED to allow text copying) */
       -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    
-    /* 🚨 Allow typing inside inputs */
-    input, textarea, select {
-      -webkit-user-select: auto !important;
-      user-select: auto !important;
     }
     
     /* 🚨 Instant Touch Physics: Destroys the 300ms mobile tap delay */
