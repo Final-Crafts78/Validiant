@@ -53,23 +53,11 @@ function checkSession() {
 
 /**
  * Centralized cleanup for all view transitions.
- * Adds a smooth fade-out before wiping the DOM.
+ * Kills any active map, tracker map, and temp DOM elements.
  */
 async function fullCleanup() {
-  const container = document.getElementById('mainContainer');
-  if (container) {
-    container.style.opacity = '0';
-    container.style.transition = 'opacity 0.2s ease-out';
-    // Wait for fade-out to complete
-    await new Promise(r => setTimeout(r, 200));
-  }
-  
   await cleanupCurrentView();
   cleanupTracker();
-  
-  if (container) {
-    container.style.opacity = '1'; // Reset for next view
-  }
 }
 function init() {
   console.log('🚀 Validiant Enterprise Bootloader Starting...');
@@ -103,200 +91,256 @@ function init() {
 }
 
 /**
- * 2. ENTERPRISE EVENT DELEGATION (ROUTER)
- * Registry of handlers for data-action attributes.
+ * 2. ENTERPRISE EVENT DELEGATION
+ * Standard: No more onclick="" in HTML. 
+ * We catch everything via data-action attributes.
  */
-const actionHandlers = {
-  // AUTH
-  'auth:logout': () => {
-    stopLocationReporting();
-    logout();
-  },
-
-  // NAVIGATION & VIEWS
-  'nav:toggleSidebar': () => toggleSidebar(),
-  
-  // View Transitions Helper
-  'view:transition': async (callback) => {
-    await fullCleanup();
-    callback();
-  },
-
-  // ADMIN VIEWS
-  'view:adminAssign': async (e) => actionHandlers['view:transition'](showAssignTask),
-  'view:adminPool': async (e) => actionHandlers['view:transition'](showUnassignedTasks),
-  'view:adminAllTasks': async (e) => actionHandlers['view:transition'](showAllTasks),
-  'view:adminEmployees': async (e) => actionHandlers['view:transition'](showEmployees),
-  'view:analytics': async (e) => actionHandlers['view:transition'](showAnalyticsDashboard),
-  'view:kyc': async (e) => actionHandlers['view:transition'](showKYCDashboard),
-  'view:activityLog': async (e) => actionHandlers['view:transition'](showActivityLog),
-  'view:trackExecutives': async (e) => actionHandlers['view:transition'](showExecutiveTracker),
-
-  // EMPLOYEE VIEWS
-  'view:employeeToday': async (e) => actionHandlers['view:transition'](showTodayTasks),
-  'view:mapRouting': async (e) => {
-    await fullCleanup();
-    showMapRouting(state.allEmployeeTasks, openTaskPanel);
-  },
-  'view:employeeHistory': async (e) => actionHandlers['view:transition'](showTaskHistory),
-
-  // ADMIN ACTIONS
-  'admin:bulkDuplicateChoice': (e, target) => {
-    const choice = target.getAttribute('data-choice');
-    if (choice) handleBulkDuplicateChoice(choice);
-  },
-  'admin:showBulkUpload': () => showBulkUpload(),
-  'admin:processSmartText': () => processSmartText(),
-  'admin:submitFinalBulk': () => submitFinalBulkUpload(),
-  'admin:searchUnassigned': () => loadUnassignedTasks(),
-  'admin:quickAssign': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) quickAssignTask(id);
-  },
-  'admin:loadAllTasks': () => loadAllTasks(),
-  'admin:resetTaskFilters': () => resetAllTaskFilters(),
-  'admin:prevPage': () => prevTaskPage(),
-  'admin:nextPage': () => nextTaskPage(),
-  'admin:showAddEmployee': () => showAddEmployee(),
-  'admin:deleteEmployee': (e, target) => {
-    const id = target.getAttribute('data-id');
-    const name = target.getAttribute('data-name');
-    if (id && name) deleteEmployee(id, name);
-  },
-  'admin:editEmployee': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) showEditEmployeeModal(id);
-  },
-  'admin:openResetPassword': (e, target) => {
-    const id = target.getAttribute('data-id');
-    const email = target.getAttribute('data-email');
-    if (id) openResetPasswordModal(id, email);
-  },
-  'admin:confirmResetPassword': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) confirmResetPassword(id);
-  },
-  'admin:exportTasks': () => exportTasks(),
-  'admin:viewEmployeeTasks': async (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) {
-      await fullCleanup();
-      showAllTasks();
-      setTimeout(() => {
-        const filterSelect = document.getElementById('allTasksEmployeeFilter');
-        if (filterSelect) {
-          filterSelect.value = id;
-          loadAllTasks();
-        }
-      }, 50);
-    }
-  },
-
-  // TASK MODALS (Single)
-  'admin:openTaskDetails': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) openTaskDetailsModal(id);
-  },
-  'admin:openStatusUpdate': (e, target) => {
-    const id = target.getAttribute('data-id');
-    const status = target.getAttribute('data-status');
-    if (id) openStatusUpdateModal(id, status || '');
-  },
-  'admin:confirmStatusUpdate': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) confirmStatusUpdate(id);
-  },
-  'admin:openReassign': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) openReassignModal(id);
-  },
-  'admin:confirmReassign': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) confirmReassign(id);
-  },
-  'admin:openUnassign': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) openUnassignModal(id);
-  },
-  'admin:confirmUnassign': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) confirmUnassign(id);
-  },
-  'admin:deleteTask': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) deleteTask(id);
-  },
-  'admin:editMapUrl': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) showEditMapModal(id);
-  },
-  'admin:saveMapUrl': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) saveEditedMapUrl(id);
-  },
-  'admin:openEditNote': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) openEditNoteModal(id);
-  },
-  'admin:confirmEditNote': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) confirmEditNote(id);
-  },
-
-  // BULK OPS
-  'admin:bulkAssignTasks': () => bulkAssignTasks(),
-  'admin:confirmBulkAssign': () => confirmBulkAssign(),
-  'admin:bulkDeleteTasks': () => bulkDeleteTasks(),
-
-  // EMPLOYEE ACTIONS
-  'employee:refreshTasks': () => loadTodayTasks(),
-  'employee:loadHistory': () => loadHistoryTasks(),
-  'task:openPanel': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) openTaskPanel(id);
-  },
-  'task:updateStatus': (e, target) => {
-    const id = target.getAttribute('data-id');
-    const status = target.getAttribute('data-status');
-    if (id && status) updateTaskStatus(id, status);
-  },
-
-  // UTILS & SORTING
-  'sorting:nearest': (e) => sortByNearest(e),
-  'sorting:pincode': () => sortByPincode(),
-  'tracker:refresh': () => updateTrackerData(),
-  'routing:refresh': (e) => sortByNearest(e),
-
-  // KYC
-  'kyc:openModal': () => openKYCModal(),
-  'kyc:refresh': () => loadKYCRequests(),
-  'kyc:viewReport': (e, target) => {
-    const id = target.getAttribute('data-id');
-    if (id) viewKYCReport(id);
-  },
-  'kyc:copyLink': (e, target) => {
-    const link = target.getAttribute('data-link');
-    if (link) copyKYCLink(link);
-  }
-};
-
 function setupEventDelegation() {
   document.addEventListener('click', async (e) => {
-    lastActivityTime = Date.now();
+    lastActivityTime = Date.now(); // Track activity
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
     const action = target.getAttribute('data-action');
-    if (actionHandlers[action]) {
-      console.log(`🚀 [ROUTER] Routing Action: ${action}`);
-      try {
-        await actionHandlers[action](e, target);
-      } catch (err) {
-        console.error(`❌ [ROUTER] Action ${action} failed:`, err);
-        showToast('A premium action failed. Please refresh.', 'error');
+    const id = target.getAttribute('data-id');
+    const status = target.getAttribute('data-status');
+
+    console.log(`🖱️ Action Dispatched: ${action}`, { id, status });
+
+    try {
+      // ROUTING / NAVIGATION
+      switch (action) {
+        // AUTH
+        case 'auth:logout':
+          stopLocationReporting();
+          logout();
+          break;
+
+        // TOP NAV / SIDEBAR
+        case 'nav:toggleSidebar':
+          toggleSidebar();
+          break;
+
+        // VIEWS
+        case 'view:adminAssign':
+          await fullCleanup();
+          showAssignTask();
+          break;
+        case 'view:employeeToday':
+          await fullCleanup();
+          showTodayTasks();
+          break;
+        case 'view:mapRouting':
+          await fullCleanup();
+          showMapRouting(state.allEmployeeTasks, openTaskPanel);
+          break;
+        case 'view:adminPool':
+          await fullCleanup();
+          showUnassignedTasks();
+          break;
+        case 'view:adminAllTasks':
+          await fullCleanup();
+          showAllTasks();
+          break;
+        case 'view:adminEmployees':
+          await fullCleanup();
+          showEmployees();
+          break;
+        case 'view:analytics':
+          await fullCleanup();
+          showAnalyticsDashboard();
+          break;
+        case 'view:kyc':
+          await fullCleanup();
+          showKYCDashboard();
+          break;
+        case 'view:employeeHistory':
+          await fullCleanup();
+          showTaskHistory();
+          break;
+        case 'view:activityLog':
+          await fullCleanup();
+          showActivityLog();
+          break;
+        
+        case 'view:trackExecutives':
+          await fullCleanup();
+          showExecutiveTracker();
+          break;
+
+        case 'tracker:refresh':
+          updateTrackerData();
+          break;
+
+        // ADMIN ACTIONS
+        case 'admin:bulkDuplicateChoice': {
+          const choice = target.getAttribute('data-choice');
+          if (choice) handleBulkDuplicateChoice(choice);
+          break;
+        }
+        case 'admin:showBulkUpload':
+          showBulkUpload();
+          break;
+        case 'admin:processSmartText':
+          processSmartText();
+          break;
+        case 'admin:submitFinalBulk':
+          submitFinalBulkUpload();
+          break;
+        case 'admin:searchUnassigned':
+          loadUnassignedTasks();
+          break;
+        case 'admin:quickAssign':
+          if (id) quickAssignTask(id);
+          break;
+        case 'admin:loadAllTasks':
+          loadAllTasks();
+          break;
+        case 'admin:resetTaskFilters':
+          resetAllTaskFilters();
+          break;
+        case 'admin:prevPage':
+          prevTaskPage();
+          break;
+        case 'admin:nextPage':
+          nextTaskPage();
+          break;
+        case 'admin:showAddEmployee':
+          showAddEmployee();
+          break;
+        case 'admin:deleteEmployee':
+          if (id && target.getAttribute('data-name')) {
+            deleteEmployee(id, target.getAttribute('data-name'));
+          }
+          break;
+        case 'admin:editEmployee':
+          if(id) showEditEmployeeModal(id);
+          break;
+        case 'admin:openResetPassword':
+          if(id) openResetPasswordModal(id, target.getAttribute('data-email'));
+          break;
+        case 'admin:confirmResetPassword':
+          if(id) confirmResetPassword(id);
+          break;
+        case 'admin:exportTasks':
+          exportTasks();
+          break;
+      
+        case 'admin:viewEmployeeTasks':
+          if(id) {
+            await fullCleanup();
+            showAllTasks();
+            // After showing the UI, we wait a tick to ensure DOM is ready, then set filter
+            setTimeout(() => {
+              const filterSelect = document.getElementById('allTasksEmployeeFilter');
+              if (filterSelect) {
+                filterSelect.value = id;
+                loadAllTasks();
+              }
+            }, 50);
+          }
+          break;
+
+        // ADMIN TASK ACTIONS (Single)
+        case 'admin:openTaskDetails':
+          if(id) openTaskDetailsModal(id);
+          break;
+        case 'admin:openStatusUpdate':
+          if(id) openStatusUpdateModal(id, status || '');
+          break;
+        case 'admin:confirmStatusUpdate':
+          if(id) confirmStatusUpdate(id);
+          break;
+        case 'admin:openReassign':
+          if(id) openReassignModal(id);
+          break;
+        case 'admin:confirmReassign':
+          if(id) confirmReassign(id);
+          break;
+        case 'admin:openUnassign':
+          if(id) openUnassignModal(id);
+          break;
+        case 'admin:confirmUnassign':
+          if(id) confirmUnassign(id);
+          break;
+        case 'admin:deleteTask':
+          if(id) deleteTask(id);
+          break;
+        case 'admin:editMapUrl':
+          if(id) showEditMapModal(id);
+          break;
+        case 'admin:saveMapUrl':
+          if(id) saveEditedMapUrl(id);
+          break;
+        case 'admin:openEditNote':
+          if(id) openEditNoteModal(id);
+          break;
+        case 'admin:confirmEditNote':
+          if(id) confirmEditNote(id);
+          break;
+
+        // ADMIN BULK OPERATIONS
+        case 'admin:bulkAssignTasks':
+          bulkAssignTasks();
+          break;
+        case 'admin:confirmBulkAssign':
+          confirmBulkAssign();
+          break;
+        case 'admin:bulkDeleteTasks':
+          bulkDeleteTasks();
+          break;
+
+        // EMPLOYEE ACTIONS
+        case 'employee:refreshTasks':
+          loadTodayTasks();
+          break;
+        case 'employee:loadHistory':
+          loadHistoryTasks();
+          break;
+
+        // TASK ACTIONS
+        case 'task:openPanel':
+          if (id) openTaskPanel(id);
+          break;
+        case 'task:updateStatus':
+          if (id && status) updateTaskStatus(id, status);
+          break;
+
+        // SORTING
+        case 'sorting:nearest':
+          sortByNearest(e);
+          break;
+        case 'sorting:pincode':
+          sortByPincode();
+          break;
+        
+        // KYC ACTIONS
+        case 'kyc:openModal':
+          openKYCModal();
+          break;
+        case 'kyc:refresh':
+          loadKYCRequests();
+          break;
+        case 'kyc:viewReport':
+          if(id) viewKYCReport(id);
+          break;
+        case 'kyc:copyLink': {
+          const link = target.getAttribute('data-link');
+          if(link) copyKYCLink(link);
+          break;
+        }
+        
+        case 'routing:refresh':
+          // fulfill user request: Refresh Map now also triggers Sort by Nearest for optimized route
+          sortByNearest(e);
+          break;
+
+        default:
+          console.warn(`⚠️ Unhandled action: ${action}`);
       }
-    } else {
-      console.warn(`⚠️ [ROUTER] Unhandled action: ${action}`);
+    } catch (error) {
+      console.error(`❌ Global Controller Error [${action}]:`, error);
+      showToast('A premium UX error occurred. Please refresh.', 'error');
     }
   });
 }

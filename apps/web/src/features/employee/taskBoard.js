@@ -58,7 +58,6 @@ export function searchTodayTasks() {
 }
 
 
-export async function loadTodayTasks(searchTerm = '') {
   try {
     const list = document.getElementById('todayTasksList');
     if (list) list.innerHTML = renderTaskSkeleton();

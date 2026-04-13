@@ -8,20 +8,12 @@ const { extractCoordinates } = require("../utils/geo");
 class TaskService {
   /**
    * Fetch all tasks with filters and search
-   * Optimized with Supabase joins for high performance
-   * @param {Object} filters - Search and filter criteria
-   * @returns {Promise<Array>} Formatted task list
    */
   async getTasks(filters) {
     const { status, employeeId, pincode, search } = filters;
+    const selectFields = search ? "*" : "id, title, status, pincode, client_name, latitude, longitude, map_url, assigned_to, created_at, assigned_date, verified_at, completed_at, notes";
     
-    // 💎 Performance Optimization: Using Supabase Join (!) to fetch assignee name in ONE query
-    // This removes the need to fetch all users independently and doing an O(N*M) lookup.
-    const selectFields = search ? "*, users:assigned_to(name)" : "id, title, status, pincode, client_name, latitude, longitude, map_url, assigned_to, created_at, assigned_date, verified_at, completed_at, notes, users:assigned_to(name)";
-    
-    let query = supabase.from("tasks")
-      .select(selectFields)
-      .order("created_at", { ascending: false });
+    let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
     
     if (status && status !== "all") {
       if (status === "active") {
@@ -30,28 +22,27 @@ class TaskService {
         query = query.eq("status", status);
       }
     }
-    
-    if (employeeId && employeeId !== "all") {
-      query = query.eq("assigned_to", parseInt(employeeId));
-    }
-    
-    if (pincode) {
-      query = query.eq("pincode", pincode);
-    }
+    if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
+    if (pincode) query = query.eq("pincode", pincode);
     
     const { data: tasks, error } = await query;
     if (error) throw error;
 
-    // 💎 Performance Optimization: Formatting in a single pass
-    const formatted = tasks.map(task => ({
+    const { data: users } = await supabase.from("users").select("id, name, employee_id");
+
+    const formatted = tasks.map(task => {
+      const matchedUser = users.find(u => u.id == task.assigned_to);
+      const userName = matchedUser ? matchedUser.name : "Unassigned";
+      const addressText = task.address || ""; 
+      return {
         ...task,
-        address: task.address || "",
-        map: (task.address || "").length > 0 ? "Yes" : "No",
+        address: addressText,
+        map: addressText.length > 0 ? "Yes" : "No",
         clientName: task.client_name || "-",
-        assignedToName: task.users ? task.users.name : "Unassigned",
-        // Flattening joined data for frontend compatibility
-        users: undefined 
-    }));
+        assignedToName: userName,
+        status: task.status
+      };
+    });
 
     if (search) {
       const s = search.toLowerCase();

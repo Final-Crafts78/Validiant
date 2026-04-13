@@ -2,7 +2,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const path = require("path");
-const logger = require("./utils/logger");
 
 // Routes
 const authRoutes = require("./routes/auth.routes");
@@ -19,7 +18,8 @@ app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`);
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -50,7 +50,8 @@ app.get("*", (req, res, next) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  logger.error('Server Error Handler', err);
+  console.error('❌ Server Error:', err.message);
+  console.error(err.stack);
   res.status(500).json({ success: false, message: "Internal Server Error" });
 });
 

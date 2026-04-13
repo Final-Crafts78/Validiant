@@ -1,5 +1,4 @@
 const nodemailer = require('nodemailer');
-const logger = require('../utils/logger');
 
 let emailTransporter = null;
 
@@ -11,9 +10,9 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       pass: process.env.EMAIL_PASS,
     },
   });
-  logger.info('Email service configured');
+  console.log('✅ Email service configured');
 } else {
-  logger.warn('EMAIL_USER or EMAIL_PASS not set. Emails disabled.');
+  console.warn('⚠️ EMAIL_USER or EMAIL_PASS not set. Emails disabled.');
 }
 
 async function sendEmail(to, subject, html) {
@@ -25,10 +24,9 @@ async function sendEmail(to, subject, html) {
       subject: subject,
       html: html,
     });
-    logger.info(`Email sent successfully to ${to}`, { subject });
     return { success: true };
   } catch (err) {
-    logger.error('Email delivery failed', err, { to, subject });
+    console.error('❌ Email failed:', err.message);
     return { success: false, message: err.message };
   }
 }
