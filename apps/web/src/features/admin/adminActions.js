@@ -45,12 +45,17 @@ export function openTaskDetailsModal(taskId) {
         </div>
       </div>
       
-      ${task.notes ? `
-        <div class="task-notes" style="background: rgba(15, 23, 42, 0.4); padding: 15px; border-radius: 8px; margin-bottom: 25px;">
-          <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 8px; text-transform: uppercase;"><i class="fas fa-sticky-note"></i> Notes</div>
-          <p style="margin: 0; color: #D1D5DB; font-size: 14px; line-height: 1.5;">${escapeHtml(task.notes)}</p>
+      <div class="task-notes-section" style="margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="color: #9CA3AF; font-size: 12px; text-transform: uppercase;"><i class="fas fa-sticky-note"></i> Notes</div>
+          <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" data-action="admin:openEditNotes" data-id="${task.id}" data-notes="${escapeHtml(task.notes || '')}">
+            <i class="fas fa-edit"></i> Edit Notes
+          </button>
         </div>
-      ` : ''}
+        <div class="task-notes" style="background: rgba(15, 23, 42, 0.4); padding: 15px; border-radius: 8px;">
+          <p id="taskNotesDisplay-${task.id}" style="margin: 0; color: #D1D5DB; font-size: 14px; line-height: 1.5;">${task.notes ? escapeHtml(task.notes) : '<i style="color:#64748b">No notes provided</i>'}</p>
+        </div>
+      </div>
 
       <div class="task-actions-section" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #374151;">
         <button class="btn btn-warning" data-action="admin:openStatusUpdate" data-id="${task.id}" data-status="${escapeHtml(task.status)}">
@@ -78,6 +83,68 @@ export function openTaskDetailsModal(taskId) {
   `;
   
   createModal('Task Details', content, { size: 'large' });
+}
+
+export function openEditNotesModal(taskId, currentNotes) {
+  const content = `
+    <div class="edit-notes-form">
+      <div class="form-group">
+        <label for="editNotesTextarea"><i class="fas fa-sticky-note"></i> Update Task Notes</label>
+        <textarea id="editNotesTextarea" class="form-input" rows="5" placeholder="Enter task notes...">${escapeHtml(currentNotes)}</textarea>
+      </div>
+      <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn btn-primary" data-action="admin:confirmEditNotes" data-id="${taskId}"><i class="fas fa-save"></i> Save Changes</button>
+        <button class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
+      </div>
+    </div>
+  `;
+  createModal('Edit Notes', content, { size: 'medium', icon: 'fa-edit' });
+}
+
+export async function confirmEditNotes(taskId) {
+  const newNotes = document.getElementById('editNotesTextarea')?.value;
+  const btn = document.querySelector('[data-action="admin:confirmEditNotes"]');
+  
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
+
+  try {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notes: newNotes,
+        userId: state.currentUser.id,
+        userName: state.currentUser.name
+      })
+    });
+    
+    if (res.ok) {
+      showToast('Notes updated successfully', 'success');
+      // Update local state and UI
+      const task = state.allAdminTasks?.find(t => t.id == taskId) || state.currentFilteredTasks?.find(t => t.id == taskId);
+      if (task) task.notes = newNotes;
+      
+      const display = document.getElementById(`taskNotesDisplay-${taskId}`);
+      if (display) display.innerHTML = newNotes ? escapeHtml(newNotes) : '<i style="color:#64748b">No notes provided</i>';
+      
+      closeAllModals();
+    } else {
+      showToast('Failed to update notes', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+      }
+    }
+  } catch (err) {
+    showToast('Network error', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+    }
+  }
 }
 
 export function openStatusUpdateModal(taskId, currentStatus) {
