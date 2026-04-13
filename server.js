@@ -142,10 +142,36 @@ async function logActivity(userId, userName, action, taskId, details) {
 
 function extractCoordinates(url) {
   if (!url) return null;
+  console.log('📍 [COORD-EXTRACT] Input URL:', url.substring(0, 200));
+
+  // DEBUG: Also attempt !3d/!4d extraction for comparison (DO NOT use for actual extraction yet)
+  const match3d = url.match(/!3d(-?\d+\.\d+)/);
+  const match4d = url.match(/!4d(-?\d+\.\d+)/);
+  if (match3d && match4d) {
+    console.log('📍 [COORD-EXTRACT] !3d/!4d ACTUAL PLACE coords found:', { lat: match3d[1], lng: match4d[1] });
+  }
+
   const match1 = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (match1) return { latitude: parseFloat(match1[1]), longitude: parseFloat(match1[2]) };
+  if (match1) {
+    const result = { latitude: parseFloat(match1[1]), longitude: parseFloat(match1[2]) };
+    console.log('📍 [COORD-EXTRACT] @ viewport match:', result);
+    if (match3d && match4d) {
+      const actualLat = parseFloat(match3d[1]);
+      const actualLng = parseFloat(match4d[1]);
+      const latDiff = Math.abs(result.latitude - actualLat);
+      const lngDiff = Math.abs(result.longitude - actualLng);
+      const distMeters = Math.sqrt(latDiff*latDiff + lngDiff*lngDiff) * 111320;
+      console.log(`📍 [COORD-EXTRACT] ⚠️ DISCREPANCY: @ vs !3d/!4d → lat diff: ${latDiff.toFixed(6)}°, lng diff: ${lngDiff.toFixed(6)}°, ~${distMeters.toFixed(0)}m apart`);
+    }
+    return result;
+  }
   const match2 = url.match(/\?q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (match2) return { latitude: parseFloat(match2[1]), longitude: parseFloat(match2[2]) };
+  if (match2) {
+    const result = { latitude: parseFloat(match2[1]), longitude: parseFloat(match2[2]) };
+    console.log('📍 [COORD-EXTRACT] ?q= match:', result);
+    return result;
+  }
+  console.log('📍 [COORD-EXTRACT] ❌ No coordinates found in URL');
   return null;
 }
 
@@ -394,11 +420,29 @@ app.post("/api/tasks", async (req, res) => {
     const { title, pincode, address, mapUrl, map_url, notes, createdBy, createdByName, assignedTo, clientName, latitude, longitude } = req.body;
     const finalMapUrl = mapUrl || map_url || null;
     let finalLat = latitude, finalLng = longitude;
+    let coordSource = 'request-body'; // Track where coords came from
+    
+    console.log(`📍 [TASK-CREATE] Title: ${title}, Pincode: ${pincode}`);
+    console.log(`📍 [TASK-CREATE] Request body coords: lat=${latitude}, lng=${longitude}`);
+    console.log(`📍 [TASK-CREATE] map_url: ${finalMapUrl ? finalMapUrl.substring(0, 150) : 'NULL'}`);
     
     if (finalMapUrl && (!finalLat || !finalLng)) {
+      console.log('📍 [TASK-CREATE] No coords in request body, extracting from map_url...');
       const coords = extractCoordinates(finalMapUrl);
-      if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+      if (coords) { 
+        finalLat = coords.latitude; 
+        finalLng = coords.longitude; 
+        coordSource = 'extracted-from-map_url';
+      } else {
+        coordSource = 'none';
+      }
+    } else if (finalLat && finalLng) {
+      coordSource = 'request-body';
+    } else {
+      coordSource = 'none';
     }
+    
+    console.log(`📍 [TASK-CREATE] FINAL coords stored: lat=${finalLat}, lng=${finalLng}, source=${coordSource}`);
 
     let initialStatus = "Unassigned";
     let finalAssignee = null;
@@ -419,6 +463,7 @@ app.post("/api/tasks", async (req, res) => {
     }]).select();
 
     if (error) throw error;
+    console.log(`📍 [TASK-CREATE] ✅ Task ${data[0].id} created with coords: lat=${data[0].latitude}, lng=${data[0].longitude}`);
     await logActivity(
       req.body.createdBy, 
       req.body.createdByName, 
@@ -429,6 +474,7 @@ app.post("/api/tasks", async (req, res) => {
 
     res.json({ success: true, task: data[0] });
   } catch (err) {
+    console.error('📍 [TASK-CREATE] ❌ Error:', err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -599,6 +645,7 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
     let successCount = 0;
     const tasksToInsert = [];
     
+    let bulkCoordStats = { fromExcel: 0, fromMapUrl: 0, none: 0 };
     for (let i = 0; i < rawData.length; i++) {
       const raw = rawData[i];
       const row = {};
@@ -611,11 +658,27 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
       
       let finalLat = row.latitude || row.lat;
       let finalLng = row.longitude || row.lng;
+      let coordSource = 'none';
+      
+      if (finalLat && finalLng) {
+        coordSource = 'excel-columns';
+        bulkCoordStats.fromExcel++;
+      }
       
       if ((row.mapurl || row.map) && (!finalLat || !finalLng)) {
-        const coords = extractCoordinates(row.mapurl || row.map);
-        if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+        const mapUrlValue = row.mapurl || row.map;
+        console.log(`📍 [BULK-UPLOAD] Row ${i+1} "${title}": Extracting coords from map_url: ${String(mapUrlValue).substring(0, 120)}`);
+        const coords = extractCoordinates(mapUrlValue);
+        if (coords) { 
+          finalLat = coords.latitude; 
+          finalLng = coords.longitude; 
+          coordSource = 'extracted-from-map_url';
+          bulkCoordStats.fromMapUrl++;
+        }
       }
+      
+      if (coordSource === 'none') bulkCoordStats.none++;
+      console.log(`📍 [BULK-UPLOAD] Row ${i+1} "${title}": pincode=${pincode}, coords=[${finalLat}, ${finalLng}], source=${coordSource}`);
 
       tasksToInsert.push({
         title: String(title),
@@ -631,6 +694,7 @@ app.post("/api/tasks/bulk-upload", upload.single("excelFile"), async (req, res) 
       });
       successCount++;
     }
+    console.log(`📍 [BULK-UPLOAD] SUMMARY: ${successCount} tasks — ${bulkCoordStats.fromExcel} from Excel cols, ${bulkCoordStats.fromMapUrl} from map_url extraction, ${bulkCoordStats.none} with NO coords`);
 
     if (tasksToInsert.length > 0) {
       await supabase.from("tasks").insert(tasksToInsert);

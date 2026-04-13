@@ -1085,6 +1085,18 @@ function loadTodayTasks(searchTerm) {
     .then(tasks => {
       const rawTasks = Array.isArray(tasks) ? tasks : [];
       
+      // 📍 [LOAD-TASKS] Debug: Log coordinate state of tasks from API
+      const withDbCoords = rawTasks.filter(t => parseFloat(t.latitude) && parseFloat(t.longitude)).length;
+      const withMapUrl = rawTasks.filter(t => t.map_url || t.mapUrl).length;
+      const withPincode = rawTasks.filter(t => t.pincode && pincodeData[t.pincode]).length;
+      console.log(`📍 [LOAD-TASKS] Received ${rawTasks.length} tasks from API:`);
+      console.log(`📍 [LOAD-TASKS]   ${withDbCoords} with DB lat/lng, ${withMapUrl} with map_url, ${withPincode} with known pincode`);
+      rawTasks.forEach(t => {
+        const hasCoords = parseFloat(t.latitude) && parseFloat(t.longitude);
+        const hasUrl = t.map_url || t.mapUrl;
+        console.log(`📍 [LOAD-TASKS]   Task ${t.id} "${t.title}": lat=${t.latitude}, lng=${t.longitude}, map_url=${hasUrl ? 'YES' : 'NULL'}, pincode=${t.pincode}, coordsInDB=${hasCoords ? 'YES' : 'NO'}`);
+      });
+      
       // Strictly filter out inactive tasks
         allEmployeeTasks = rawTasks.filter(task => {
         const s = (task.status || '').toLowerCase();
@@ -1371,23 +1383,39 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 function reapplyDistanceSorting(tasks, userLat, userLng) {
+  console.log(`📍 [DIST-SORT] Sorting ${tasks.length} tasks from user position [${userLat}, ${userLng}]`);
   // Enrich with coordinates (MapURL > Pincode > Null)
   let pool = tasks.map(t => {
     let lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
+    let coordSource = (isNaN(lat) || isNaN(lng) || lat === 0) ? 'none' : 'db';
     
     // ✅ FIX: On-the-fly extraction for sorting
     if (isNaN(lat) || isNaN(lng) || lat === 0) {
       const link = t.map_url || t.mapUrl || t.mapurl;
       if (link) {
         const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-        if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+        if (match) { 
+          lat = parseFloat(match[1]); lng = parseFloat(match[2]); 
+          coordSource = match[0].startsWith('@') ? '@-viewport' : '?q=-query';
+        }
+        // 📍 DEBUG: Check if !3d/!4d coords differ
+        const m3d = link.match(/!3d(-?[0-9.]+)/);
+        const m4d = link.match(/!4d(-?[0-9.]+)/);
+        if (m3d && m4d && match) {
+          const diffLng = Math.abs(parseFloat(match[2]) - parseFloat(m4d[1]));
+          if (diffLng > 0.001) {
+            console.warn(`📍 [DIST-SORT] ⚠️ Task ${t.id} "${t.title}": @ lng=${match[2]} vs !4d lng=${m4d[1]} → DIFF ${(diffLng*111320).toFixed(0)}m`);
+          }
+        }
       }
     }
 
     if ((isNaN(lat) || lat === 0) && t.pincode && pincodeData[t.pincode]) {
       lat = pincodeData[t.pincode].lat;
       lng = pincodeData[t.pincode].lng;
+      coordSource = 'pincode-fallback';
     }
+    console.log(`📍 [DIST-SORT] Task ${t.id} "${t.title}": [${lat}, ${lng}] source=${coordSource}`);
     return { ...t, _lat: lat, _lng: lng };
   });
 
@@ -1435,23 +1463,43 @@ function sortByNearest() {
         savedEmployeeLocation = { latitude: userLat, longitude: userLng };
         isNearestSortActive = true;
         
+        console.log(`📍 [ORS-ENRICH] Enriching ${allEmployeeTasks.length} tasks for ORS optimization...`);
         const enrichedTasks = allEmployeeTasks.map(t => {
           let lat = parseFloat(t.latitude) || null;
           let lng = parseFloat(t.longitude) || null;
+          let coordSource = (lat && lng) ? 'db' : 'none';
           
           // ✅ FIX: On-the-fly extraction for Elite Routing Engine
           if (!lat || !lng) {
             const link = t.map_url || t.mapUrl || t.mapurl;
             if (link) {
               const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-              if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+              if (match) { 
+                lat = parseFloat(match[1]); lng = parseFloat(match[2]); 
+                coordSource = match[0].startsWith('@') ? '@-viewport' : '?q=-query';
+              }
+              // 📍 DEBUG: Check if !3d/!4d actual place coords exist and differ
+              const m3d = link.match(/!3d(-?[0-9.]+)/);
+              const m4d = link.match(/!4d(-?[0-9.]+)/);
+              if (m3d && m4d) {
+                console.log(`📍 [ORS-ENRICH] Task ${t.id} "${t.title}": !3d/!4d ACTUAL=[${m3d[1]}, ${m4d[1]}]`);
+                if (match) {
+                  const diffLng = Math.abs(parseFloat(match[2]) - parseFloat(m4d[1]));
+                  const diffLat = Math.abs(parseFloat(match[1]) - parseFloat(m3d[1]));
+                  if (diffLng > 0.001 || diffLat > 0.001) {
+                    console.warn(`📍 [ORS-ENRICH] ⚠️ Task ${t.id}: DISCREPANCY @=[${match[1]},${match[2]}] vs !3d/4d=[${m3d[1]},${m4d[1]}] → ${(Math.max(diffLat,diffLng)*111320).toFixed(0)}m apart!`);
+                  }
+                }
+              }
             }
           }
 
           if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
             lat = pincodeData[t.pincode].lat;
             lng = pincodeData[t.pincode].lng;
+            coordSource = 'pincode-fallback';
           }
+          console.log(`📍 [ORS-ENRICH] Task ${t.id} "${t.title}": FINAL=[${lat}, ${lng}] source=${coordSource}`);
           return { ...t, _lat: lat, _lng: lng };
         });
         
@@ -4308,23 +4356,51 @@ async function showMapRouting() {
       // 🚨 Batch Rendering: Create a background array to hold markers
       const mapMarkers = [];
 
+      console.log(`📍 [MAP-ROUTING] Plotting ${activeTasks.length} active tasks on map...`);
+      let mapCoordStats = { db: 0, atViewport: 0, qQuery: 0, pincodeFallback: 0, noCoords: 0, discrepancies: 0 };
+
       activeTasks.forEach((t, index) => {
         let lat = parseFloat(t.latitude) || parseFloat(t._lat);
         let lng = parseFloat(t.longitude) || parseFloat(t._lng);
+        let coordSource = (lat && lng) ? 'db' : 'none';
         
         // ✅ FIX: On-the-fly extraction if database coords are missing
         if (!lat || !lng) {
           const link = t.map_url || t.mapUrl || t.mapurl;
           if (link) {
             const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-            if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+            if (match) { 
+              lat = parseFloat(match[1]); lng = parseFloat(match[2]); 
+              coordSource = match[0].startsWith('@') ? '@-viewport' : '?q=-query';
+            }
+            // 📍 DEBUG: Check for !3d/!4d discrepancy
+            const m3d = link.match(/!3d(-?[0-9.]+)/);
+            const m4d = link.match(/!4d(-?[0-9.]+)/);
+            if (m3d && m4d && match) {
+              const diffLng = Math.abs(parseFloat(match[2]) - parseFloat(m4d[1]));
+              const diffLat = Math.abs(parseFloat(match[1]) - parseFloat(m3d[1]));
+              if (diffLng > 0.001 || diffLat > 0.001) {
+                console.warn(`📍 [MAP-ROUTING] ⚠️ Pin ${index+1} Task ${t.id} "${t.title}": COORDS WRONG! Using @=[${match[1]},${match[2]}] but REAL !3d/4d=[${m3d[1]},${m4d[1]}] → ${(Math.max(diffLat,diffLng)*111320).toFixed(0)}m off!`);
+                mapCoordStats.discrepancies++;
+              }
+            }
           }
         }
 
         if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
           lat = pincodeData[t.pincode].lat;
           lng = pincodeData[t.pincode].lng;
+          coordSource = 'pincode-fallback';
         }
+
+        // Track stats
+        if (coordSource === 'db') mapCoordStats.db++;
+        else if (coordSource === '@-viewport') mapCoordStats.atViewport++;
+        else if (coordSource === '?q=-query') mapCoordStats.qQuery++;
+        else if (coordSource === 'pincode-fallback') mapCoordStats.pincodeFallback++;
+        else mapCoordStats.noCoords++;
+
+        console.log(`📍 [MAP-ROUTING] Pin ${index+1}: Task ${t.id} "${t.title}" → [${lat}, ${lng}] source=${coordSource} map_url=${(t.map_url||t.mapUrl) ? 'YES' : 'NULL'}`);
 
         if (lat && lng) {
           waypoints.push([lat, lng]);
@@ -4347,6 +4423,7 @@ async function showMapRouting() {
           mapMarkers.push(marker);
         }
       });
+      console.log(`📍 [MAP-ROUTING] SUMMARY: ${mapCoordStats.db} from DB, ${mapCoordStats.atViewport} from @viewport, ${mapCoordStats.qQuery} from ?q=, ${mapCoordStats.pincodeFallback} from pincode, ${mapCoordStats.noCoords} with NO coords, ${mapCoordStats.discrepancies} with @/!3d discrepancies`);
 
       // 🚨 Batch Rendering: Stamp all markers onto the map perfectly simultaneously
       const newMarkersGroup = L.layerGroup(mapMarkers);
