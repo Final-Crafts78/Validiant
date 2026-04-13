@@ -42,28 +42,28 @@ export async function loadEmployeesList() {
               <th>Name</th>
               <th>ID</th>
               <th>Email</th>
-              <th>Phone</th>
+              <th>Active Tasks</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
     `;
     
-    users.forEach(u => {
-      html += `<tr>
-        <td><strong>${escapeHtml(u.name)}</strong></td>
-        <td>${escapeHtml(u.employeeId)}</td>
-        <td>${escapeHtml(u.email)}</td>
-        <td>${escapeHtml(u.phone || 'N/A')}</td>
-        <td style="display:flex; gap:6px; flex-wrap:wrap;">
+      const activeTasks = u.tasks ? u.tasks.filter(t => t.status !== 'Completed' && t.status !== 'Verified').length : 0;
+      html += `<tr style="border-bottom:1px solid #334155;">
+        <td style="padding:12px 15px;"><strong>${escapeHtml(u.name)}</strong></td>
+        <td style="padding:12px 15px;">${escapeHtml(u.employeeId)}</td>
+        <td style="padding:12px 15px;">${escapeHtml(u.email)}</td>
+        <td style="padding:12px 15px; text-align:center;"><span class="info-badge" style="background:#312e81; color:#c7d2fe;">${activeTasks}</span></td>
+        <td style="padding:12px 15px; display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" data-action="admin:editEmployee" data-id="${u.id}">
             <i class="fas fa-edit"></i> Edit
           </button>
-          <button class="btn btn-warning btn-sm" data-action="admin:openResetPassword" data-id="${u.id}" data-email="${escapeHtml(u.email)}">
+          <button class="btn btn-warning" data-action="admin:openResetPassword" data-id="${u.id}" data-email="${escapeHtml(u.email)}" style="padding:4px 8px; font-size:12px; color:#111827;">
             <i class="fas fa-key"></i> Reset
           </button>
           <button class="btn btn-danger btn-sm" data-action="admin:deleteEmployee" data-id="${u.id}" data-name="${escapeHtml(u.name)}">
-            <i class="fas fa-trash"></i> Delete
+            <i class="fas fa-trash"></i>
           </button>
         </td>
       </tr>`;
@@ -78,8 +78,7 @@ export async function loadEmployeesList() {
 
 export function showAddEmployee() {
   const content = `
-    <form id="addEmpForm" class="employee-form" style="display:flex; flex-direction:column; gap:15px;">
-      <div class="form-grid" style="grid-template-columns:1fr 1fr; gap:15px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
         <div class="form-group">
           <label><i class="fas fa-user"></i> Full Name *</label>
           <input type="text" id="newEmpName" class="form-input" required placeholder="Enter full name" />
@@ -88,14 +87,14 @@ export function showAddEmployee() {
           <label><i class="fas fa-id-badge"></i> Employee ID *</label>
           <input type="text" id="newEmpId" class="form-input" required placeholder="e.g., EMP001" />
         </div>
-      </div>
-      <div class="form-group">
-        <label><i class="fas fa-envelope"></i> Email *</label>
-        <input type="email" id="newEmpEmail" class="form-input" required placeholder="emp@company.com" />
-      </div>
-      <div class="form-group">
-        <label><i class="fas fa-phone"></i> Phone</label>
-        <input type="tel" id="newEmpPhone" class="form-input" placeholder="+91 XXXXX XXXXX" />
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> Email *</label>
+          <input type="email" id="newEmpEmail" class="form-input" required placeholder="emp@company.com" />
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-phone"></i> Phone</label>
+          <input type="tel" id="newEmpPhone" class="form-input" placeholder="+91 XXXXX XXXXX" />
+        </div>
       </div>
       <div class="form-group">
         <label><i class="fas fa-lock"></i> Default Password *</label>
@@ -172,24 +171,27 @@ export function showEditEmployeeModal(empId) {
 
   const content = `
     <form id="editEmpForm" style="display:flex; flex-direction:column; gap:15px;">
-      <div class="form-group">
-        <label><i class="fas fa-user"></i> Full Name</label>
-        <input type="text" id="editEmpName" class="form-input" value="${escapeHtml(emp.name)}" required />
-      </div>
-      <div class="form-group">
-        <label><i class="fas fa-id-badge"></i> Employee ID</label>
-        <input type="text" id="editEmpId" class="form-input" value="${escapeHtml(emp.employeeId)}" required />
-      </div>
-      <div class="form-group">
-        <label><i class="fas fa-envelope"></i> Email</label>
-        <input type="email" id="editEmpEmail" class="form-input" value="${escapeHtml(emp.email)}" required />
-      </div>
-      <div class="form-group">
-        <label><i class="fas fa-phone"></i> Phone</label>
-        <input type="tel" id="editEmpPhone" class="form-input" value="${escapeHtml(emp.phone || '')}" />
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+        <div class="form-group">
+          <label><i class="fas fa-user"></i> Full Name</label>
+          <input type="text" id="editEmpName" class="form-input" value="${escapeHtml(emp.name)}" required />
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-id-badge"></i> Employee ID</label>
+          <input type="text" id="editEmpId" class="form-input" value="${escapeHtml(emp.employeeId)}" required />
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> Email</label>
+          <input type="email" id="editEmpEmail" class="form-input" value="${escapeHtml(emp.email)}" required />
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-phone"></i> Phone</label>
+          <input type="tel" id="editEmpPhone" class="form-input" value="${escapeHtml(emp.phone || '')}" />
+        </div>
       </div>
       <div class="modal-actions" style="margin-top:10px;">
         <button type="button" class="btn btn-primary" onclick="window._saveEditEmployee(${emp.id})"><i class="fas fa-save"></i> Save Changes</button>
+        <button type="button" class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
       </div>
     </form>
   `;

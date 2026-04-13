@@ -38,26 +38,42 @@ export async function openTaskPanel(taskId) {
         </div>
       </div>
 
-      <div class="modal-actions" style="margin-top:25px; display:flex; flex-direction:column; gap:10px;">
-        ${task.map_url ? `
-          <a href="${task.map_url}" target="_blank" class="btn btn-info" style="width:100%; justify-content:center;">
-            <i class="fas fa-directions"></i> Open in Maps
-          </a>
-        ` : ''}
+      <div class="task-actions-section" style="margin-top:25px; padding-top:20px; border-top:1px solid rgba(255,255,255,0.1);">
+        <label style="display:block; font-size:11px; color:#94a3b8; text-transform:uppercase; margin-bottom:10px; font-weight:600;"><i class="fas fa-sync-alt"></i> Update Task Status</label>
         
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-          <button class="btn btn-success" data-action="task:updateStatus" data-id="${task.id}" data-status="Completed">
-            <i class="fas fa-check"></i> Mark Completed
-          </button>
-          <button class="btn btn-warning" data-action="task:updateStatus" data-id="${task.id}" data-status="In Progress">
-            <i class="fas fa-clock"></i> In Progress
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+          <select id="employee-panel-status" class="form-input" style="flex:1; background:#1e293b; border:1px solid #334155; color:#f8fafc; padding:10px; border-radius:8px;">
+            <option value="Pending" ${task.status === 'Pending' ? 'selected' : ''}>Pending</option>
+            <option value="In Progress" ${task.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+            <option value="Completed" ${task.status === 'Completed' ? 'selected' : ''}>Completed</option>
+            <option value="Left Job" ${task.status === 'Left Job' ? 'selected' : ''}>Left Job</option>
+            <option value="Not Picking Call" ${task.status === 'Not Picking Call' ? 'selected' : ''}>Not Picking Call</option>
+            <option value="Switch Off" ${task.status === 'Switch Off' ? 'selected' : ''}>Switch Off</option>
+            <option value="Wrong Address" ${task.status === 'Wrong Address' ? 'selected' : ''}>Wrong Address</option>
+            <option value="Does Not Reside" ${task.status === 'Does Not Reside' ? 'selected' : ''}>Does Not Reside</option>
+            <option value="Unable To Verify" ${task.status === 'Unable To Verify' ? 'selected' : ''}>Unable To Verify</option>
+          </select>
+          <button class="btn btn-primary" onclick="window._updatePanelStatus(${task.id})" style="padding:0 20px;">
+            <i class="fas fa-save"></i> Save
           </button>
         </div>
+
+        ${task.map_url || task.mapUrl ? `
+          <a href="${task.map_url || task.mapUrl}" target="_blank" class="btn btn-info" style="width:100%; justify-content:center; padding:12px; border-radius:8px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.2); color:#60a5fa;">
+            <i class="fas fa-directions"></i> Navigate to Location
+          </a>
+        ` : ''}
       </div>
     </div>
   `;
 
-  createModal('Task Details', html, { icon: 'fas fa-info-circle', size: 'medium' });
+  // Attach global handler for the save button
+  window._updatePanelStatus = (tid) => {
+    const sel = document.getElementById('employee-panel-status');
+    if (sel) updateTaskStatus(tid, sel.value);
+  };
+
+  createModal('Task Details', html, { icon: 'fas fa-clipboard-list', size: 'medium' });
 }
 
 export async function updateTaskStatus(taskId, status) {

@@ -82,13 +82,20 @@ export function openTaskDetailsModal(taskId) {
 
 export function openStatusUpdateModal(taskId, currentStatus) {
   const content = `
-    <div style="margin-bottom:15px;">Update status for tracking:</div>
+    <div style="margin-bottom:15px; color:#9ca3af; font-size:13px;"><i class="fas fa-info-circle"></i> Update status for tracking:</div>
     <select id="updateStatusSelect" class="form-input">
+      <option value="Unassigned" ${currentStatus==='Unassigned'?'selected':''}>Unassigned</option>
       <option value="Pending" ${currentStatus==='Pending'?'selected':''}>Pending</option>
       <option value="In Progress" ${currentStatus==='In Progress'?'selected':''}>In Progress</option>
       <option value="Completed" ${currentStatus==='Completed'?'selected':''}>Completed</option>
       <option value="Verified" ${currentStatus==='Verified'?'selected':''}>Verified (Admin)</option>
       <option value="Rejected" ${currentStatus==='Rejected'?'selected':''}>Rejected</option>
+      <option value="Left Job" ${currentStatus==='Left Job'?'selected':''}>Left Job</option>
+      <option value="Not Picking Call" ${currentStatus==='Not Picking Call'?'selected':''}>Not Picking</option>
+      <option value="Switch Off" ${currentStatus==='Switch Off'?'selected':''}>Switch Off</option>
+      <option value="Wrong Address" ${currentStatus==='Wrong Address'?'selected':''}>Wrong Address</option>
+      <option value="Does Not Reside" ${currentStatus==='Does Not Reside'?'selected':''}>Does Not Reside</option>
+      <option value="Unable To Verify" ${currentStatus==='Unable To Verify'?'selected':''}>Unable To Verify</option>
     </select>
     <div class="modal-actions" style="margin-top:20px;">
       <button class="btn btn-primary" data-action="admin:confirmStatusUpdate" data-id="${taskId}"><i class="fas fa-save"></i> Save Status</button>
@@ -127,13 +134,23 @@ export function openReassignModal(taskId) {
   });
 
   const content = `
-    <div style="margin-bottom:15px;">Target Employee:</div>
-    <select id="reassignEmpId" class="form-input">${empOptions}</select>
-    <div class="modal-actions" style="margin-top:20px;">
-      <button class="btn btn-primary" data-action="admin:confirmReassign" data-id="${taskId}">Confirm Reassign</button>
+    <div class="reassign-form" style="display:flex; flex-direction:column; gap:20px;">
+      <div class="form-info" style="display:flex; gap:12px; align-items:center; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); padding:15px; border-radius:8px; color:#a5b4fc; font-size:13px;">
+        <i class="fas fa-info-circle"></i>
+        <span>Select a new employee to assign this task</span>
+      </div>
+      
+      <div class="form-group">
+        <label for="reassignEmpId"><i class="fas fa-user"></i> Target Employee</label>
+        <select id="reassignEmpId" class="form-input">${empOptions}</select>
+      </div>
+      <div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px; border-top:1px solid #1f2937; padding-top:15px;">
+        <button class="btn btn-primary" data-action="admin:confirmReassign" data-id="${taskId}"><i class="fas fa-check"></i> Reassign Task</button>
+        <button class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
+      </div>
     </div>
   `;
-  createModal('Reassign Task', content);
+  createModal('Reassign Task', content, { icon: 'fa-sync-alt', size: 'medium' });
 }
 
 export async function confirmReassign(taskId) {
@@ -141,18 +158,23 @@ export async function confirmReassign(taskId) {
   if (!newEmpId) return showToast('Please select new employee', 'warning');
 
   try {
-    const res = await fetch(`/api/tasks/${taskId}`, {
+    const res = await fetch(`/api/tasks/${taskId}/assign`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignedTo: newEmpId, userId: state.currentUser.id })
+      body: JSON.stringify({ 
+        employeeId: newEmpId, 
+        userId: state.currentUser.id,
+        userName: state.currentUser.name
+      })
     });
     if (res.ok) {
-      showToast('Reassigned successfully', 'success');
+      showToast('Task assigned successfully', 'success');
       closeAllModals();
       if(document.getElementById('allTasksList')) loadAllTasks();
+      if(document.getElementById('unassignedTasksList')) loadUnassignedTasks();
     }
   } catch (err) {
-    showToast('Failed to reassign', 'error');
+    showToast('Failed to assign', 'error');
   }
 }
 
@@ -164,7 +186,7 @@ export function openUnassignModal(taskId) {
 
   const content = `
     <div class="unassign-form">
-      <div class="warning-box" style="display:flex; gap:15px; align-items:flex-start; background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); padding:20px; border-radius:12px; margin-bottom:20px;">
+      <div class="warning-box" style="display:flex; gap:15px; align-items:flex-start; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); padding:20px; border-radius:12px; margin-bottom:20px;">
         <i class="fas fa-exclamation-triangle" style="color:#FCD34D; font-size:24px; margin-top:2px;"></i>
         <div>
           <h4 style="margin: 0 0 8px 0; color: #FCD34D;">Move task back to unassigned pool?</h4>
@@ -174,22 +196,20 @@ export function openUnassignModal(taskId) {
         </div>
       </div>
       <div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end;">
-        <button class="btn btn-warning" data-action="admin:confirmUnassign" data-id="${taskId}"><i class="fas fa-user-minus"></i> Unassign</button>
+        <button class="btn btn-warning" data-action="admin:confirmUnassign" data-id="${taskId}" style="color:#111827;"><i class="fas fa-check"></i> Yes, Unassign</button>
         <button class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
       </div>
     </div>
   `;
-  createModal('Unassign Task', content, { size: 'medium' });
+  createModal('Unassign Task', content, { icon: 'fa-times-circle', size: 'medium' });
 }
 
 export async function confirmUnassign(taskId) {
   try {
-    const res = await fetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
+    const res = await fetch(`/api/tasks/${taskId}/unassign`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        assignedTo: null,
-        status: 'Unassigned',
         userId: state.currentUser.id,
         userName: state.currentUser.name
       })

@@ -32,8 +32,17 @@ import { sortByNearest, sortByPincode } from './features/employee/sorting';
 import { showEditEmployeeModal, openResetPasswordModal, confirmResetPassword } from './features/admin/employees';
 
 /**
- * 1. INITIALIZATION
+ * SESSION MANAGEMENT (30 Minutes Inactivity Timeout)
  */
+let lastActivityTime = Date.now();
+const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
+
+function checkSession() {
+  if (Date.now() - lastActivityTime >= SESSION_DURATION) {
+    showToast('Session expired due to inactivity. Please login again.', 'error');
+    setTimeout(() => logout(), 2000);
+  }
+}
 function init() {
   console.log('🚀 Validiant Enterprise Bootloader Starting...');
   
@@ -58,6 +67,9 @@ function init() {
 
   // Bind Global Event Delegation
   setupEventDelegation();
+
+  // Start Session Monitor
+  setInterval(checkSession, 30000); // Check every 30 seconds
 }
 
 /**
@@ -67,6 +79,7 @@ function init() {
  */
 function setupEventDelegation() {
   document.addEventListener('click', async (e) => {
+    lastActivityTime = Date.now(); // Track activity
     const target = e.target.closest('[data-action]');
     if (!target) return;
 

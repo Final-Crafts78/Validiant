@@ -4,6 +4,7 @@
 import { state } from '../../store/globalState';
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
+import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
 
 let currentTaskPage = 1;
 const TASKS_PER_PAGE = 25;
@@ -12,8 +13,11 @@ export function showAllTasks() {
   const content = document.getElementById('mainContainer');
   if (!content) return;
 
+  // Clear any previous selection when switching to this view
+  clearSelection();
+
   const html = `
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
       <h2><i class="fas fa-list-alt"></i> All Tasks Overview</h2>
       <div>
         <button class="btn btn-success btn-sm" data-action="admin:exportCSV"><i class="fas fa-file-csv"></i> Export Data</button>
@@ -23,11 +27,18 @@ export function showAllTasks() {
     <div class="filter-section" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:#1e293b; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #334155;">
       <select id="allTasksStatusFilter" class="form-input" style="flex:1 1 140px;">
         <option value="all">All Statuses</option>
+        <option value="Unassigned">Unassigned</option>
         <option value="Pending">Pending</option>
         <option value="In Progress">In Progress</option>
         <option value="Completed">Completed</option>
         <option value="Verified">Verified</option>
         <option value="Rejected">Rejected</option>
+        <option value="Left Job">Left Job</option>
+        <option value="Not Picking Call">Not Picking</option>
+        <option value="Switch Off">Switch Off</option>
+        <option value="Wrong Address">Wrong Address</option>
+        <option value="Does Not Reside">Does Not Reside</option>
+        <option value="Unable To Verify">Unable To Verify</option>
       </select>
 
       <select id="allTasksEmployeeFilter" class="form-input" style="flex:1 1 180px;">
@@ -37,7 +48,7 @@ export function showAllTasks() {
       <input type="text" id="allTasksPincodeFilter" class="form-input" placeholder="Pincode" style="flex:1 1 100px; max-width:120px;">
       <input type="date" id="allTasksFromDate" class="form-input" title="From Date" style="flex:1 1 130px; max-width:150px;">
       <input type="date" id="allTasksToDate" class="form-input" title="To Date" style="flex:1 1 130px; max-width:150px;">
-      <input type="text" id="allTasksSearch" class="search-box" placeholder="Search Case ID, notes..." style="flex:1 1 220px; max-width:360px;">
+      <input type="text" id="allTasksSearch" class="search-box" placeholder="Search Case ID, Client, Notes..." style="flex:1 1 220px; max-width:360px;">
 
       <button class="btn btn-info btn-sm" data-action="admin:loadAllTasks"><i class="fas fa-filter"></i> Apply</button>
       <button class="btn btn-secondary btn-sm" data-action="admin:resetTaskFilters"><i class="fas fa-undo"></i> Reset</button>
@@ -45,6 +56,17 @@ export function showAllTasks() {
 
     <div id="allTasksActiveFilters" class="active-filters" style="margin-bottom:15px;">
       <span class="filter-hint" style="color:#94a3b8; font-size:13px;">No filters applied. Showing latest tasks.</span>
+    </div>
+
+    <div id="bulkActionsContainer" class="bulk-actions-bar" style="display:none; margin-bottom:15px;">
+      <div class="bulk-info">
+        <i class="fas fa-check-double"></i>
+        <span id="selectedCountText">0 task(s) selected</span>
+      </div>
+      <div class="bulk-buttons">
+        <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
+        <button class="btn btn-danger btn-sm" data-action="admin:bulkDeleteTasks"><i class="fas fa-trash"></i> Bulk Delete</button>
+      </div>
     </div>
 
     <div id="allTasksList">
@@ -168,50 +190,90 @@ function displayAllTasksList(tasks) {
   const tasksToDisplay = tasks.slice(startIndex, endIndex);
 
   let html = `
-    <div class="table-header-info" style="margin-bottom:15px; color:#cbd5e1;">
-      <i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks
+    <div class="table-header-info" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
+      <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks</span>
     </div>
     <div class="table-wrapper" style="overflow-x: auto; background: #1e293b; border-radius: 8px; border: 1px solid #334155;">
-      <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+      <table class="data-table" id="allTasksTable" style="width: 100%; border-collapse: collapse; text-align: left;">
         <thead style="border-bottom: 1px solid #334155;">
           <tr>
+            <th style="padding: 12px 15px; color: #94A3B8; width:40px;"><input type="checkbox" id="selectAllCb"></th>
+            <th style="padding: 12px 15px; color: #94A3B8; min-width: 80px;">Date</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Case ID</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Date</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Assigned To</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">Client</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">Employee</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Pincode</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">Map</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Status</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Actions</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">SLA (72h)</th>
+            <th style="padding: 12px 15px; color: #94A3B8; text-align:right;">Actions</th>
           </tr>
         </thead>
         <tbody>
   `;
 
   tasksToDisplay.forEach(t => {
-    const d = new Date(t.created_at || t.assigned_date || t.assignedDate);
-    const dateStr = d.toLocaleDateString();
+    // Legacy Date Format
+    let dateStr = '-';
+    if(t.created_at || t.assigned_date) {
+       const d = new Date(t.created_at || t.assigned_date);
+       dateStr = d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'});
+    }
+
     const isUnassigned = !t.assigned_to || t.assigned_to === 'Unassigned' || t.employees === null;
     const assigneeName = isUnassigned ? 'Unassigned' : (t.employees ? t.employees.name : t.assigned_to);
     
+    // SLA Calculation Logic
+    let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
+    const assignedDate = t.assigned_date || t.assignedDate;
+    if (t.status !== 'Unassigned' && assignedDate) {
+        const assignedTime = new Date(assignedDate).getTime();
+        let endTime = new Date().getTime(); 
+        
+        if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
+           endTime = new Date(t.completed_at || t.verified_at).getTime();
+        }
+
+        const hours = (endTime - assignedTime) / (1000 * 60 * 60);
+        if (hours <= 72) {
+          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);"><i class="fas fa-check"></i> On Time</span>`;
+        } else {
+          const days = Math.floor(hours/24);
+          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-circle"></i> ${days}d Overdue</span>`;
+        }
+    }
+
+    const mapLink = t.map_url || t.mapUrl || '';
+    const mapDisplay = mapLink 
+      ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
+      : `<span style="color: #6B7280; font-size: 11px;">No map</span>`;
+
     html += `
       <tr class="task-row" style="border-bottom: 1px solid #334155;">
-        <td style="padding: 12px 15px; font-weight: 500;">
-          <div style="color: #F8FAFC;">${escapeHtml(t.title)}</div>
-          ${t.clientName ? `<div style="font-size: 11px; color: #9CA3AF;">${escapeHtml(t.clientName)}</div>` : ''}
-        </td>
+        <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
         <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
+        <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
+        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
+            ${escapeHtml(t.clientName || '-')}
+          </div>
+        </td>
         <td style="padding: 12px 15px;">
           ${isUnassigned 
             ? `<span style="color: #F59E0B; font-size: 13px;"><i class="fas fa-exclamation-circle"></i> Unassigned</span>`
-            : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user"></i> ${escapeHtml(assigneeName)}</span>`
+            : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user-circle"></i> ${escapeHtml(assigneeName)}</span>`
           }
         </td>
-        <td style="padding: 12px 15px; font-size: 13px;">${escapeHtml(t.pincode)}</td>
+        <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
+        <td style="padding: 12px 15px;">${mapDisplay}</td>
         <td style="padding: 12px 15px;">
           <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
             ${t.status}
           </span>
         </td>
-        <td style="padding: 12px 15px;">
+        <td style="padding: 12px 15px;">${slaBadge}</td>
+        <td style="padding: 12px 15px; text-align:right;">
           <button class="btn btn-primary btn-sm" data-action="task:openPanel" data-id="${t.id}">
             <i class="fas fa-eye"></i> View
           </button>
@@ -242,6 +304,14 @@ function displayAllTasksList(tasks) {
   }
 
   list.innerHTML = html;
+
+  // Attach Selection Event Listeners
+  const selectAll = document.getElementById('selectAllCb');
+  selectAll?.addEventListener('change', () => toggleSelectAll('all-tasks-cb'));
+
+  document.querySelectorAll('.all-tasks-cb').forEach(cb => {
+    cb.addEventListener('change', () => handleSingleSelection(cb));
+  });
 }
 
 export function prevTaskPage() {

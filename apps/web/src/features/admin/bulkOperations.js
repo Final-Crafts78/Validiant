@@ -48,7 +48,8 @@ export function handleSingleSelection(cb) {
 
 export function clearSelection() {
   window.selectedTasks.clear();
-  const checkboxes = document.querySelectorAll('.task-checkbox, #selectAllCb');
+  // Clear any checkbox and remove selected-row class from any tr
+  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
   checkboxes.forEach(cb => cb.checked = false);
   document.querySelectorAll('.selected-row').forEach(row => row.classList.remove('selected-row'));
   updateBulkActions();
@@ -62,51 +63,88 @@ export function updateBulkActions() {
 
   if (count > 0) {
     bulkContainer.style.display = 'flex';
-    bulkContainer.querySelector('#selectedCountText').innerText = `${count} task(s) selected`;
+    const countSpan = bulkContainer.querySelector('#selectedCountText');
+    if (countSpan) countSpan.innerText = `${count} task(s) selected`;
   } else {
     bulkContainer.style.display = 'none';
   }
 }
 
-export function bulkAssignTasks() {
+export async function bulkAssignTasks() {
   if (window.selectedTasks.size === 0) return;
+  
+  // Ensure employees are loaded
+  if (!state.allEmployees || state.allEmployees.length === 0) {
+    try {
+      const res = await fetch('/api/users');
+      state.allEmployees = await res.json();
+    } catch (err) {
+      return showToast('Failed to load employee list', 'error');
+    }
+  }
   
   let empOptions = '<option value="">Choose Employee...</option>';
   state.allEmployees?.forEach(e => {
-    empOptions += `<option value="${e.id}">${e.name}</option>`;
+    empOptions += `<option value="${e.id}">${escapeHtml(e.name)} (${e.employeeId})</option>`;
   });
 
   const content = `
-    <div style="margin-bottom: 20px;">
-      Assigning <strong>${window.selectedTasks.size}</strong> tasks to:
+    <div style="margin-bottom: 20px; color:#cbd5e1; font-size:14px;">
+      <i class="fas fa-info-circle" style="color:#6366f1; margin-right:8px;"></i>
+      Assigning <strong>${window.selectedTasks.size}</strong> selected tasks to:
     </div>
-    <select id="bulkAssignEmpId" class="form-input">
-      ${empOptions}
-    </select>
-    <div class="modal-actions" style="margin-top:20px;">
-      <button class="btn btn-primary" data-action="admin:confirmBulkAssign"><i class="fas fa-check"></i> Confirm</button>
-      <button class="btn btn-secondary" onclick="closeAllModals()"><i class="fas fa-times"></i> Cancel</button>
+    <div class="form-group">
+      <select id="bulkAssignEmpId" class="form-input" style="width:100%; height:45px; border-radius:8px; background:#1e293b; border:1px solid #334155; color:white; padding:0 15px;">
+        ${empOptions}
+      </select>
+    </div>
+    <div class="modal-actions" style="margin-top:25px; padding-top:20px; border-top:1px solid #334155; display:flex; gap:10px;">
+      <button class="btn btn-primary btn-lg" data-action="admin:confirmBulkAssign" style="flex:2;">
+        <i class="fas fa-check"></i> Confirm Assignment
+      </button>
+      <button class="btn btn-secondary btn-lg" onclick="closeAllModals()" style="flex:1;">
+        <i class="fas fa-times"></i> Cancel
+      </button>
     </div>
   `;
   
-  createModal('Bulk Assign', content, { size: 'medium' });
+  createModal('Bulk Assignment', content, { icon: 'fa-user-plus', size: 'medium' });
+}
+
+// Helper to escape HTML safely
+function escapeHtml(text) {
+  if (typeof text !== 'string') return text || '';
+  return text.replace(/[&<>"']/g, function(m) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[m];
+  });
 }
 
 export async function confirmBulkAssign() {
   const empId = document.getElementById('bulkAssignEmpId')?.value;
-  if (!empId) return showToast('Select an employee', 'warning');
+  if (!empId) return showToast('Please select an employee', 'warning');
   
   const tasksToUpdate = Array.from(window.selectedTasks);
   
   try {
-    showToast('Assigning tasks...', 'info');
+    showToast(`Assigning ${tasksToUpdate.length} tasks...`, 'info');
     let success = 0;
     
+    // Batch updates would be better but for now we loop
     for (const taskId of tasksToUpdate) {
       const res = await fetch(`/api/tasks/${taskId}/assign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId: empId })
+        body: JSON.stringify({ 
+          employeeId: empId,
+          userId: state.currentUser.id,
+          userName: state.currentUser.name
+        })
       });
       if (res.ok) success++;
     }
@@ -127,11 +165,13 @@ export async function confirmBulkAssign() {
 export async function bulkDeleteTasks() {
   if (window.selectedTasks.size === 0) return;
   
-  if (!confirm(`Are you sure you want to permanently delete ${window.selectedTasks.size} tasks?`)) return;
+  if (!confirm(`CAUTION: Are you sure you want to permanently delete ${window.selectedTasks.size} tasks?`)) return;
   
   try {
     const tasksToUpdate = Array.from(window.selectedTasks);
     let success = 0;
+    
+    showToast(`Deleting ${tasksToUpdate.length} tasks...`, 'info');
     
     for (const taskId of tasksToUpdate) {
       const res = await fetch(`/api/tasks/${taskId}?adminId=${state.currentUser.id}`, { method: 'DELETE' });

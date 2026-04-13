@@ -98,18 +98,41 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
         let lat = parseFloat(t.latitude) || parseFloat(t._lat);
         let lng = parseFloat(t.longitude) || parseFloat(t._lng);
         
-        // Approx location detection
-        const isApproxLocation = (!parseFloat(t.latitude) || !parseFloat(t.longitude)) && t.pincode && pincodeData[t.pincode];
+        // 4. ELITE COORDINATE EXTRACTION (Legacy Parity: !3d > @viewport > ?q= > Pincode)
         if (!lat || !lng) {
-            if (isApproxLocation) {
-                lat = pincodeData[t.pincode].lat;
-                lng = pincodeData[t.pincode].lng;
+          const link = t.map_url || t.mapUrl || t.mapurl;
+          if (link) {
+            // Prioritize !3d/!4d (Actual pin location)
+            const m3d = link.match(/!3d(-?[0-9.]+)/);
+            const m4d = link.match(/!4d(-?[0-9.]+)/);
+            if (m3d && m4d) {
+              lat = parseFloat(m3d[1]);
+              lng = parseFloat(m4d[1]);
+            } else {
+              // Fallback to viewport or query
+              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+              if (match) { 
+                lat = parseFloat(match[1]); 
+                lng = parseFloat(match[2]); 
+              }
             }
+          }
+        }
+
+        const isExactLocation = !!(parseFloat(t.latitude) && parseFloat(t.longitude)) || 
+                                !!(t.map_url && t.map_url.includes('!3d'));
+
+        if (!lat || !lng) {
+          if (t.pincode && pincodeData[t.pincode]) {
+            lat = pincodeData[t.pincode].lat;
+            lng = pincodeData[t.pincode].lng;
+          }
         }
 
         if (lat && lng) {
           waypoints.push([lat, lng]);
-          const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444';
+          // Orange for Approx (Pincode), Red for Exact (Coordinates)
+          const pinColor = isExactLocation ? '#ef4444' : '#f59e0b';
           
           const taskIcon = L.divIcon({
             className: 'custom-task-icon',

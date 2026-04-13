@@ -68,6 +68,20 @@ class TaskController {
   }
 
   /**
+   * Assign a task
+   */
+  async assignTask(req, res) {
+    try {
+      const { taskId } = req.params;
+      const { employeeId, userId, userName } = req.body;
+      await taskService.assignTask(taskId, employeeId, userId, userName);
+      res.json({ success: true, message: "Task assigned successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * Reassign a task
    */
   async reassignTask(req, res) {
@@ -103,6 +117,20 @@ class TaskController {
       const { employeeLocation, tasks } = req.body;
       const optimizedTasks = await taskService.optimizeTasks(employeeLocation, tasks);
       res.json({ success: true, optimizedTasks });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Delete a task
+   */
+  async deleteTask(req, res) {
+    try {
+      const { id } = req.params;
+      const { adminId } = req.query;
+      await taskService.deleteTask(id, adminId);
+      res.json({ success: true, message: "Task deleted successfully" });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

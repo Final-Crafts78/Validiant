@@ -50,6 +50,44 @@ class AdminController {
   }
 
   /**
+   * Export Tasks to CSV
+   */
+  async exportTasks(req, res) {
+    try {
+      const { status, employeeId } = req.query;
+      let query = supabase.from("tasks").select("*, employees:users!tasks_assigned_to_fkey(name)");
+      
+      if (status && status !== 'all') query = query.eq('status', status);
+      if (employeeId && employeeId !== 'all') query = query.eq('assigned_to', employeeId);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Generate CSV
+      const headers = ["Task ID", "Title", "Client", "Pincode", "Status", "Assigned To", "Assigned Date", "Created At"];
+      const rows = data.map(t => [
+        t.id,
+        t.title,
+        t.client_name || t.clientName || '',
+        t.pincode,
+        t.status,
+        t.employees ? t.employees.name : 'Unassigned',
+        t.assigned_date || '',
+        t.created_at
+      ]);
+      
+      const csvString = [headers, ...rows].map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=validiant_export_${new Date().toISOString().split('T')[0]}.csv`);
+      res.status(200).send(csvString);
+    } catch (err) {
+      console.error('Export Error:', err);
+      res.status(500).send("Export failed");
+    }
+  }
+
+  /**
    * Health Check
    */
   health(req, res) {

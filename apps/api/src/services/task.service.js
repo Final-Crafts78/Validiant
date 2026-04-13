@@ -158,6 +158,31 @@ class TaskService {
   }
 
   /**
+   * Assign a task (initial assignment)
+   */
+  async assignTask(taskId, employeeId, userId, userName) {
+    // Legacy behavior: assignment sets status to Pending and captures current date
+    const [empRes, taskRes] = await Promise.all([
+      supabase.from("users").select("name").eq("id", employeeId).single(),
+      supabase.from("tasks").select("status").eq("id", taskId).single()
+    ]);
+
+    if (!empRes.data) throw new Error("Employee not found");
+    
+    const { error } = await supabase.from("tasks").update({
+      assigned_to: employeeId,
+      assigned_date: new Date().toISOString().split('T')[0],
+      status: "Pending",
+      updated_at: new Date()
+    }).eq("id", taskId);
+
+    if (error) throw error;
+
+    await logActivity(userId, userName, "TASK_ASSIGNED", taskId, `Assigned to ${empRes.data.name}`);
+    return true;
+  }
+
+  /**
    * Reassign a task
    */
   async reassignTask(taskId, newEmployeeId, userId, userName) {
@@ -221,6 +246,19 @@ class TaskService {
     const steps = data.routes[0].steps.filter(s => s.type === "job");
     const optimizedTasks = steps.map(step => routableTasks[step.job]);
     return [...optimizedTasks, ...unroutableTasks];
+  }
+
+  /**
+   * Delete a task permanently
+   */
+  async deleteTask(taskId, adminId) {
+    const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+    if (error) throw error;
+    
+    if (adminId) {
+      await logActivity(adminId, "Admin", "TASK_DELETED", taskId, "Task permanently deleted");
+    }
+    return true;
   }
 }
 

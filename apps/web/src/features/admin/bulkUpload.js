@@ -180,14 +180,16 @@ export function processSmartText() {
 }
 
 function downloadBulkUploadTemplate() {
-  const csvContent = `CaseID,Pincode,ClientName,EmployeeID,MapURL,Notes
-CASE001,560001,ABC Company,,http://maps.google.com/example,Priority task
-CASE002,560002,XYZ Corp,EMP123,,Assign to specific ID`;
+  const csvContent = `CaseID,Pincode,ClientName,EmployeeID,MapURL,Notes\nCASE001,560001,ABC Company,,http://maps.google.com/example,Priority task\nCASE002,560002,XYZ Corp,EMP123,,Assign to specific ID`;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `Validiant_Bulk_Upload_Template.csv`;
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'Validiant_Bulk_Upload_Template.csv');
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }
 
 // 3. Intelligent Column Mapper
@@ -246,7 +248,7 @@ function smartColumnMapper(rawData) {
   return normalized;
 }
 
-// 4. Preview Window
+// 4. Preview Window (Restored Legacy Perfection: Editable Table)
 function showSmartPreview(tasks) {
   closeAllModals();
   window._pendingBulkTasks = tasks;
@@ -255,25 +257,26 @@ function showSmartPreview(tasks) {
     <div class="preview-container">
       <div class="preview-header" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
         <span class="info-badge" style="color:#94a3b8;"><i class="fas fa-list"></i> Total: <strong>${tasks.length}</strong> tasks parsed</span>
+        <span class="info-badge" style="color:#6366F1; border-color:rgba(99,102,241,0.3)"><i class="fas fa-edit"></i> Click fields to edit</span>
       </div>
       
       <div class="table-wrapper" style="max-height: 400px; overflow: auto; border: 1px solid #374151; border-radius: 8px;">
         <table class="data-table" id="previewTable" style="width:100%">
           <thead style="position:sticky; top:0; background:#1F2937; z-index:10;">
             <tr>
-              <th style="padding:10px;">ID</th>
-              <th style="padding:10px;">Pincode</th>
-              <th style="padding:10px;">Client</th>
-              <th style="padding:10px;">Target</th>
+              <th style="padding:12px;">Case ID</th>
+              <th style="padding:12px;">Pincode</th>
+              <th style="padding:12px;">Client Name</th>
+              <th style="padding:12px;">Status</th>
             </tr>
           </thead>
           <tbody>
             ${tasks.map((t, idx) => `
               <tr data-idx="${idx}" style="border-bottom:1px solid #334155;">
-                <td style="padding:10px;">${escapeHtml(t.title)}</td>
-                <td style="padding:10px;">${escapeHtml(t.pincode || '')}</td>
-                <td style="padding:10px;">${escapeHtml(t.clientName || '-')}</td>
-                <td style="padding:10px;">${t.assignedTo ? '<span style="color:#60a5fa">Assigned</span>' : '<span style="color:#f59e0b">Pool</span>'}</td>
+                <td style="padding:8px;"><input type="text" value="${escapeHtml(t.title)}" class="form-input text-sm" name="title" style="background:rgba(0,0,0,0.2); border:1px solid transparent; width:100%"></td>
+                <td style="padding:8px;"><input type="text" value="${escapeHtml(t.pincode || '')}" class="form-input text-sm" name="pincode" style="background:rgba(0,0,0,0.2); border:1px solid transparent; width:100%"></td>
+                <td style="padding:12px; color:#94a3b8;">${escapeHtml(t.clientName || '-')}</td>
+                <td style="padding:12px;">${t.assignedTo ? '<span style="color:#60a5fa; font-size:12px;"><i class="fas fa-user-check"></i> Matched</span>' : '<span style="color:#f59e0b; font-size:12px;"><i class="fas fa-layer-group"></i> Pool</span>'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -286,29 +289,144 @@ function showSmartPreview(tasks) {
     </div>
   `;
   
-  createModal('Review Data Import', content, { size: 'large' });
+  createModal('Review Data Import', content, { size: 'large', icon: 'fa-robot' });
 }
 
 export async function submitFinalBulkUpload() {
-  const tasks = window._pendingBulkTasks;
-  if (!tasks || tasks.length === 0) return showToast('No tasks to upload', 'error');
-
   const btn = document.querySelector('.modal .btn-primary');
-  if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+  const rows = document.querySelectorAll('#previewTable tbody tr');
+  const updatedTasks = [];
+
+  rows.forEach(row => {
+    const idx = row.getAttribute('data-idx');
+    const task = window._pendingBulkTasks[idx];
+    task.title = row.querySelector('input[name="title"]').value;
+    task.pincode = row.querySelector('input[name="pincode"]').value;
+    if (task.title) updatedTasks.push(task);
+  });
+
+  if (updatedTasks.length === 0) return showToast('No tasks to upload', 'error');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking Duplicates...';
+  }
   
   try {
-    let successCount = 0;
-    
-    // Very basic check against existing tasks to simulate legacy checkDuplicateCases
+    // 1. Fetch existing tasks to check for duplicates
     const exRes = await fetch('/api/tasks?role=admin');
     const existing = await exRes.json();
-    const exIds = new Set(existing.map(e => e.title.toLowerCase()));
+    const existingMap = new Map(existing.map(e => [e.title.trim().toLowerCase(), e]));
 
-    for (const t of tasks) {
-      if (exIds.has(t.title.toLowerCase())) {
-        continue; // Simple duplicate skip for brevity, legacy prompted users
+    const duplicates = [];
+    const newTasks = [];
+
+    tasks.forEach(t => {
+      if (existingMap.has(t.title.trim().toLowerCase())) {
+        duplicates.push({ ...t, existingId: existingMap.get(t.title.trim().toLowerCase()).id });
+      } else {
+        newTasks.push(t);
       }
-      
+    });
+
+    if (duplicates.length > 0) {
+      showDuplicateModal(duplicates, newTasks);
+    } else {
+      await processBulkUpload(newTasks);
+    }
+  } catch (err) {
+    showToast('Failed during duplicate check', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-upload"></i> Complete Import';
+    }
+  }
+}
+
+function showDuplicateModal(duplicates, newTasks) {
+  const content = `
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      <div class="form-info" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); padding:15px; border-radius:8px; display:flex; gap:12px; align-items:center;">
+        <i class="fas fa-exclamation-triangle" style="color:#f59e0b; font-size:24px;"></i>
+        <span style="color:#e5e7eb;"><strong>${duplicates.length}</strong> duplicate case IDs found. What would you like to do?</span>
+      </div>
+
+      <div style="max-height:150px; overflow-y:auto; background:#111827; padding:15px; border-radius:8px; border:1px solid #374151;">
+        <div style="color:#9ca3af; font-size:12px; margin-bottom:8px; font-weight:600; text-transform:uppercase;">Duplicate Case List:</div>
+        <div style="color:#d1d5db; font-size:13px; line-height:1.6;">
+          ${duplicates.map(d => `• ${escapeHtml(d.title)}`).join('<br>')}
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+        <button class="btn btn-primary" data-action="admin:bulkDuplicateChoice" data-choice="create" style="justify-content:center; padding:12px;">
+          <i class="fas fa-plus"></i> Create New (${duplicates.length + newTasks.length} total)
+        </button>
+        <button class="btn btn-warning" data-action="admin:bulkDuplicateChoice" data-choice="update" style="justify-content:center; padding:12px; color:#111827;">
+          <i class="fas fa-sync-alt"></i> Update Existing (${duplicates.length} updated + ${newTasks.length} new)
+        </button>
+        <button class="btn btn-secondary" data-action="admin:bulkDuplicateChoice" data-choice="cancel" style="justify-content:center; padding:12px;">
+          <i class="fas fa-times"></i> Skip Duplicates (${newTasks.length} new only)
+        </button>
+      </div>
+    </div>
+  `;
+  
+  window._bulkUploadContext = { duplicates, newTasks };
+  createModal('Duplicate Cases Found', content, { size: 'medium', icon: 'fa-exclamation-triangle' });
+}
+
+export async function handleBulkDuplicateChoice(choice) {
+  const ctx = window._bulkUploadContext;
+  if (!ctx) return;
+  
+  closeAllModals();
+  
+  if (choice === 'create') {
+    showToast(`Creating all ${ctx.duplicates.length + ctx.newTasks.length} tasks...`, 'info');
+    await processBulkUpload([...ctx.duplicates, ...ctx.newTasks]);
+  } else if (choice === 'update') {
+    showToast('Updating existing and creating new...', 'info');
+    await updateExistingTasks(ctx.duplicates);
+    await processBulkUpload(ctx.newTasks);
+  } else if (choice === 'cancel') {
+    showToast(`Skipping ${ctx.duplicates.length} duplicates...`, 'info');
+    await processBulkUpload(ctx.newTasks);
+  }
+  
+  delete window._bulkUploadContext;
+}
+
+async function updateExistingTasks(duplicates) {
+  let success = 0;
+  for (const dup of duplicates) {
+    if (!dup.assignedTo) continue;
+    try {
+      const res = await fetch(`/api/tasks/${dup.existingId}/assign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          employeeId: dup.assignedTo,
+          userId: state.currentUser.id,
+          userName: state.currentUser.name
+        })
+      });
+      if (res.ok) success++;
+    } catch (e) { console.error(e); }
+  }
+  showToast(`${success} task(s) reassigned successfully`, 'success');
+}
+
+async function processBulkUpload(tasks) {
+  if (!tasks || tasks.length === 0) {
+    showToast('Import complete (no new tasks)', 'success');
+    refreshAfterUpload();
+    return;
+  }
+
+  let successCount = 0;
+  for (const t of tasks) {
+    try {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -319,19 +437,17 @@ export async function submitFinalBulkUpload() {
         })
       });
       if (response.ok) successCount++;
-    }
-    
-    showToast(`${successCount} task(s) imported successfully (duplicates skipped)`, 'success');
-    closeAllModals();
-    
-    delete window._pendingBulkTasks;
-    
-    // Refresh views
-    if(document.getElementById('allTasksList')) { loadAllTasks(); }
-    else if(document.getElementById('unassignedTasksList')) { showUnassignedTasks(); }
-    else { showAllTasks(); }
-    
-  } catch (err) {
-    showToast('Failed during import', 'error');
+    } catch (e) { console.error(e); }
   }
+
+  showToast(`${successCount} task(s) imported successfully`, 'success');
+  refreshAfterUpload();
+}
+
+function refreshAfterUpload() {
+  closeAllModals();
+  delete window._pendingBulkTasks;
+  if (document.getElementById('allTasksList')) loadAllTasks();
+  else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
+  else showAllTasks();
 }
