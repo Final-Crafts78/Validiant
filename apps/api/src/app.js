@@ -33,6 +33,21 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api", adminRoutes);
 
+// Static file serving for Frontend (Production)
+const webDistPath = path.resolve(__dirname, "../../web/dist");
+app.use(express.static(webDistPath));
+
+// Fallback to index.html for unknown routes (SPA support)
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  res.sendFile(path.join(webDistPath, "index.html"), (err) => {
+    if (err) {
+      // If index.html not found, just continue to error handler
+      next();
+    }
+  });
+});
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err.message);
