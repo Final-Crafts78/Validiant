@@ -10,18 +10,27 @@ export function escapeHtml(text) {
 }
 
 export function showToast(message, type = 'info') {
-  const toast = document.getElementById('toast');
-  if (!toast) return;
-  
-  toast.className = `toast toast-${type} show`;
-  toast.innerHTML = `
-    <i class="fas ${getIcon(type)} toast-icon"></i>
-    <span>${message}</span>
-  `;
-  
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 4000);
+  const toastContainer = document.getElementById('toast');
+  if (toastContainer) {
+    toastContainer.className = `toast toast-${type} show`;
+    toastContainer.innerHTML = `
+      <i class="fas ${getIcon(type)} toast-icon"></i>
+      <span>${escapeHtml(message)}</span>
+    `;
+    setTimeout(() => toastContainer.classList.remove('show'), 4000);
+  } else {
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+}
+
+export function cleanupCurrentView() {
+  if (window.routingMapInstance) {
+    window.routingMapInstance.remove();
+    window.routingMapInstance = null;
+  }
+  const tempEls = document.querySelectorAll('.temp-edit-section, .inline-edit-form');
+  tempEls.forEach(el => el.remove());
 }
 
 function getIcon(type) {

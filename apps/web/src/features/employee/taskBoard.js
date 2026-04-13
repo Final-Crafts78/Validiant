@@ -24,23 +24,39 @@ export function showTodayTasks() {
       </button>
     </div>
     <div id="todayTasksList">
-      <div class="loading-spinner show"><i class="fas fa-spinner"></i> Loading...</div>
+      <div class="loading-spinner show"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
     </div>
   `;
   content.innerHTML = html;
   
-  // Setup search listener
-  let searchTimeout;
+  // Attach search debounce
   const searchInput = document.getElementById('todayTaskSearch');
   if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => loadTodayTasks(e.target.value), 300);
+    let timeout;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(searchTodayTasks, 300);
     });
   }
 
   loadTodayTasks();
 }
+
+export function searchTodayTasks() {
+  const searchEl = document.getElementById('todayTaskSearch');
+  if (!searchEl) return;
+  
+  const term = searchEl.value.toLowerCase();
+  const filtered = state.allEmployeeTasks.filter(t => 
+    (t.title || '').toLowerCase().includes(term) || 
+    String(t.pincode || '').includes(term) || 
+    (t.address || '').toLowerCase().includes(term) ||
+    (t.clientName || t.client_name || '').toLowerCase().includes(term)
+  );
+  
+  displayEmployeeTasks(filtered);
+}
+
 
 export async function loadTodayTasks(searchTerm = "") {
   try {
@@ -66,7 +82,7 @@ export async function loadTodayTasks(searchTerm = "") {
   }
 }
 
-function displayEmployeeTasks(tasks) {
+export function displayEmployeeTasks(tasks) {
   const list = document.getElementById('todayTasksList');
   if (!list) return;
   

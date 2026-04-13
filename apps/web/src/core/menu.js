@@ -14,6 +14,10 @@ export function initMenu() {
     { icon: 'fa-inbox', text: 'Unassigned Pool', action: 'view:adminPool' },
     { icon: 'fa-list', text: 'All Tasks', action: 'view:adminAllTasks' },
     { icon: 'fa-users', text: 'Employees', action: 'view:adminEmployees' },
+    { icon: 'fa-history', text: 'Activity Log', action: 'view:activityLog' },
+    { icon: 'fa-chart-pie', text: 'Analytics', action: 'view:analytics' },
+    { icon: 'fa-upload', text: 'Bulk Upload', action: 'admin:showBulkUpload' },
+    { icon: 'fa-download', text: 'Export CSV', action: 'admin:exportTasks' },
     { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'view:kyc' },
     { icon: 'fa-sign-out-alt', text: 'Logout', action: 'auth:logout', style: 'margin-top: auto; color: #ef4444;' }
   ] : [
