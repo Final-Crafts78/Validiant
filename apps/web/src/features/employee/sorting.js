@@ -110,7 +110,25 @@ export async function sortByNearest(event) {
           }).filter(t => t);
           
           state.allEmployeeTasks = optimizedOrder;
-          displayEmployeeTasks(state.allEmployeeTasks);
+          
+          // View-Aware Logic: Update List OR Map depending on what's active
+          const list = document.getElementById('todayTasksList');
+          const map = document.getElementById('routingMap');
+          
+          if (map && map.offsetParent !== null) {
+            // We are on Map View - Lazy import routing engine to refresh map
+            Promise.all([
+              import('../routing/leafletEngine'),
+              import('../employee/taskPanel')
+            ]).then(([mod, panelMod]) => {
+              mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel);
+            }).catch(err => console.error('Failed to refresh map after sort:', err));
+          }
+          
+          if (list) {
+            displayEmployeeTasks(state.allEmployeeTasks);
+          }
+          
           showToast('Route optimized!', 'success');
         } else {
           fallbackSort(userLat, userLng);

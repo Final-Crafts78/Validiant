@@ -15,7 +15,8 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
     content.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2><i class="fas fa-map-marked-alt"></i> Live Route Map</h2>
-      <div id="mapHeaderActions">
+      <div id="mapHeaderActions" style="display:flex; gap:8px;">
+        <button class="btn btn-warning btn-sm" data-action="sorting:nearest"><i class="fas fa-location-arrow"></i> Optimize Route</button>
         <button class="btn btn-info btn-sm" data-action="routing:refresh"><i class="fas fa-sync"></i> Refresh Map</button>
       </div>
     </div>
@@ -80,7 +81,14 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
         routeLayer.clearLayers();
       }
       
-      setTimeout(() => { if (routingMapInstance) routingMapInstance.invalidateSize(); }, 250);
+      // 🚨 Ensure map instance hasn't been destroyed in a race condition
+      if (!routingMapInstance) return;
+
+      setTimeout(() => { 
+        if (routingMapInstance) {
+          routingMapInstance.invalidateSize(); 
+        }
+      }, 400); // Increased for mobile stability
 
       L.marker([userLat, userLng])
         .addTo(markerLayer)
@@ -105,25 +113,16 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
             // Prioritize !3d/!4d (Actual pin location)
             const m3d = link.match(/!3d(-?[0-9.]+)/);
             const m4d = link.match(/!4d(-?[0-9.]+)/);
-            if (m3d && m4d) {
-              lat = parseFloat(m3d[1]);
-              lng = parseFloat(m4d[1]);
-            } else {
-              // Fallback to viewport or query
-              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-              if (match) { 
-                lat = parseFloat(match[1]); 
-                lng = parseFloat(match[2]); 
-              }
+            const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+            if (match) { 
+              lat = parseFloat(match[1]); 
+              lng = parseFloat(match[2]); 
             }
           }
         }
 
-        const isExactLocation = !!(parseFloat(t.latitude) && parseFloat(t.longitude)) || 
-                                !!(t.map_url && t.map_url.includes('!3d'));
-
         if (!lat || !lng) {
-          if (t.pincode && pincodeData[t.pincode]) {
+          if (isApproxLocation) {
             lat = pincodeData[t.pincode].lat;
             lng = pincodeData[t.pincode].lng;
           }
@@ -131,17 +130,16 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 
         if (lat && lng) {
           waypoints.push([lat, lng]);
-          // Orange for Approx (Pincode), Red for Exact (Coordinates)
-          const pinColor = isExactLocation ? '#ef4444' : '#f59e0b';
+          const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444';
           
           const taskIcon = L.divIcon({
-            className: 'custom-task-icon',
+            className: 'custom-task-icon gpu-boost',
             html: `<div style="background-color: ${pinColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
 
-          const marker = L.marker([lat, lng], { icon: taskIcon }).on('click', () => {
+          const marker = L.marker([lat, lng], { icon: taskIcon, riseOnHover: true }).on('click', () => {
             openTaskDetailsModal(t.id);
           });
           mapMarkers.push(marker);
@@ -181,8 +179,9 @@ export function cleanupMapInstance() {
     try {
       routingMapInstance.off();
       routingMapInstance.remove();
-    } catch (e) {
-      console.warn('Map cleanup error:', e);
+    } catch (error) {
+      console.error(`❌ Global Controller Error: cleanup`, error);
+      showToast('An unexpected UI error occurred.', 'error');
     }
     routingMapInstance = null;
     markerLayer = null;

@@ -1,0 +1,225 @@
+/**
+ * Validiant Premium Sign-In Styles
+ * Uses design tokens from premium.css
+ */
+
+.signin-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-dark);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background Gradients */
+.signin-page::before {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+  top: -200px;
+  left: -200px;
+  filter: blur(80px);
+  z-index: 0;
+}
+
+.signin-page::after {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+  bottom: -150px;
+  right: -100px;
+  filter: blur(80px);
+  z-index: 0;
+}
+
+.login-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  box-shadow: var(--shadow-premium);
+  overflow: hidden;
+  border: 1px solid var(--border-glass);
+  max-width: 900px;
+  width: 100%;
+  animation: slideUp 0.6s var(--ease-out-expo);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.brand-side {
+  flex: 1;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-right: 1px solid var(--border-glass);
+  text-align: center;
+}
+
+.brand-logo {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: white;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 25px var(--primary-glow);
+}
+
+.brand-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.brand-subtitle {
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.form-side {
+  flex: 1.2;
+  padding: 60px;
+  background: var(--bg-card);
+}
+
+.form-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.form-header p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper i {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.form-control {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: white;
+  font-size: 15px;
+  transition: var(--transition-fast);
+}
+
+.form-control:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-glow);
+  outline: none;
+}
+
+.btn-signin {
+  width: 100%;
+  padding: 16px;
+  margin-top: 10px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 32px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.divider span {
+  padding: 0 16px;
+}
+
+.social-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-social {
+  flex: 1;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-size: 18px;
+}
+
+.btn-social:hover {
+  background: var(--border);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+    margin: 10px;
+  }
+  .brand-side {
+    padding: 40px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .form-side {
+    padding: 40px;
+  }
+}

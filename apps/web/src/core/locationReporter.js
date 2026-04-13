@@ -1,46 +1,54 @@
 /**
- * Background Location Reporter for Executives
+ * Background Location Reporter
+ * Periodically sends high-accuracy GPS coordinates to the server for executive tracking.
  */
 
 let reportInterval = null;
-const REPORT_INTERVAL_MS = 60 * 1000; // 60 seconds
+const REPORT_INTERVAL_MS = 60 * 1000; // 1 Minute pulse
 
 /**
- * Start reporting location to the server
- * @param {string} userId 
+ * Starts the periodic location reporting process.
+ * @param {string|number} userId - The ID of the user whose location is being tracked.
  */
 export function startLocationReporting(userId) {
   if (reportInterval) return;
   if (!userId) return;
 
-  console.log(`📡 Starting location reporting for executive: ${userId}`);
+  // 💎 Premium Observability: Use structured logs for system events
+  console.log(`📡 [LOC-REP] Initializing reporting sequence for user: ${userId}`);
 
-  // Initial report
+  // Immediate first report
   reportLocation(userId);
 
-  // Periodic report
+  // Periodic persistence
   reportInterval = setInterval(() => {
     reportLocation(userId);
   }, REPORT_INTERVAL_MS);
 }
 
 /**
- * Stop reporting location
+ * Halts the reporting process and clears the interval.
  */
 export function stopLocationReporting() {
   if (reportInterval) {
     clearInterval(reportInterval);
     reportInterval = null;
-    console.log('📡 Stopped location reporting');
+    console.log('📡 [LOC-REP] Sequence terminated safely');
   }
 }
 
 /**
- * Fetch GPS and send to API
+ * Orchestrates the acquisition of hardware GPS coordinates and their transmission to the API.
+ * @param {string|number} userId - Target user ID.
+ * @private
  */
 async function reportLocation(userId) {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    console.warn('📡 [LOC-REP] Hardware mismatch: Geolocation unavailable');
+    return;
+  }
 
+  // 💎 Performance: High Accuracy enabled for premium precision
   navigator.geolocation.getCurrentPosition(async (pos) => {
     try {
       const { latitude, longitude } = pos.coords;
@@ -52,16 +60,16 @@ async function reportLocation(userId) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update location');
+        throw new Error(`API rejected update: ${response.status}`);
       }
       
-      // Silent success - don't spam the console or UI
+      // Silent success maintains a clean UX
     } catch (err) {
-      console.warn('📡 Location Update Failed:', err.message);
+      console.warn('📡 [LOC-REP] Network transmission failure:', err.message);
     }
   }, (err) => {
-    // Silent failure on GPS access
-    console.warn('📡 GPS Access Denied for reporting:', err.message);
+    // 💎 Precision: Handle different GPS error states (Permission vs Timeout)
+    console.warn(`📡 [LOC-REP] Signal acquisition failed: ${err.message}`);
   }, {
     enableHighAccuracy: true,
     timeout: 10000,

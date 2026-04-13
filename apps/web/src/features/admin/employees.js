@@ -55,7 +55,11 @@ export async function loadEmployeesList() {
         <td style="padding:12px 15px;"><strong>${escapeHtml(u.name)}</strong></td>
         <td style="padding:12px 15px;">${escapeHtml(u.employeeId)}</td>
         <td style="padding:12px 15px;">${escapeHtml(u.email)}</td>
-        <td style="padding:12px 15px; text-align:center;"><span class="info-badge" style="background:#312e81; color:#c7d2fe;">${activeTasks}</span></td>
+        <td style="padding:12px 15px; text-align:center;">
+          <button class="btn btn-sm" data-action="admin:viewEmployeeTasks" data-id="${u.id}" style="background:rgba(49,46,129,0.2); border:1px solid #312e81; color:#c7d2fe; cursor:pointer; font-weight:700; border-radius:12px; padding:2px 10px;">
+            ${activeTasks}
+          </button>
+        </td>
         <td style="padding:12px 15px; display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" data-action="admin:editEmployee" data-id="${u.id}">
             <i class="fas fa-edit"></i> Edit

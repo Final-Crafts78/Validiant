@@ -1,4 +1,5 @@
 const supabase = require("../config/supabase");
+const logger = require("../utils/logger");
 
 /**
  * Admin and Analytics Controller
@@ -27,6 +28,7 @@ class AdminController {
         admins: admins || 0
       });
     } catch (err) {
+      logger.error('Failed to fetch analytics', err);
       res.status(500).json({ error: "Failed to fetch analytics" });
     }
   }
@@ -45,6 +47,7 @@ class AdminController {
       if (error) throw error;
       res.json(data);
     } catch (err) {
+      logger.error('Failed to fetch activity logs', err);
       res.status(500).json([]);
     }
   }
@@ -78,11 +81,13 @@ class AdminController {
       
       const csvString = [headers, ...rows].map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
       
+      logger.info('Tasks exported to CSV', { status, employeeId, rowCount: data.length });
+      
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=validiant_export_${new Date().toISOString().split('T')[0]}.csv`);
       res.status(200).send(csvString);
     } catch (err) {
-      console.error('Export Error:', err);
+      logger.error('Export Error', err);
       res.status(500).send("Export failed");
     }
   }

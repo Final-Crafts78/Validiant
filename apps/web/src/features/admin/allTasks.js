@@ -107,10 +107,23 @@ export async function loadAllTasks() {
   if (search) url += `&search=${encodeURIComponent(search)}`;
 
   try {
+    // Premium Skeleton Loader while fetching
+    const list = document.getElementById('allTasksList');
+    if (list) list.innerHTML = renderTableSkeleton();
+
     const res = await fetch(url);
     const tasks = await res.json();
     
-    state.allAdminTasks = Array.isArray(tasks) ? tasks : [];
+    let rawTasks = Array.isArray(tasks) ? tasks : [];
+    
+    // ABSOLUTE PRECISION: Enforce Default Descending Sort by Date (Most Recent First)
+    rawTasks.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.assigned_date || 0);
+      const dateB = new Date(b.created_at || b.assigned_date || 0);
+      return dateB - dateA;
+    });
+
+    state.allAdminTasks = rawTasks;
     const filtered = applyDateFilter(state.allAdminTasks); 
     state.currentFilteredTasks = filtered;
 
@@ -121,6 +134,34 @@ export async function loadAllTasks() {
     const list = document.getElementById('allTasksList');
     if (list) list.innerHTML = '<div class="empty-state"><h3>Error Loading Tasks</h3></div>';
   }
+}
+
+function renderTableSkeleton() {
+  let rows = '';
+  for (let i = 0; i < 8; i++) {
+    rows += `
+      <tr style="border-bottom: 1px solid #334155;">
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 20px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 60px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 100px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 80px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 100px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 50px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 40px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 20px; width: 70px; border-radius: 10px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 60px;"></div></td>
+        <td style="padding: 15px;"><div class="skeleton" style="height: 24px; width: 50px; border-radius: 6px;"></div></td>
+      </tr>
+    `;
+  }
+  return `
+    <div class="table-wrapper skeleton-table" style="overflow: hidden; background: #1e293b; border-radius: 8px; border: 1px solid #334155; opacity: 0.6;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead><tr style="border-bottom: 1px solid #475569;"><th colspan="10" style="padding: 20px;"><div class="skeleton" style="height: 10px; width: 30%;"></div></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function applyDateFilter(tasks) {
@@ -173,7 +214,7 @@ function displayAllTasksList(tasks) {
 
   if (!tasks || tasks.length === 0) {
     list.innerHTML = `
-      <div class="empty-state">
+      <div class="empty-state view-fade-in">
         <i class="fas fa-inbox" style="font-size: 3rem; color: #6B7280; margin-bottom: 15px;"></i>
         <h3 style="color: #9CA3AF;">No Tasks Found</h3>
         <p style="color: #6B7280; font-size: 13px;">Try adjusting your filters or create a new task</p>
@@ -189,11 +230,21 @@ function displayAllTasksList(tasks) {
   const endIndex = startIndex + TASKS_PER_PAGE;
   const tasksToDisplay = tasks.slice(startIndex, endIndex);
 
-  let html = `
-    <div class="table-header-info" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
+  // Shell for the table
+  let shellHtml = `
+    <div class="table-header-info view-fade-in" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
       <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks</span>
+      
+      <div id="bulkActionsContainer" style="display:none; animation: slideIn 0.2s ease;">
+        <div style="display:flex; align-items:center; gap:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); padding:6px 15px; border-radius:12px;">
+          <span id="selectedCountText" style="font-size:13px; color:#a5b4fc; font-weight:600;">0 selected</span>
+          <div style="width:1px; height:16px; background:rgba(255,255,255,0.1);"></div>
+          <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks" style="padding:4px 10px; font-size:12px;"><i class="fas fa-user-plus"></i> Assign</button>
+          <button class="btn btn-danger btn-sm" data-action="admin:bulkDeleteTasks" style="padding:4px 10px; font-size:12px; background:rgba(239,68,68,0.2); border-color:rgba(239,68,68,0.4);"><i class="fas fa-trash"></i> Delete</button>
+        </div>
+      </div>
     </div>
-    <div class="table-wrapper" style="overflow-x: auto; background: #1e293b; border-radius: 8px; border: 1px solid #334155;">
+    <div class="table-wrapper gpu-boost" style="overflow-x: auto; background: #1e293b; border-radius: 8px; border: 1px solid #334155; contain: content;">
       <table class="data-table" id="allTasksTable" style="width: 100%; border-collapse: collapse; text-align: left;">
         <thead style="border-bottom: 1px solid #334155;">
           <tr>
@@ -203,95 +254,20 @@ function displayAllTasksList(tasks) {
             <th style="padding: 12px 15px; color: #94A3B8;">Client</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Employee</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Pincode</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Map</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Status</th>
             <th style="padding: 12px 15px; color: #94A3B8;">SLA (72h)</th>
             <th style="padding: 12px 15px; color: #94A3B8; text-align:right;">Actions</th>
           </tr>
         </thead>
-        <tbody>
-  `;
-
-  tasksToDisplay.forEach(t => {
-    // Legacy Date Format
-    let dateStr = '-';
-    if(t.created_at || t.assigned_date) {
-       const d = new Date(t.created_at || t.assigned_date);
-       dateStr = d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'});
-    }
-
-    const isUnassigned = !t.assigned_to || t.assigned_to === 'Unassigned' || t.employees === null;
-    const assigneeName = isUnassigned ? 'Unassigned' : (t.employees ? t.employees.name : t.assigned_to);
-    
-    // SLA Calculation Logic
-    let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
-    const assignedDate = t.assigned_date || t.assignedDate;
-    if (t.status !== 'Unassigned' && assignedDate) {
-        const assignedTime = new Date(assignedDate).getTime();
-        let endTime = new Date().getTime(); 
-        
-        if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
-           endTime = new Date(t.completed_at || t.verified_at).getTime();
-        }
-
-        const hours = (endTime - assignedTime) / (1000 * 60 * 60);
-        if (hours <= 72) {
-          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);"><i class="fas fa-check"></i> On Time</span>`;
-        } else {
-          const days = Math.floor(hours/24);
-          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-circle"></i> ${days}d Overdue</span>`;
-        }
-    }
-
-    const mapLink = t.map_url || t.mapUrl || '';
-    const mapDisplay = mapLink 
-      ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
-      : `<span style="color: #6B7280; font-size: 11px;">No map</span>`;
-
-    html += `
-      <tr class="task-row" style="border-bottom: 1px solid #334155;">
-        <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
-        <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
-        <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
-        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
-            ${escapeHtml(t.clientName || '-')}
-          </div>
-        </td>
-        <td style="padding: 12px 15px;">
-          ${isUnassigned 
-            ? `<span style="color: #F59E0B; font-size: 13px;"><i class="fas fa-exclamation-circle"></i> Unassigned</span>`
-            : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user-circle"></i> ${escapeHtml(assigneeName)}</span>`
-          }
-        </td>
-        <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
-        <td style="padding: 12px 15px;">${mapDisplay}</td>
-        <td style="padding: 12px 15px;">
-          <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
-            ${t.status}
-          </span>
-        </td>
-        <td style="padding: 12px 15px;">${slaBadge}</td>
-        <td style="padding: 12px 15px; text-align:right;">
-          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}">
-            <i class="fas fa-eye"></i> View
-          </button>
-        </td>
-      </tr>
-    `;
-  });
-
-  html += `
-        </tbody>
+        <tbody id="allTasksTableBody"></tbody>
       </table>
     </div>
   `;
 
   // Pagination UI
   if (totalPages > 1) {
-    html += `
-      <div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
+    shellHtml += `
+      <div class="pagination view-fade-in" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
         <button class="btn btn-secondary btn-sm" data-action="admin:prevPage" ${currentTaskPage === 1 ? 'disabled' : ''}>
           <i class="fas fa-chevron-left"></i> Previous
         </button>
@@ -303,14 +279,90 @@ function displayAllTasksList(tasks) {
     `;
   }
 
-  list.innerHTML = html;
+  list.innerHTML = shellHtml;
+  const tbody = document.getElementById('allTasksTableBody');
+  if (!tbody) return;
+
+  // Progressive row rendering for performance
+  tasksToDisplay.forEach((t, i) => {
+    let dateStr = '-';
+    if(t.created_at || t.assigned_date) {
+       const d = new Date(t.created_at || t.assigned_date);
+       dateStr = d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'});
+    }
+
+    const isUnassigned = !t.assigned_to || t.assigned_to === 'Unassigned' || !t.assignedToName;
+    const assigneeName = isUnassigned ? 'Unassigned' : t.assignedToName;
+    
+    // SLA Calculation Logic (Simplified for performance)
+    let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
+    const assignedDate = t.assigned_date || t.assignedDate;
+    if (t.status !== 'Unassigned' && assignedDate) {
+        const hours = (new Date().getTime() - new Date(assignedDate).getTime()) / (1000 * 60 * 60);
+        if (hours <= 72) {
+          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.1); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);">On Time</span>`;
+        } else {
+          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.1); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);">Overdue</span>`;
+        }
+    }
+
+    const row = document.createElement('tr');
+    row.className = 'task-row gpu-boost';
+    row.style.cssText = `border-bottom: 1px solid #334155; opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.03}s;`;
+    
+    row.innerHTML = `
+        <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
+        <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
+        <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
+        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">${escapeHtml(t.clientName || '-')}</td>
+        <td style="padding: 12px 15px;">
+          <span style="color: ${isUnassigned ? '#F59E0B' : '#60A5FA'}; font-size: 13px;">
+            ${isUnassigned ? '<i class="fas fa-exclamation-circle"></i>' : '<i class="fas fa-user-circle"></i>'} ${escapeHtml(assigneeName)}
+          </span>
+        </td>
+        <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
+        <td style="padding: 12px 15px;">
+          <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
+            ${t.status}
+          </span>
+        </td>
+        <td style="padding: 12px 15px;">${slaBadge}</td>
+        <td style="padding: 12px 15px; text-align:right;">
+          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}">
+            <i class="fas fa-eye"></i> View
+          </button>
+        </td>
+    `;
+    tbody.appendChild(row);
+    
+    // Trigger animation in next frame
+    requestAnimationFrame(() => {
+      row.style.opacity = '1';
+      row.style.transform = 'translateY(0)';
+    });
+  });
 
   // Attach Selection Event Listeners
   const selectAll = document.getElementById('selectAllCb');
-  selectAll?.addEventListener('change', () => toggleSelectAll('all-tasks-cb'));
+  const bulkContainer = document.getElementById('bulkActionsContainer');
+  const countText = document.getElementById('selectedCountText');
 
-  document.querySelectorAll('.all-tasks-cb').forEach(cb => {
-    cb.addEventListener('change', () => handleSingleSelection(cb));
+  const updateBulkUI = () => {
+    const selected = document.querySelectorAll('.all-tasks-cb:checked');
+    if (bulkContainer) bulkContainer.style.display = selected.length > 0 ? 'flex' : 'none';
+    if (countText) countText.textContent = `${selected.length} selected`;
+  };
+
+  selectAll?.addEventListener('change', () => {
+    toggleSelectAll('all-tasks-cb');
+    updateBulkUI();
+  });
+
+  tbody.addEventListener('change', (e) => {
+    if (e.target.classList.contains('all-tasks-cb')) {
+      handleSingleSelection(e.target);
+      updateBulkUI();
+    }
   });
 }
 
