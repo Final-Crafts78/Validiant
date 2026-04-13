@@ -26,7 +26,7 @@ import {
   toggleSelectAll, handleSingleSelection, bulkAssignTasks, 
   confirmBulkAssign, bulkDeleteTasks 
 } from './features/admin/bulkOperations';
-import { showBulkUpload, processSmartText, submitFinalBulkUpload, handleBulkDuplicateChoice } from './features/admin/bulkUpload';
+import { showBulkUpload, processSmartText, submitFinalBulkUpload, handleBulkDuplicateChoice, downloadBulkUploadTemplate } from './features/admin/bulkUpload';
 import { showEditMapModal, saveEditedMapUrl } from './features/admin/mapModals';
 import { showActivityLog } from './features/admin/activityLog';
 import { sortByNearest, sortByPincode } from './features/employee/sorting';
@@ -173,6 +173,9 @@ function setupEventDelegation() {
           break;
 
         // ADMIN ACTIONS
+        case 'admin:downloadTemplate':
+          downloadBulkUploadTemplate();
+          break;
         case 'admin:bulkDuplicateChoice': {
           const choice = target.getAttribute('data-choice');
           if (choice) handleBulkDuplicateChoice(choice);
