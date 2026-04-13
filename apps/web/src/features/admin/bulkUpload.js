@@ -1,7 +1,8 @@
 /**
  * Admin: Smart Bulk Upload Feature
  */
-import { showToast, createModal, closeAllModals, escapeHtml } from '../../utils/ui';
+import { showToast, escapeHtml } from '../../utils/ui';
+import { createModal, closeAllModals } from '../../utils/modals';
 import { state } from '../../store/globalState';
 import { loadAllTasks } from './allTasks';
 import { showUnassignedTasks } from './unassignedTasks';
