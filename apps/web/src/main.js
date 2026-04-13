@@ -19,8 +19,8 @@ import { cleanupCurrentView } from './utils/ui';
 // New Phase 9 Modules:
 import { 
   openTaskDetailsModal, openStatusUpdateModal, confirmStatusUpdate, 
-  openReassignModal, confirmReassign, openUnassignModal, confirmUnassign, 
-  deleteTask, exportTasks, openEditNotesModal, confirmEditNotes 
+  openReassignModal, confirmReassign, openUnassignModal, confirmUnassign, deleteTask, exportTasks,
+  openEditNoteModal, confirmEditNote
 } from './features/admin/adminActions';
 import { 
   toggleSelectAll, handleSingleSelection, bulkAssignTasks, 
@@ -229,11 +229,11 @@ function setupEventDelegation() {
       case 'admin:saveMapUrl':
         if(id) saveEditedMapUrl(id);
         break;
-      case 'admin:openEditNotes':
-        if(id) openEditNotesModal(id, target.getAttribute('data-notes') || '');
+      case 'admin:openEditNote':
+        if(id) openEditNoteModal(id);
         break;
-      case 'admin:confirmEditNotes':
-        if(id) confirmEditNotes(id);
+      case 'admin:confirmEditNote':
+        if(id) confirmEditNote(id);
         break;
 
       // ADMIN BULK OPERATIONS

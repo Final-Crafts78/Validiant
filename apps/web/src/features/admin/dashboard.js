@@ -27,6 +27,10 @@ export async function showAssignTask() {
       <form id="taskForm" class="modern-form">
         <div class="form-grid">
           <!-- Left Column: Task Information -->
+          <div class="form-section">
+            <h4 class="section-title">
+              <i class="fas fa-info-circle"></i> Task Information
+            </h4>
             
             <div class="form-group">
               <label for="caseId">
@@ -139,6 +143,7 @@ export async function showAssignTask() {
               </label>
               <select id="assignedTo" class="form-input">
                 <option value="Unassigned">-- Leave Unassigned --</option>
+                <option disabled>Loading employees...</option>
               </select>
               <small class="form-hint" style="color: #94A3B8; font-size: 11px;">Leave unassigned to add task to pool</small>
             </div>
