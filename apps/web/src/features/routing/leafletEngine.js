@@ -175,3 +175,17 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
   );
 }
+
+export function cleanupMapInstance() {
+  if (routingMapInstance) {
+    try {
+      routingMapInstance.off();
+      routingMapInstance.remove();
+    } catch (e) {
+      console.warn('Map cleanup error:', e);
+    }
+    routingMapInstance = null;
+    markerLayer = null;
+    routeLayer = null;
+  }
+}

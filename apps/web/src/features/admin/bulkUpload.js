@@ -321,7 +321,7 @@ export async function submitFinalBulkUpload() {
     const duplicates = [];
     const newTasks = [];
 
-    tasks.forEach(t => {
+    updatedTasks.forEach(t => {
       if (existingMap.has(t.title.trim().toLowerCase())) {
         duplicates.push({ ...t, existingId: existingMap.get(t.title.trim().toLowerCase()).id });
       } else {

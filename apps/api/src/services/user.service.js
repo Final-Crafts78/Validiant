@@ -83,6 +83,56 @@ class UserService {
     await logActivity(admin.id, "Admin", "EMPLOYEE_DELETED", null, `Deleted: ${employee?.name}`);
     return true;
   }
+
+  /**
+   * Update employee location
+   */
+  async updateLocation(userId, latitude, longitude) {
+    const { error } = await supabase
+      .from("users")
+      .update({ 
+        latitude, 
+        longitude, 
+        last_active: new Date() 
+      })
+      .eq("id", userId);
+
+    if (error) throw error;
+    return true;
+  }
+
+  /**
+   * Get all employee locations for Admin Tracker
+   */
+  async getEmployeeLocations() {
+    const { data: users, error: userError } = await supabase
+      .from("users")
+      .select("id, name, employee_id, latitude, longitude, last_active")
+      .eq("role", "employee")
+      .eq("is_active", true);
+
+    if (userError) throw userError;
+
+    const { data: taskCounts, error: taskError } = await supabase
+      .from("tasks")
+      .select("assigned_to, status")
+      .not("assigned_to", "is", null)
+      .not("status", "in", '("Completed", "Verified")');
+
+    if (taskError) throw taskError;
+
+    const countMap = taskCounts.reduce((acc, t) => {
+      acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
+      return acc;
+    }, {});
+
+    return users.map(u => ({
+      ...u,
+      employeeId: u.employee_id,
+      lastActive: u.last_active,
+      activeTasks: countMap[u.id] || 0
+    }));
+  }
 }
 
 module.exports = new UserService();

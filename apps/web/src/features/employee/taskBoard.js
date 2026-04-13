@@ -112,7 +112,7 @@ export function displayEmployeeTasks(tasks) {
       : '';
 
     return `
-      <div class="mobile-optimized-card" data-action="task:openPanel" data-id="${task.id}" style="opacity: 0; transform: translateY(20px); transition: all 0.3s ease;">
+      <div class="mobile-optimized-card" data-action="task:openPanel" data-id="${task.id}" style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1); cursor:pointer; opacity: 0; transform: translateY(20px); transition: all 0.3s ease;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
           <div style="flex:1;">
             <h3 style="margin:0 0 6px 0; color:#f8fafc; font-size:16px; font-weight:600;">

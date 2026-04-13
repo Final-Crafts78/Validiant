@@ -20,7 +20,7 @@ export function showAllTasks() {
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
       <h2><i class="fas fa-list-alt"></i> All Tasks Overview</h2>
       <div>
-        <button class="btn btn-success btn-sm" data-action="admin:exportCSV"><i class="fas fa-file-csv"></i> Export Data</button>
+        <button class="btn btn-success btn-sm" data-action="admin:exportTasks"><i class="fas fa-file-csv"></i> Export Data</button>
       </div>
     </div>
     
@@ -274,7 +274,7 @@ function displayAllTasksList(tasks) {
         </td>
         <td style="padding: 12px 15px;">${slaBadge}</td>
         <td style="padding: 12px 15px; text-align:right;">
-          <button class="btn btn-primary btn-sm" data-action="task:openPanel" data-id="${t.id}">
+          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}">
             <i class="fas fa-eye"></i> View
           </button>
         </td>

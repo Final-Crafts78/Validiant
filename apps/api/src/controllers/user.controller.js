@@ -44,6 +44,26 @@ class UserController {
       res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  async getLocations(req, res) {
+    try {
+      const locations = await userService.getEmployeeLocations();
+      res.json(locations);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  async updateLocation(req, res) {
+    try {
+      const { id } = req.params;
+      const { latitude, longitude } = req.body;
+      await userService.updateLocation(id, latitude, longitude);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = new UserController();

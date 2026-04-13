@@ -25,10 +25,11 @@ export function showToast(message, type = 'info') {
 }
 
 export function cleanupCurrentView() {
-  if (window.routingMapInstance) {
-    window.routingMapInstance.remove();
-    window.routingMapInstance = null;
-  }
+  // Lazy import to break circular dependency: ui.js ↔ leafletEngine.js
+  // leafletEngine imports showToast from ui.js, so we can't statically import from leafletEngine here.
+  import('../features/routing/leafletEngine').then(mod => {
+    mod.cleanupMapInstance();
+  }).catch(() => {});
   const tempEls = document.querySelectorAll('.temp-edit-section, .inline-edit-form');
   tempEls.forEach(el => el.remove());
 }

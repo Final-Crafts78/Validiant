@@ -26,7 +26,7 @@ import {
   toggleSelectAll, handleSingleSelection, bulkAssignTasks, 
   confirmBulkAssign, bulkDeleteTasks 
 } from './features/admin/bulkOperations';
-import { showBulkUpload, processSmartText, submitFinalBulkUpload } from './features/admin/bulkUpload';
+import { showBulkUpload, processSmartText, submitFinalBulkUpload, handleBulkDuplicateChoice } from './features/admin/bulkUpload';
 import { showEditMapModal, saveEditedMapUrl } from './features/admin/mapModals';
 import { showActivityLog } from './features/admin/activityLog';
 import { sortByNearest, sortByPincode } from './features/employee/sorting';
@@ -35,6 +35,8 @@ import {
   showKYCDashboard, openKYCModal, loadKYCRequests, 
   viewKYCReport, copyKYCLink 
 } from './features/admin/kycService';
+import { startLocationReporting, stopLocationReporting } from './core/locationReporter';
+import { showExecutiveTracker, cleanupTracker, updateTrackerData } from './features/admin/executiveTracker';
 
 /**
  * SESSION MANAGEMENT (30 Minutes Inactivity Timeout)
@@ -47,6 +49,15 @@ function checkSession() {
     showToast('Session expired due to inactivity. Please login again.', 'error');
     setTimeout(() => logout(), 2000);
   }
+}
+
+/**
+ * Centralized cleanup for all view transitions.
+ * Kills any active map, tracker map, and temp DOM elements.
+ */
+function fullCleanup() {
+  cleanupCurrentView();
+  cleanupTracker();
 }
 function init() {
   console.log('🚀 Validiant Enterprise Bootloader Starting...');
@@ -68,6 +79,8 @@ function init() {
     showAssignTask();
   } else {
     showTodayTasks();
+    // Start background location reporting for executives
+    startLocationReporting(state.currentUser.id);
   }
 
   // Bind Global Event Delegation
@@ -98,6 +111,7 @@ function setupEventDelegation() {
     switch (action) {
       // AUTH
       case 'auth:logout':
+        stopLocationReporting();
         logout();
         break;
 
@@ -108,48 +122,61 @@ function setupEventDelegation() {
 
       // VIEWS
       case 'view:adminAssign':
-        cleanupCurrentView();
+        fullCleanup();
         showAssignTask();
         break;
       case 'view:employeeToday':
-        cleanupCurrentView();
+        fullCleanup();
         showTodayTasks();
         break;
       case 'view:mapRouting':
-        cleanupCurrentView();
+        fullCleanup();
         showMapRouting(state.allEmployeeTasks, openTaskPanel);
         break;
       case 'view:adminPool':
-        cleanupCurrentView();
+        fullCleanup();
         showUnassignedTasks();
         break;
       case 'view:adminAllTasks':
-        cleanupCurrentView();
+        fullCleanup();
         showAllTasks();
         break;
       case 'view:adminEmployees':
-        cleanupCurrentView();
+        fullCleanup();
         showEmployees();
         break;
       case 'view:analytics':
-        cleanupCurrentView();
+        fullCleanup();
         showAnalyticsDashboard();
         break;
       case 'view:kyc':
-        cleanupCurrentView();
+        fullCleanup();
         showKYCDashboard();
         break;
       case 'view:employeeHistory':
-        cleanupCurrentView();
+        fullCleanup();
         showTaskHistory();
         break;
       case 'view:activityLog':
-        cleanupCurrentView();
+        fullCleanup();
         showActivityLog();
+        break;
+      
+      case 'view:trackExecutives':
+        fullCleanup();
+        showExecutiveTracker();
+        break;
+
+      case 'tracker:refresh':
+        updateTrackerData();
         break;
 
       // ADMIN ACTIONS
-      // ADMIN ACTIONS
+      case 'admin:bulkDuplicateChoice': {
+        const choice = target.getAttribute('data-choice');
+        if (choice) handleBulkDuplicateChoice(choice);
+        break;
+      }
       case 'admin:showBulkUpload':
         showBulkUpload();
         break;
@@ -281,10 +308,11 @@ function setupEventDelegation() {
       case 'kyc:viewReport':
         if(id) viewKYCReport(id);
         break;
-      case 'kyc:copyLink':
+      case 'kyc:copyLink': {
         const link = target.getAttribute('data-link');
         if(link) copyKYCLink(link);
         break;
+      }
       
       case 'routing:refresh':
         showMapRouting(state.allEmployeeTasks, openTaskPanel);

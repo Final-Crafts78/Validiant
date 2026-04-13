@@ -16,6 +16,7 @@ export function initMenu() {
     { icon: 'fa-users', text: 'Employees', action: 'view:adminEmployees' },
     { icon: 'fa-history', text: 'Activity Log', action: 'view:activityLog' },
     { icon: 'fa-chart-pie', text: 'Analytics', action: 'view:analytics' },
+    { icon: 'fa-satellite-dish', text: 'Track Executives', action: 'view:trackExecutives' },
     { icon: 'fa-upload', text: 'Bulk Upload', action: 'admin:showBulkUpload' },
     { icon: 'fa-download', text: 'Export CSV', action: 'admin:exportTasks' },
     { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'view:kyc' },
