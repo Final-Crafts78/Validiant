@@ -30,6 +30,10 @@ import { showEditMapModal, saveEditedMapUrl } from './features/admin/mapModals';
 import { showActivityLog } from './features/admin/activityLog';
 import { sortByNearest, sortByPincode } from './features/employee/sorting';
 import { showEditEmployeeModal, openResetPasswordModal, confirmResetPassword } from './features/admin/employees';
+import { 
+  showKYCDashboard, openKYCModal, loadKYCRequests, 
+  viewKYCReport, copyKYCLink 
+} from './features/admin/kycService';
 
 /**
  * SESSION MANAGEMENT (30 Minutes Inactivity Timeout)
@@ -132,8 +136,7 @@ function setupEventDelegation() {
         break;
       case 'view:kyc':
         cleanupCurrentView();
-        showToast('Digital KYC is handled via internal script', 'info');
-        if (typeof window.showKYCDashboard === 'function') window.showKYCDashboard();
+        showKYCDashboard();
         break;
       case 'view:employeeHistory':
         cleanupCurrentView();
@@ -259,6 +262,21 @@ function setupEventDelegation() {
         break;
       case 'sorting:pincode':
         sortByPincode();
+        break;
+      
+      // KYC ACTIONS
+      case 'kyc:openModal':
+        openKYCModal();
+        break;
+      case 'kyc:refresh':
+        loadKYCRequests();
+        break;
+      case 'kyc:viewReport':
+        if(id) viewKYCReport(id);
+        break;
+      case 'kyc:copyLink':
+        const link = target.getAttribute('data-link');
+        if(link) copyKYCLink(link);
         break;
       
       case 'routing:refresh':
