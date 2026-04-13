@@ -214,7 +214,7 @@ function displayAllTasksList(tasks) {
 
   if (!tasks || tasks.length === 0) {
     list.innerHTML = `
-      <div class="empty-state view-fade-in">
+      <div class="empty-state">
         <i class="fas fa-inbox" style="font-size: 3rem; color: #6B7280; margin-bottom: 15px;"></i>
         <h3 style="color: #9CA3AF;">No Tasks Found</h3>
         <p style="color: #6B7280; font-size: 13px;">Try adjusting your filters or create a new task</p>
@@ -230,9 +230,8 @@ function displayAllTasksList(tasks) {
   const endIndex = startIndex + TASKS_PER_PAGE;
   const tasksToDisplay = tasks.slice(startIndex, endIndex);
 
-  // Shell for the table
-  let shellHtml = `
-    <div class="table-header-info view-fade-in" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
+  let html = `
+    <div class="table-header-info gpu-boost" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
       <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks</span>
       
       <div id="bulkActionsContainer" style="display:none; animation: slideIn 0.2s ease;">
@@ -254,37 +253,17 @@ function displayAllTasksList(tasks) {
             <th style="padding: 12px 15px; color: #94A3B8;">Client</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Employee</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Pincode</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">Map</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Status</th>
             <th style="padding: 12px 15px; color: #94A3B8;">SLA (72h)</th>
             <th style="padding: 12px 15px; color: #94A3B8; text-align:right;">Actions</th>
           </tr>
         </thead>
-        <tbody id="allTasksTableBody"></tbody>
-      </table>
-    </div>
+        <tbody>
   `;
 
-  // Pagination UI
-  if (totalPages > 1) {
-    shellHtml += `
-      <div class="pagination view-fade-in" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
-        <button class="btn btn-secondary btn-sm" data-action="admin:prevPage" ${currentTaskPage === 1 ? 'disabled' : ''}>
-          <i class="fas fa-chevron-left"></i> Previous
-        </button>
-        <span style="color: #94A3B8; font-size: 14px;">Page ${currentTaskPage} of ${totalPages}</span>
-        <button class="btn btn-secondary btn-sm" data-action="admin:nextPage" ${currentTaskPage === totalPages ? 'disabled' : ''}>
-          Next <i class="fas fa-chevron-right"></i>
-        </button>
-      </div>
-    `;
-  }
-
-  list.innerHTML = shellHtml;
-  const tbody = document.getElementById('allTasksTableBody');
-  if (!tbody) return;
-
-  // Progressive row rendering for performance
-  tasksToDisplay.forEach((t, i) => {
+  tasksToDisplay.forEach(t => {
+    // Legacy Date Format
     let dateStr = '-';
     if(t.created_at || t.assigned_date) {
        const d = new Date(t.created_at || t.assigned_date);
@@ -294,33 +273,50 @@ function displayAllTasksList(tasks) {
     const isUnassigned = !t.assigned_to || t.assigned_to === 'Unassigned' || !t.assignedToName;
     const assigneeName = isUnassigned ? 'Unassigned' : t.assignedToName;
     
-    // SLA Calculation Logic (Simplified for performance)
+    // SLA Calculation Logic
     let slaBadge = '<span class="status-badge" style="background:#374151; color:#9ca3af; font-size:11px;">N/A</span>';
     const assignedDate = t.assigned_date || t.assignedDate;
     if (t.status !== 'Unassigned' && assignedDate) {
-        const hours = (new Date().getTime() - new Date(assignedDate).getTime()) / (1000 * 60 * 60);
+        const assignedTime = new Date(assignedDate).getTime();
+        let endTime = new Date().getTime(); 
+        
+        if (['Completed', 'Verified', 'Rejected'].includes(t.status) && (t.completed_at || t.verified_at)) {
+           endTime = new Date(t.completed_at || t.verified_at).getTime();
+        }
+
+        const hours = (endTime - assignedTime) / (1000 * 60 * 60);
         if (hours <= 72) {
-          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.1); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);">On Time</span>`;
+          slaBadge = `<span class="status-badge" style="background:rgba(16, 185, 129, 0.15); color:#34d399; font-size:11px; border:1px solid rgba(16, 185, 129, 0.2);"><i class="fas fa-check"></i> On Time</span>`;
         } else {
-          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.1); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);">Overdue</span>`;
+          const days = Math.floor(hours/24);
+          slaBadge = `<span class="status-badge" style="background:rgba(239, 68, 68, 0.15); color:#f87171; font-size:11px; border:1px solid rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-circle"></i> ${days}d Overdue</span>`;
         }
     }
 
-    const row = document.createElement('tr');
-    row.className = 'task-row gpu-boost';
-    row.style.cssText = `border-bottom: 1px solid #334155; opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.03}s;`;
-    
-    row.innerHTML = `
+    const mapLink = t.map_url || t.mapUrl || '';
+    const mapDisplay = mapLink 
+      ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
+      : `<span style="color: #6B7280; font-size: 11px;">No map</span>`;
+
+    html += `
+      <tr class="task-row" style="border-bottom: 1px solid #334155;">
         <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
         <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
         <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
-        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">${escapeHtml(t.clientName || '-')}</td>
+        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
+            ${escapeHtml(t.clientName || '-')}
+          </div>
+        </td>
         <td style="padding: 12px 15px;">
-          <span style="color: ${isUnassigned ? '#F59E0B' : '#60A5FA'}; font-size: 13px;">
-            ${isUnassigned ? '<i class="fas fa-exclamation-circle"></i>' : '<i class="fas fa-user-circle"></i>'} ${escapeHtml(assigneeName)}
-          </span>
+          ${isUnassigned 
+            ? `<span style="color: #F59E0B; font-size: 13px;"><i class="fas fa-exclamation-circle"></i> Unassigned</span>`
+            : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user-circle"></i> ${escapeHtml(assigneeName)}</span>`
+          }
         </td>
         <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
+        <td style="padding: 12px 15px;">${mapDisplay}</td>
         <td style="padding: 12px 15px;">
           <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
             ${t.status}
@@ -332,15 +328,32 @@ function displayAllTasksList(tasks) {
             <i class="fas fa-eye"></i> View
           </button>
         </td>
+      </tr>
     `;
-    tbody.appendChild(row);
-    
-    // Trigger animation in next frame
-    requestAnimationFrame(() => {
-      row.style.opacity = '1';
-      row.style.transform = 'translateY(0)';
-    });
   });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Pagination UI
+  if (totalPages > 1) {
+    html += `
+      <div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
+        <button class="btn btn-secondary btn-sm" data-action="admin:prevPage" ${currentTaskPage === 1 ? 'disabled' : ''}>
+          <i class="fas fa-chevron-left"></i> Previous
+        </button>
+        <span style="color: #94A3B8; font-size: 14px;">Page ${currentTaskPage} of ${totalPages}</span>
+        <button class="btn btn-secondary btn-sm" data-action="admin:nextPage" ${currentTaskPage === totalPages ? 'disabled' : ''}>
+          Next <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
 
   // Attach Selection Event Listeners
   const selectAll = document.getElementById('selectAllCb');
@@ -349,8 +362,12 @@ function displayAllTasksList(tasks) {
 
   const updateBulkUI = () => {
     const selected = document.querySelectorAll('.all-tasks-cb:checked');
-    if (bulkContainer) bulkContainer.style.display = selected.length > 0 ? 'flex' : 'none';
-    if (countText) countText.textContent = `${selected.length} selected`;
+    if (bulkContainer) {
+      bulkContainer.style.display = selected.length > 0 ? 'block' : 'none';
+    }
+    if (countText) {
+      countText.textContent = `${selected.length} selected`;
+    }
   };
 
   selectAll?.addEventListener('change', () => {
@@ -358,11 +375,11 @@ function displayAllTasksList(tasks) {
     updateBulkUI();
   });
 
-  tbody.addEventListener('change', (e) => {
-    if (e.target.classList.contains('all-tasks-cb')) {
-      handleSingleSelection(e.target);
+  document.querySelectorAll('.all-tasks-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      handleSingleSelection(cb);
       updateBulkUI();
-    }
+    });
   });
 }
 

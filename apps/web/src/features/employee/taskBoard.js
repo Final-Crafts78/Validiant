@@ -107,7 +107,7 @@ export function displayEmployeeTasks(tasks) {
   if (!list) return;
 
   if (tasks.length === 0) {
-    list.innerHTML = `<div class="empty-state view-fade-in">
+    list.innerHTML = `<div class="empty-state">
       <i class="fas fa-check-circle" style="font-size:3rem; color:#10b981; margin-bottom:15px;"></i>
       <h3>All Clear!</h3>
       <p>No tasks assigned for today.</p>
@@ -116,16 +116,23 @@ export function displayEmployeeTasks(tasks) {
   }
 
   // Define logic for badges (SLA/Approx/Distance)
-  const renderTask = (task) => {
+  const tasksHtml = tasks.map((task, index) => {
     const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
     const mapLink = task.map_url || task.mapUrl || task.mapurl;
+    
+    // Approx Badge
     const isApprox = (!parseFloat(task.latitude) || !parseFloat(task.longitude)) && task.pincode && pincodeData[task.pincode];
+    const approxBadge = isApprox
+      ? `<span style="background:rgba(245,158,11,0.15); color:#f59e0b; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500;" title="Pincode fallback location"><i class="fas fa-exclamation-triangle"></i> Approx Area</span>`
+      : '';
+
+    // Distance Badge (if available from VRP)
     const distanceBadge = task.distanceKm 
-      ? `<span style="background:rgba(16,185,129,0.1); color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
+      ? `<span style="background:rgba(16,185,129,0.15); color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
 
     return `
-      <div class="mobile-optimized-card gpu-boost" data-action="task:openPanel" data-id="${task.id}" style="opacity: 0; transform: translateY(15px); contain: layout style;">
+      <div class="mobile-optimized-card gpu-boost" data-action="task:openPanel" data-id="${task.id}" style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1); cursor:pointer; opacity: 0; transform: translateY(20px); transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); contain: content;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
           <div style="flex:1;">
             <h3 style="margin:0 0 6px 0; color:#f8fafc; font-size:16px; font-weight:600;">
@@ -136,53 +143,46 @@ export function displayEmployeeTasks(tasks) {
               <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client')}</span>
               <span class="pincode-tag"><i class="fas fa-map-pin" style="color:#60a5fa;"></i> ${task.pincode}</span>
               ${distanceBadge}
-              ${isApprox ? `<span class="badge-approx">Approx Area</span>` : ''}
+              ${approxBadge}
             </div>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+            ${mapLink ? `
+              <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
+                      class="btn btn-primary btn-sm" style="padding:5px 10px; font-size:11px; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.4); color:#60a5fa;">
+                <i class="fas fa-map-marker-alt"></i> Navigate
+              </button>
+            ` : ''}
             <span class="status-badge ${statusClass}">${task.status}</span>
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-          <span style="color:#6366f1; font-size:12px; font-weight:600;">View details <i class="fas fa-chevron-right" style="font-size:10px; margin-left:3px;"></i></span>
+          <span style="color:#6366f1; font-size:12px; font-weight:600;">Tap to view details <i class="fas fa-chevron-right" style="font-size:10px; margin-left:3px;"></i></span>
         </div>
       </div>
     `;
-  };
+  }).join('');
 
-  // Performance: Batch DOM updates using DocumentFragment
-  const container = document.createElement('div');
-  container.className = 'task-grid-container';
-  container.style.cssText = 'display: grid; gap: 16px;';
-  
-  const header = `<div style="color:#94a3b8; font-size:13px; margin-bottom:15px; display:flex; align-items:center; gap:8px;" class="view-fade-in">
+  list.innerHTML = `
+    <div style="color:#94a3b8; font-size:13px; margin-bottom:15px; display:flex; align-items:center; gap:8px;">
       <i class="fas fa-info-circle"></i>
       <span>Found <strong>${tasks.length}</strong> active task(s) for your current shift</span>
-    </div>`;
-  
-  list.innerHTML = header;
-  list.appendChild(container);
+    </div>
+    ${tasksHtml}
+  `;
 
-  // Lazy reveal logic
+  // Hardware Accelerated Scroll Reveal (Legacy parity)
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         requestAnimationFrame(() => {
-          entry.target.style.transition = 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
-          entry.target.style.opacity = '1';
-          entry.target.style.transform = 'translateY(0)';
+          entry.target.style.opacity = "1";
+          entry.target.style.transform = "translateY(0)";
         });
         observer.unobserve(entry.target);
       }
     });
-  }, { threshold: 0.1, rootMargin: '50px' });
+  }, { threshold: 0.1 });
 
-  // Progressive rendering for ultra-smooth feel
-  tasks.forEach((task, i) => {
-    const div = document.createElement('div');
-    div.innerHTML = renderTask(task);
-    const card = div.firstElementChild;
-    container.appendChild(card);
-    observer.observe(card);
-  });
+  list.querySelectorAll('.mobile-optimized-card').forEach(card => observer.observe(card));
 }

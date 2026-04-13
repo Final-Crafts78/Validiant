@@ -3,7 +3,7 @@
  */
 import { state, setCurrentUser } from './store/globalState';
 import { initAuth, logout } from './core/auth';
-import { showToast, showLoading, initMagneticButtons } from './utils/ui';
+import { showToast, showLoading } from './utils/ui';
 import { showAssignTask } from './features/admin/dashboard';
 import { showTodayTasks, loadTodayTasks } from './features/employee/taskBoard';
 import { showMapRouting } from './features/routing/leafletEngine';
@@ -100,9 +100,6 @@ function init() {
 
   // Start Session Monitor
   setInterval(checkSession, 30000); // Check every 30 seconds
-
-  // 💎 Premium: Initialize magnetic micro-interactions
-  initMagneticButtons();
 }
 
 /**
@@ -119,19 +116,10 @@ const actionHandlers = {
   // NAVIGATION & VIEWS
   'nav:toggleSidebar': () => toggleSidebar(),
   
-  // View Transitions Helper - Butter Smooth Navigation
+  // View Transitions Helper
   'view:transition': async (callback) => {
-    if (!document.startViewTransition) {
-      await fullCleanup();
-      callback();
-      return;
-    }
-
-    document.startViewTransition(async () => {
-      await cleanupCurrentView();
-      cleanupTracker();
-      callback();
-    });
+    await fullCleanup();
+    callback();
   },
 
   // ADMIN VIEWS
