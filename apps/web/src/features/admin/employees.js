@@ -49,6 +49,7 @@ export async function loadEmployeesList() {
           <tbody>
     `;
     
+    users.forEach(u => {
       const activeTasks = u.tasks ? u.tasks.filter(t => t.status !== 'Completed' && t.status !== 'Verified').length : 0;
       html += `<tr style="border-bottom:1px solid #334155;">
         <td style="padding:12px 15px;"><strong>${escapeHtml(u.name)}</strong></td>
