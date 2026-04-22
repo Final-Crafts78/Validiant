@@ -13,7 +13,7 @@ import { showAllTasks, loadAllTasks, resetAllTaskFilters, prevTaskPage, nextTask
 import { showEmployees, showAddEmployee, deleteEmployee } from './features/admin/employees';
 import { showAnalyticsDashboard } from './features/admin/analytics';
 import { showTaskHistory, loadHistoryTasks } from './features/employee/taskHistory';
-import { initMenu } from './core/menu';
+import { initMenu, setActiveMenuItem } from './core/menu';
 import { cleanupCurrentView } from './utils/ui';
 
 // New Phase 9 Modules:
@@ -77,8 +77,10 @@ function init() {
   // Initial View based on role
   if (state.currentUser.role === 'admin') {
     showAssignTask();
+    setActiveMenuItem('view:adminAssign');
   } else {
     showTodayTasks();
+    setActiveMenuItem('view:employeeToday');
     // Start background location reporting for executives
     startLocationReporting(state.currentUser.id);
   }
@@ -111,6 +113,11 @@ function setupEventDelegation() {
     console.log(`[DEBUG] 🖱️ Action Dispatched: ${action} | Target:`, target);
 
     try {
+      // Automatic Menu Highlighting for View Transitions
+      if (action.startsWith('view:')) {
+        setActiveMenuItem(action);
+      }
+
       // ROUTING / NAVIGATION
       switch (action) {
         // AUTH

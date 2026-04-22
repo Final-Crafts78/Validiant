@@ -37,3 +37,18 @@ export function initMenu() {
     menu.appendChild(btn);
   });
 }
+
+/**
+ * Highlights the active menu item and clears others
+ */
+export function setActiveMenuItem(action) {
+  const items = document.querySelectorAll('.menu-item');
+  items.forEach(item => {
+    if (item.getAttribute('data-action') === action) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
