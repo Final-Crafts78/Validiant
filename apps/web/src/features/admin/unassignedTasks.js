@@ -1,6 +1,7 @@
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
+import { state } from '../../store/globalState';
 
 export function showUnassignedTasks() {
   const content = document.getElementById('mainContainer');

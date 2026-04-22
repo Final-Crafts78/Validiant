@@ -21,7 +21,7 @@ class TaskController {
    */
   async getUnassignedTasks(req, res) {
     try {
-      const tasks = await taskService.getTasks({ status: 'Unassigned' });
+      const tasks = await taskService.getTasks({ ...req.query, status: 'Unassigned' });
       res.json(tasks);
     } catch (err) {
       res.status(500).json({ error: err.message });
