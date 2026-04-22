@@ -88,17 +88,38 @@ class UserService {
    * Update employee location
    */
   async updateLocation(userId, latitude, longitude) {
-    const { error } = await supabase
-      .from("users")
-      .update({ 
-        latitude, 
-        longitude, 
-        last_active: new Date() 
-      })
-      .eq("id", userId);
+    try {
+      // Try primary column names first
+      const { error } = await supabase
+        .from("users")
+        .update({ 
+          latitude, 
+          longitude, 
+          last_active: new Date() 
+        })
+        .eq("id", userId);
 
-    if (error) throw error;
-    return true;
+      if (error && error.message.includes("latitude")) {
+        console.warn('[DEBUG] ⚠️ Native latitude missing, trying lat/lng fallback...');
+        const { error: fallbackError } = await supabase
+          .from("users")
+          .update({ 
+            lat: latitude, 
+            lng: longitude, 
+            last_active: new Date() 
+          })
+          .eq("id", userId);
+        
+        if (fallbackError) throw fallbackError;
+      } else if (error) {
+        throw error;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[DEBUG] ❌ updateLocation failed:', err.message);
+      throw err;
+    }
   }
 
   /**
@@ -107,48 +128,59 @@ class UserService {
   async getEmployeeLocations() {
     try {
       console.log('[DEBUG] 📍 Fetching employee locations...');
+      
       const { data: users, error: userError } = await supabase
         .from("users")
-        .select("id, name, employee_id, latitude, longitude, last_active")
+        .select("id, name, employee_id, latitude, longitude, lat, lng, last_active")
         .eq("role", "employee")
         .eq("is_active", true);
 
       if (userError) {
-        console.error('[DEBUG] ❌ User Fetch Error:', userError);
-        throw userError;
+        console.warn('[DEBUG] ⚠️ Native coordinate select failed, trying fallback...');
+        // Fallback: select without coordinates first to avoid crash, then we'll see what we have
+        const { data: fallbackUsers, error: fallbackError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("role", "employee")
+          .eq("is_active", true);
+          
+        if (fallbackError) throw fallbackError;
+        return this._formatLocationResponse(fallbackUsers);
       }
 
-      console.log(`[DEBUG] 👥 Found ${users?.length || 0} active employees.`);
-
-      // Simplified task count query - avoid complex 'not in' logic which can be brittle
-      const { data: taskCounts, error: taskError } = await supabase
-        .from("tasks")
-        .select("assigned_to, status")
-        .neq("status", "Completed")
-        .neq("status", "Verified");
-
-      if (taskError) {
-        console.error('[DEBUG] ❌ Task Count Fetch Error:', taskError);
-        // We don't throw here, just log and continue with 0 counts to keep tracker alive
-      }
-
-      const countMap = (taskCounts || []).reduce((acc, t) => {
-        if (t.assigned_to) {
-          acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
-        }
-        return acc;
-      }, {});
-
-      return (users || []).map(u => ({
-        ...u,
-        employeeId: u.employee_id,
-        lastActive: u.last_active,
-        activeTasks: countMap[u.id] || 0
-      }));
+      return this._formatLocationResponse(users);
     } catch (err) {
       console.error('[DEBUG] ❌ getEmployeeLocations CRASHED:', err.message);
       throw err;
     }
+  }
+
+  async _formatLocationResponse(users) {
+    // Simplified task count query
+    const { data: taskCounts } = await supabase
+      .from("tasks")
+      .select("assigned_to, status")
+      .neq("status", "Completed")
+      .neq("status", "Verified");
+
+    const countMap = (taskCounts || []).reduce((acc, t) => {
+      if (t.assigned_to) {
+        acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    return (users || []).map(u => ({
+      ...u,
+      employeeId: u.employee_id,
+      lastActive: u.last_active,
+      // Map whatever coordinate format we found to the frontend expectation
+      latitude: u.latitude || u.lat || null,
+      longitude: u.longitude || u.lng || null,
+      lat: u.latitude || u.lat || null, // Provide both for safety
+      lng: u.longitude || u.lng || null,
+      activeTasks: countMap[u.id] || 0
+    }));
   }
 }
 

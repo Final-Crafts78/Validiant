@@ -30,6 +30,7 @@ export function showUnassignedTasks() {
       </div>
       <div class="bulk-buttons">
         <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
+        <button class="btn btn-success btn-sm" data-action="admin:bulkCompleteTasks"><i class="fas fa-check-double"></i> Bulk Complete</button>
         <button class="btn btn-danger btn-sm" data-action="admin:bulkDeleteTasks"><i class="fas fa-trash"></i> Bulk Delete</button>
       </div>
     </div>

@@ -290,6 +290,12 @@ function setupEventDelegation() {
         case 'admin:confirmBulkAssign':
           confirmBulkAssign();
           break;
+        case 'admin:bulkCompleteTasks':
+          bulkCompleteTasks();
+          break;
+        case 'admin:confirmBulkComplete':
+          confirmBulkComplete();
+          break;
         case 'admin:bulkDeleteTasks':
           bulkDeleteTasks();
           break;

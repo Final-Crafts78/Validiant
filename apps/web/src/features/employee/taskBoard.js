@@ -115,11 +115,24 @@ export function displayEmployeeTasks(tasks) {
     return;
   }
 
-  // Define logic for badges (SLA/Approx/Distance)
   const tasksHtml = tasks.map((task, index) => {
     const statusClass = `status-${task.status.toLowerCase().replace(/\s/g, '-')}`;
     const mapLink = task.map_url || task.mapUrl || task.mapurl;
     
+    // SLA Badge Logic
+    const createdDate = new Date(task.created_at);
+    const now = new Date();
+    const diffHours = (now - createdDate) / (1000 * 60 * 60);
+    
+    let slaBadge = '';
+    if (diffHours < 24) {
+      slaBadge = `<span class="status-badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.2); font-size:11px;"><i class="fas fa-check-circle"></i> Day 1</span>`;
+    } else if (diffHours < 48) {
+      slaBadge = `<span class="status-badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); font-size:11px;"><i class="fas fa-clock"></i> Day 2</span>`;
+    } else {
+      slaBadge = `<span class="status-badge" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.2); font-size:11px;"><i class="fas fa-exclamation-triangle"></i> Day 3+</span>`;
+    }
+
     // Approx Badge
     const isApprox = (!parseFloat(task.latitude) || !parseFloat(task.longitude)) && task.pincode && pincodeData[task.pincode];
     const approxBadge = isApprox
@@ -147,13 +160,14 @@ export function displayEmployeeTasks(tasks) {
             </div>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+            <span class="status-badge ${statusClass}">${task.status}</span>
+            ${slaBadge}
             ${mapLink ? `
               <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
                       class="btn btn-primary btn-sm" style="padding:5px 10px; font-size:11px; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.4); color:#60a5fa;">
                 <i class="fas fa-map-marker-alt"></i> Navigate
               </button>
             ` : ''}
-            <span class="status-badge ${statusClass}">${task.status}</span>
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">

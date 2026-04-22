@@ -54,6 +54,18 @@ export function showAllTasks() {
       <button class="btn btn-secondary btn-sm" data-action="admin:resetTaskFilters"><i class="fas fa-undo"></i> Reset</button>
     </div>
 
+    <div id="bulkActionsContainer" class="bulk-actions-bar" style="display:none; margin-bottom:15px;">
+      <div class="bulk-info">
+        <i class="fas fa-check-double"></i>
+        <span id="selectedCountText">0 task(s) selected</span>
+      </div>
+      <div class="bulk-buttons">
+        <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
+        <button class="btn btn-success btn-sm" data-action="admin:bulkCompleteTasks"><i class="fas fa-check-double"></i> Bulk Complete</button>
+        <button class="btn btn-danger btn-sm" data-action="admin:bulkDeleteTasks"><i class="fas fa-trash"></i> Bulk Delete</button>
+      </div>
+    </div>
+
     <div id="allTasksActiveFilters" class="active-filters" style="margin-bottom:15px;">
       <span class="filter-hint" style="color:#94a3b8; font-size:13px;">No filters applied. Showing latest tasks.</span>
     </div>

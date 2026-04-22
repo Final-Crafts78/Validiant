@@ -18,9 +18,14 @@ export async function openTaskPanel(taskId) {
 
   const html = `
     <div class="task-detail-view">
-      <div style="margin-bottom:20px;">
-        <h4 style="color:#94a3b8; font-size:12px; text-transform:uppercase; margin-bottom:5px;">Case Information</h4>
-        <h2 style="margin:0; font-size:20px;">${escapeHtml(task.title)}</h2>
+      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:20px;">
+        <div style="flex:1;">
+          <h4 style="color:#94a3b8; font-size:12px; text-transform:uppercase; margin-bottom:5px;">Case Information</h4>
+          <h2 style="margin:0; font-size:20px;">${escapeHtml(task.title)}</h2>
+        </div>
+        <div>
+          ${getSlaBadge(task.created_at)}
+        </div>
       </div>
 
       <div class="form-grid" style="grid-template-columns: 1fr; gap:15px;">
@@ -74,6 +79,20 @@ export async function openTaskPanel(taskId) {
   };
 
   createModal('Task Details', html, { icon: 'fas fa-clipboard-list', size: 'medium' });
+}
+
+function getSlaBadge(createdAt) {
+  const createdDate = new Date(createdAt);
+  const now = new Date();
+  const diffHours = (now - createdDate) / (1000 * 60 * 60);
+  
+  if (diffHours < 24) {
+    return `<span class="status-badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.2); font-size:11px;"><i class="fas fa-check-circle"></i> Day 1</span>`;
+  } else if (diffHours < 48) {
+    return `<span class="status-badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); font-size:11px;"><i class="fas fa-clock"></i> Day 2</span>`;
+  } else {
+    return `<span class="status-badge" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.2); font-size:11px;"><i class="fas fa-exclamation-triangle"></i> Day 3+</span>`;
+  }
 }
 
 export async function updateTaskStatus(taskId, status) {

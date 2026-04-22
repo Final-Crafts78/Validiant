@@ -162,6 +162,59 @@ export async function confirmBulkAssign() {
   }
 }
 
+export async function bulkCompleteTasks() {
+  if (window.selectedTasks.size === 0) return;
+  
+  const content = `
+    <div style="margin-bottom: 20px; color:#cbd5e1; font-size:14px;">
+      <i class="fas fa-exclamation-triangle" style="color:#f59e0b; margin-right:8px;"></i>
+      Are you sure you want to mark <strong>${window.selectedTasks.size}</strong> tasks as <strong>Completed</strong>?
+    </div>
+    <div class="modal-actions" style="margin-top:25px; padding-top:20px; border-top:1px solid #334155; display:flex; gap:10px;">
+      <button class="btn btn-success btn-lg" data-action="admin:confirmBulkComplete" style="flex:2;">
+        <i class="fas fa-check"></i> Yes, Mark Completed
+      </button>
+      <button class="btn btn-secondary btn-lg" onclick="closeAllModals()" style="flex:1;">
+        <i class="fas fa-times"></i> Cancel
+      </button>
+    </div>
+  `;
+  
+  createModal('Bulk Complete', content, { icon: 'fa-check-double', size: 'medium' });
+}
+
+export async function confirmBulkComplete() {
+  const tasksToUpdate = Array.from(window.selectedTasks);
+  
+  try {
+    showToast(`Completing ${tasksToUpdate.length} tasks...`, 'info');
+    let success = 0;
+    
+    for (const taskId of tasksToUpdate) {
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 'Completed',
+          userId: state.currentUser.id,
+          userName: state.currentUser.name
+        })
+      });
+      if (res.ok) success++;
+    }
+    
+    showToast(`Successfully completed ${success} tasks`, 'success');
+    closeAllModals();
+    clearSelection();
+    
+    if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+    if (document.getElementById('allTasksList')) loadAllTasks();
+    
+  } catch (err) {
+    showToast('Bulk complete error', 'error');
+  }
+}
+
 export async function bulkDeleteTasks() {
   if (window.selectedTasks.size === 0) return;
   
