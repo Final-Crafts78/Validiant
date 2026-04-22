@@ -7,13 +7,34 @@ import { state } from '../../store/globalState';
 import { loadUnassignedTasks } from './unassignedTasks';
 import { loadAllTasks } from './allTasks';
 
-export function openTaskDetailsModal(taskId) {
-  const task = state.allAdminTasks?.find(t => t.id == taskId) 
+export async function openTaskDetailsModal(taskId) {
+  console.log(`[DEBUG] 🔍 Opening Details for Task ID: ${taskId}`);
+  console.log(`[DEBUG] 📦 Current State:`, { 
+    adminTasks: state.allAdminTasks?.length, 
+    filteredTasks: state.currentFilteredTasks?.length,
+    unassignedTasks: state.allUnassignedTasks?.length 
+  });
+
+  let task = state.allAdminTasks?.find(t => t.id == taskId) 
             || state.currentFilteredTasks?.find(t => t.id == taskId)
             || state.allUnassignedTasks?.find(t => t.id == taskId);
             
   if (!task) {
-    showToast('Task not found in current view', 'error');
+    console.warn(`[DEBUG] ⚠️ Task ${taskId} not found in state. Attempting API fetch...`);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      if (res.ok) {
+        task = await res.json();
+        console.log(`[DEBUG] ✅ Task ${taskId} recovered from API.`);
+      }
+    } catch (err) {
+      console.error(`[DEBUG] ❌ API Fallback failed:`, err);
+    }
+  }
+
+  if (!task) {
+    showToast('Task details could not be found', 'error');
+    console.error(`[DEBUG] ❌ Task ${taskId} COMPLETELY MISSING from state and API.`);
     return;
   }
   

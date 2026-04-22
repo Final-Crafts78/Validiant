@@ -247,7 +247,7 @@ function setupEventDelegation() {
 
         // ADMIN TASK ACTIONS (Single)
         case 'admin:openTaskDetails':
-          if(id) openTaskDetailsModal(id);
+          if(id) await openTaskDetailsModal(id);
           break;
         case 'admin:openStatusUpdate':
           if(id) openStatusUpdateModal(id, status || '');
