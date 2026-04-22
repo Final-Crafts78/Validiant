@@ -117,7 +117,7 @@ class UserService {
       .from("tasks")
       .select("assigned_to, status")
       .not("assigned_to", "is", null)
-      .not("status", "in", '("Completed", "Verified")');
+      .not("status", "in", ["Completed", "Verified"]);
 
     if (taskError) throw taskError;
 
