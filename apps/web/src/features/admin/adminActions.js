@@ -9,7 +9,8 @@ import { loadAllTasks } from './allTasks';
 
 export function openTaskDetailsModal(taskId) {
   const task = state.allAdminTasks?.find(t => t.id == taskId) 
-            || state.currentFilteredTasks?.find(t => t.id == taskId);
+            || state.currentFilteredTasks?.find(t => t.id == taskId)
+            || state.allUnassignedTasks?.find(t => t.id == taskId);
             
   if (!task) {
     showToast('Task not found in current view', 'error');
@@ -183,7 +184,8 @@ export async function confirmReassign(taskId) {
 
 export function openUnassignModal(taskId) {
   const task = state.allAdminTasks?.find(t => t.id == taskId) 
-            || state.currentFilteredTasks?.find(t => t.id == taskId);
+            || state.currentFilteredTasks?.find(t => t.id == taskId)
+            || state.allUnassignedTasks?.find(t => t.id == taskId);
   const displayTitle = task ? escapeHtml(task.title) : 'this task';
   const displayClient = task?.client_name || task?.clientName ? ` (${escapeHtml(task.client_name || task.clientName)})` : '';
 
@@ -252,7 +254,8 @@ export function exportTasks() {
 
 export function openEditNoteModal(taskId) {
   const task = state.allAdminTasks?.find(t => t.id == taskId) 
-            || state.currentFilteredTasks?.find(t => t.id == taskId);
+            || state.currentFilteredTasks?.find(t => t.id == taskId)
+            || state.allUnassignedTasks?.find(t => t.id == taskId);
   
   const content = `
     <div class="edit-note-form">

@@ -7,9 +7,9 @@ import { state } from '../../store/globalState';
 import { loadUnassignedTasks } from './unassignedTasks';
 
 export function showEditMapModal(taskId) {
-  const task = state.allAdminTasks?.find(t => t.id === taskId) 
-            || state.currentFilteredTasks?.find(t => t.id === taskId)
-            || state.allUnassignedTasks?.find(t => t.id === taskId);
+  const task = state.allAdminTasks?.find(t => t.id == taskId) 
+            || state.currentFilteredTasks?.find(t => t.id == taskId)
+            || state.allUnassignedTasks?.find(t => t.id == taskId);
             
   if (!task) return showToast('Task not found', 'error');
 
