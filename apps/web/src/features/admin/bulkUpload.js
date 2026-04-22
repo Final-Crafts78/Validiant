@@ -311,7 +311,7 @@ function showSmartPreview(tasks) {
         <button id="confirmUploadBtn" class="btn btn-primary btn-lg" data-action="admin:submitFinalBulk">
           <i class="fas fa-cloud-upload-alt"></i> Upload Valid Tasks
         </button>
-        <button id="cancelUploadBtn" class="btn btn-secondary" onclick="showBulkUpload()">Back</button>
+        <button id="cancelUploadBtn" class="btn btn-secondary" data-action="admin:showBulkUpload">Back</button>
       </div>
     </div>
   `;
@@ -362,13 +362,13 @@ export async function submitFinalBulkUpload() {
 async function checkDuplicateCases(tasks) {
   const response = await fetch('/api/tasks?role=admin');
   const existingTasks = await response.json();
-  const existingCaseIds = new Set(existingTasks.map(t => t.title.trim().toLowerCase()));
+  const existingCaseIds = new Set(existingTasks.filter(t => t.title).map(t => t.title.trim().toLowerCase()));
   const duplicates = [];
   const newTasks = [];
   tasks.forEach(task => {
     const caseId = task.title.trim().toLowerCase();
     if (existingCaseIds.has(caseId)) {
-      const existing = existingTasks.find(e => e.title.trim().toLowerCase() === caseId);
+      const existing = existingTasks.find(e => e.title && e.title.trim().toLowerCase() === caseId);
       duplicates.push({ ...task, existingId: existing.id });
     } else {
       newTasks.push(task);

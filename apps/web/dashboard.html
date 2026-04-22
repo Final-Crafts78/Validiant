@@ -37,9 +37,8 @@
     }
     
     /* 🚨 Instant Touch Physics: Destroys the 300ms mobile tap delay */
-    button, a, select, input, .menu-item, .task-card,  .mobile-optimized-card:active {
+    button:active, a:active, select:active, input:active, .menu-item:active, .task-card:active, .mobile-optimized-card:active {
     transform: scale(0.96) translateZ(0) !important;
-    background: #1e293b !important;
   }
 
     /* SIDEBAR */
@@ -170,6 +169,11 @@
         border-bottom: 2px solid #334155;
       }
       .task-row:hover { background: rgba(255,255,255,0.03) !important; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
