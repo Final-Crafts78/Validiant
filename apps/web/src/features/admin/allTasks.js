@@ -150,7 +150,6 @@ function renderTableSkeleton() {
         <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 80px;"></div></td>
         <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 100px;"></div></td>
         <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 50px;"></div></td>
-        <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 40px;"></div></td>
         <td style="padding: 15px;"><div class="skeleton" style="height: 20px; width: 70px; border-radius: 10px;"></div></td>
         <td style="padding: 15px;"><div class="skeleton" style="height: 14px; width: 60px;"></div></td>
         <td style="padding: 15px;"><div class="skeleton" style="height: 24px; width: 50px; border-radius: 6px;"></div></td>
@@ -160,7 +159,7 @@ function renderTableSkeleton() {
   return `
     <div class="table-wrapper skeleton-table" style="overflow: hidden; background: #1e293b; border-radius: 8px; border: 1px solid #334155; opacity: 0.6;">
       <table style="width: 100%; border-collapse: collapse;">
-        <thead><tr style="border-bottom: 1px solid #475569;"><th colspan="10" style="padding: 20px;"><div class="skeleton" style="height: 10px; width: 30%;"></div></th></tr></thead>
+        <thead><tr style="border-bottom: 1px solid #475569;"><th colspan="9" style="padding: 20px;"><div class="skeleton" style="height: 10px; width: 30%;"></div></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -256,7 +255,6 @@ function displayAllTasksList(tasks) {
             <th style="padding: 12px 15px; color: #94A3B8;">Client</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Employee</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Pincode</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Map</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Status</th>
             <th style="padding: 12px 15px; color: #94A3B8;">SLA (72h)</th>
             <th style="padding: 12px 15px; color: #94A3B8; text-align:right;">Actions</th>
@@ -329,7 +327,6 @@ function displayAllTasksList(tasks) {
           }
         </td>
         <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
-        <td style="padding: 12px 15px;">${mapDisplay}</td>
         <td style="padding: 12px 15px;">
           <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
             ${t.status}
