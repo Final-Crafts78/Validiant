@@ -74,14 +74,33 @@ function init() {
     sidebar.classList.add('collapsed');
   }
 
-  // Initial View based on role
-  if (state.currentUser.role === 'admin') {
-    showAssignTask();
-    setActiveMenuItem('view:adminAssign');
+  // Initial View based on role and saved preference
+  const lastView = localStorage.getItem('lastView');
+  const role = state.currentUser.role;
+  
+  if (lastView && lastView.startsWith('view:')) {
+    console.log(`🧭 Restoring last view: ${lastView}`);
+    // Simulate a click on the menu item to trigger the view logic
+    const mockTarget = document.createElement('div');
+    mockTarget.setAttribute('data-action', lastView);
+    
+    // We need to handle the initial view load logic which is normally in setupEventDelegation
+    // But since the delegator is attached to document, we can just trigger a manual load
+    triggerInitialView(lastView, role);
   } else {
-    showTodayTasks();
-    setActiveMenuItem('view:employeeToday');
-    // Start background location reporting for executives
+    // Default Fallback
+    if (role === 'admin') {
+      showAssignTask();
+      setActiveMenuItem('view:adminAssign');
+    } else {
+      showTodayTasks();
+      setActiveMenuItem('view:employeeToday');
+      startLocationReporting(state.currentUser.id);
+    }
+  }
+
+  // Start background location reporting for executives regardless of view (if they are employees)
+  if (role === 'employee') {
     startLocationReporting(state.currentUser.id);
   }
 
@@ -116,6 +135,7 @@ function setupEventDelegation() {
       // Automatic Menu Highlighting for View Transitions
       if (action.startsWith('view:')) {
         setActiveMenuItem(action);
+        localStorage.setItem('lastView', action);
       }
 
       // Only prevent default for buttons/links that are part of our action system
@@ -389,6 +409,54 @@ function toggleSidebar() {
 
   const isCollapsed = sidebar.classList.contains('collapsed');
   localStorage.setItem('sidebarCollapsed', isCollapsed);
+}
+
+/**
+ * Helper to trigger view logic without a click event
+ */
+async function triggerInitialView(action, role) {
+  setActiveMenuItem(action);
+  await fullCleanup();
+  
+  switch (action) {
+    case 'view:adminAssign':
+      if (role === 'admin') showAssignTask();
+      break;
+    case 'view:employeeToday':
+      showTodayTasks();
+      break;
+    case 'view:mapRouting':
+      showMapRouting(state.allEmployeeTasks, openTaskPanel);
+      break;
+    case 'view:adminPool':
+      if (role === 'admin') showUnassignedTasks();
+      break;
+    case 'view:adminAllTasks':
+      if (role === 'admin') showAllTasks();
+      break;
+    case 'view:adminEmployees':
+      if (role === 'admin') showEmployees();
+      break;
+    case 'view:analytics':
+      if (role === 'admin') showAnalyticsDashboard();
+      break;
+    case 'view:trackExecutives':
+      if (role === 'admin') showExecutiveTracker();
+      break;
+    case 'view:kyc':
+      if (role === 'admin') showKYCDashboard();
+      break;
+    case 'view:employeeHistory':
+      showTaskHistory();
+      break;
+    case 'view:activityLog':
+      if (role === 'admin') showActivityLog();
+      break;
+    default:
+      // Fallback
+      if (role === 'admin') showAssignTask();
+      else showTodayTasks();
+  }
 }
 
 // Start the engine
