@@ -105,33 +105,50 @@ class UserService {
    * Get all employee locations for Admin Tracker
    */
   async getEmployeeLocations() {
-    const { data: users, error: userError } = await supabase
-      .from("users")
-      .select("id, name, employee_id, latitude, longitude, last_active")
-      .eq("role", "employee")
-      .eq("is_active", true);
+    try {
+      console.log('[DEBUG] 📍 Fetching employee locations...');
+      const { data: users, error: userError } = await supabase
+        .from("users")
+        .select("id, name, employee_id, latitude, longitude, last_active")
+        .eq("role", "employee")
+        .eq("is_active", true);
 
-    if (userError) throw userError;
+      if (userError) {
+        console.error('[DEBUG] ❌ User Fetch Error:', userError);
+        throw userError;
+      }
 
-    const { data: taskCounts, error: taskError } = await supabase
-      .from("tasks")
-      .select("assigned_to, status")
-      .not("assigned_to", "is", null)
-      .not("status", "in", ["Completed", "Verified"]);
+      console.log(`[DEBUG] 👥 Found ${users?.length || 0} active employees.`);
 
-    if (taskError) throw taskError;
+      // Simplified task count query - avoid complex 'not in' logic which can be brittle
+      const { data: taskCounts, error: taskError } = await supabase
+        .from("tasks")
+        .select("assigned_to, status")
+        .neq("status", "Completed")
+        .neq("status", "Verified");
 
-    const countMap = taskCounts.reduce((acc, t) => {
-      acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
-      return acc;
-    }, {});
+      if (taskError) {
+        console.error('[DEBUG] ❌ Task Count Fetch Error:', taskError);
+        // We don't throw here, just log and continue with 0 counts to keep tracker alive
+      }
 
-    return users.map(u => ({
-      ...u,
-      employeeId: u.employee_id,
-      lastActive: u.last_active,
-      activeTasks: countMap[u.id] || 0
-    }));
+      const countMap = (taskCounts || []).reduce((acc, t) => {
+        if (t.assigned_to) {
+          acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
+        }
+        return acc;
+      }, {});
+
+      return (users || []).map(u => ({
+        ...u,
+        employeeId: u.employee_id,
+        lastActive: u.last_active,
+        activeTasks: countMap[u.id] || 0
+      }));
+    } catch (err) {
+      console.error('[DEBUG] ❌ getEmployeeLocations CRASHED:', err.message);
+      throw err;
+    }
   }
 }
 

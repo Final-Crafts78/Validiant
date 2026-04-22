@@ -9,11 +9,10 @@ class AdminController {
    */
   async getAnalytics(req, res) {
     try {
-      const [{ count: totalTasks }, { count: assignedTasks }, { count: completedTasks }, { count: verifiedTasks }, { count: activeEmployees }, { count: admins }] = await Promise.all([
+      const [{ count: totalTasks }, { count: assignedTasks }, { count: combinedCompleted }, { count: activeEmployees }, { count: admins }] = await Promise.all([
         supabase.from("tasks").select("*", { count: "exact", head: true }),
         supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "Unassigned"),
-        supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Completed"),
-        supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Verified"),
+        supabase.from("tasks").select("*", { count: "exact", head: true }).in("status", ["Completed", "Verified"]),
         supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "employee").eq("is_active", true),
         supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "admin")
       ]);
@@ -21,12 +20,13 @@ class AdminController {
       res.json({
         totalTasks: totalTasks || 0,
         assignedTasks: assignedTasks || 0,
-        completedTasks: completedTasks || 0,
-        verifiedTasks: verifiedTasks || 0,
+        completedTasks: combinedCompleted || 0,
+        verifiedTasks: 0, // Set to 0 as it's now bundled into completed
         activeEmployees: activeEmployees || 0,
         admins: admins || 0
       });
     } catch (err) {
+      console.error('Analytics Error:', err);
       res.status(500).json({ error: "Failed to fetch analytics" });
     }
   }

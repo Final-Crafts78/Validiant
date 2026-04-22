@@ -73,15 +73,14 @@ async function loadAnalyticsData() {
       new Chart(document.getElementById('statusChart'), {
         type: 'doughnut',
         data: {
-          labels: ['Completed', 'Pending', 'Unassigned', 'Verified'],
+          labels: ['Completed', 'Pending', 'Unassigned'],
           datasets: [{
             data: [
                 data.completedTasks || 0, 
                 pending > 0 ? pending : 0, 
-                unassigned > 0 ? unassigned : 0, 
-                data.verifiedTasks || 0
+                unassigned > 0 ? unassigned : 0
             ],
-            backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
             borderWidth: 0
           }]
         },
