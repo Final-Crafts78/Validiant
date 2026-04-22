@@ -125,8 +125,8 @@ class TaskService {
   async updateTask(id, updateFields, userId, userName) {
     const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude } = updateFields;
     
-    // Fetch current task state to detect transitions
-    const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to").eq("id", id).single();
+    // Fetch current task state to detect transitions and for logging
+    const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to, title, client_name").eq("id", id).single();
     
     const updateData = { updated_at: new Date() };
     let changes = [];
@@ -167,7 +167,12 @@ class TaskService {
     if (error) throw error;
 
     if (userId) {
-        const logDetail = changes.length > 0 ? `Updated: ${changes.join(", ")}` : "Task details updated";
+        const taskTitle = currentTask?.title || id;
+        const client = currentTask?.client_name || "Unknown";
+        const logDetail = changes.length > 0 
+          ? `Case: ${taskTitle} | Client: ${client} | Updated: ${changes.join(", ")}` 
+          : `Case: ${taskTitle} | Client: ${client} | Task details updated`;
+        
         await logActivity(userId, userName, "TASK_UPDATED", id, logDetail);
     }
     return true;
@@ -177,6 +182,8 @@ class TaskService {
    * Unassign a task
    */
   async unassignTask(taskId, userId, userName) {
+    const { data: task } = await supabase.from("tasks").select("title, client_name").eq("id", taskId).single();
+    
     const { error } = await supabase.from("tasks").update({
       assigned_to: null,
       status: "Unassigned",
@@ -185,7 +192,9 @@ class TaskService {
 
     if (error) throw error;
 
-    await logActivity(userId, userName, "TASK_UNASSIGNED", taskId, "Moved to unassigned pool");
+    const taskTitle = task?.title || taskId;
+    const client = task?.client_name || "Unknown";
+    await logActivity(userId, userName, "TASK_UNASSIGNED", taskId, `Case: ${taskTitle} | Client: ${client} | Moved to unassigned pool`);
     return true;
   }
 
@@ -196,10 +205,11 @@ class TaskService {
     // Legacy behavior: assignment sets status to Pending and captures current date
     const [empRes, taskRes] = await Promise.all([
       supabase.from("users").select("name").eq("id", employeeId).single(),
-      supabase.from("tasks").select("status").eq("id", taskId).single()
+      supabase.from("tasks").select("title, client_name").eq("id", taskId).single()
     ]);
 
     if (!empRes.data) throw new Error("Employee not found");
+    const task = taskRes.data;
     
     const { error } = await supabase.from("tasks").update({
       assigned_to: employeeId,
@@ -210,7 +220,9 @@ class TaskService {
 
     if (error) throw error;
 
-    await logActivity(userId, userName, "TASK_ASSIGNED", taskId, `Assigned to ${empRes.data.name}`);
+    const taskTitle = task?.title || taskId;
+    const client = task?.client_name || "Unknown";
+    await logActivity(userId, userName, "TASK_ASSIGNED", taskId, `Case: ${taskTitle} | Client: ${client} | Assigned to ${empRes.data.name}`);
     return true;
   }
 
@@ -220,7 +232,7 @@ class TaskService {
   async reassignTask(taskId, newEmployeeId, userId, userName) {
     const [empRes, taskRes] = await Promise.all([
       supabase.from("users").select("name").eq("id", newEmployeeId).single(),
-      supabase.from("tasks").select("status").eq("id", taskId).single()
+      supabase.from("tasks").select("status, title, client_name").eq("id", taskId).single()
     ]);
 
     if (!empRes.data) throw new Error("Employee not found");
@@ -238,7 +250,9 @@ class TaskService {
 
     if (error) throw error;
 
-    await logActivity(userId, userName, "TASK_REASSIGNED", taskId, `Reassigned to ${empRes.data.name}`);
+    const taskTitle = currentTask?.title || taskId;
+    const client = currentTask?.client_name || "Unknown";
+    await logActivity(userId, userName, "TASK_REASSIGNED", taskId, `Case: ${taskTitle} | Client: ${client} | Reassigned to ${empRes.data.name}`);
     return true;
   }
 
