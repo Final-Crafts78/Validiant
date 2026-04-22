@@ -285,9 +285,17 @@ function displayAllTasksList(tasks) {
     }
 
     const mapLink = t.map_url || t.mapUrl || '';
-    const mapDisplay = mapLink 
-      ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
-      : `<span style="color: #6B7280; font-size: 11px;">No map</span>`;
+    const mapDisplay = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        ${mapLink 
+          ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
+          : `<span style="color: #6B7280; font-size: 11px;">No map</span>`
+        }
+        <button class="btn btn-secondary btn-sm" style="padding:4px 8px; background:transparent; border:1px solid #334155; color:#94a3b8;" data-action="admin:editMapUrl" data-id="${t.id}">
+          <i class="fas fa-pen" style="font-size:10px;"></i>
+        </button>
+      </div>
+    `;
 
     html += `
       <tr class="task-row" style="border-bottom: 1px solid #334155;">

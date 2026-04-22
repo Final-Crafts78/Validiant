@@ -8,8 +8,8 @@ import { loadUnassignedTasks } from './unassignedTasks';
 import { loadAllTasks } from './allTasks';
 
 export function openTaskDetailsModal(taskId) {
-  const task = state.allAdminTasks?.find(t => t.id === taskId) 
-            || state.currentFilteredTasks?.find(t => t.id === taskId);
+  const task = state.allAdminTasks?.find(t => t.id == taskId) 
+            || state.currentFilteredTasks?.find(t => t.id == taskId);
             
   if (!task) {
     showToast('Task not found in current view', 'error');

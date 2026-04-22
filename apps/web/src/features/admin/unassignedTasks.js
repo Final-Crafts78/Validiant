@@ -54,11 +54,12 @@ export async function loadUnassignedTasks() {
   try {
     const res = await fetch(url, { cache: 'no-store' });
     const tasks = await res.json();
+    state.allUnassignedTasks = Array.isArray(tasks) ? tasks : [];
     
     const empRes = await fetch(`/api/users?_t=${timestamp}`, { cache: 'no-store' });
     const employees = await empRes.json();
     
-    displayUnassignedList(tasks, employees);
+    displayUnassignedList(state.allUnassignedTasks, employees);
   } catch (err) {
     console.error('❌ Error loading tasks:', err);
     showToast('Failed to load unassigned tasks', 'error');
