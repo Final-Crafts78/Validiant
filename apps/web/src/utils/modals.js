@@ -2,16 +2,25 @@
  * Modal Management Utility
  */
 
+let modalTimeout = null;
+
 export function closeAllModals() {
   const container = document.getElementById('modalContainer');
   if (!container) return;
+  console.log('[DEBUG] 🚪 Closing all modals...');
   
+  if (modalTimeout) {
+    clearTimeout(modalTimeout);
+    modalTimeout = null;
+  }
+
   const overlay = container.querySelector('.modal-overlay');
   if (overlay) {
     overlay.classList.remove('show');
-    setTimeout(() => {
+    modalTimeout = setTimeout(() => {
       container.innerHTML = '';
       container.style.display = 'none';
+      modalTimeout = null;
     }, 300);
   } else {
     container.innerHTML = '';
@@ -20,8 +29,19 @@ export function closeAllModals() {
 }
 
 export function createModal(title, content, options = {}) {
+  console.log(`[DEBUG] 🖼️ Creating modal: ${title}`);
+  
+  if (modalTimeout) {
+    console.log('[DEBUG] ⚠️ Cancelling pending modal cleanup');
+    clearTimeout(modalTimeout);
+    modalTimeout = null;
+  }
+
   const container = document.getElementById('modalContainer');
-  if (!container) return;
+  if (!container) {
+    console.error('[DEBUG] ❌ modalContainer NOT FOUND in DOM');
+    return;
+  }
 
   const sizeClass = options.size || 'medium';
   

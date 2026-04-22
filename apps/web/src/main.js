@@ -101,11 +101,14 @@ function setupEventDelegation() {
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
+    // Prevent default to stop form submissions or link navigation
+    e.preventDefault();
+
     const action = target.getAttribute('data-action');
     const id = target.getAttribute('data-id');
     const status = target.getAttribute('data-status');
 
-    console.log(`🖱️ Action Dispatched: ${action}`, { id, status });
+    console.log(`[DEBUG] 🖱️ Action Dispatched: ${action} | Target:`, target);
 
     try {
       // ROUTING / NAVIGATION
@@ -327,10 +330,10 @@ function setupEventDelegation() {
           console.warn(`⚠️ Unhandled action: ${action}`);
       }
     } catch (error) {
-      console.error(`❌ Global Controller Error [${action}]:`, error);
+      console.error(`[DEBUG] ❌ Global Controller Error [${action}]:`, error);
       showToast('A premium UX error occurred. Please refresh.', 'error');
     }
-  });
+  }, true); // Use capture phase to catch events earlier
 }
 
 // Global Refresh Handler for Status Updates
