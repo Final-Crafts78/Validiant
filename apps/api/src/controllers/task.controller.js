@@ -123,6 +123,75 @@ class TaskController {
   }
 
   /**
+   * Bulk upload tasks from Excel/CSV
+   */
+  async bulkUpload(req, res) {
+    try {
+      if (!req.file) return res.status(400).json({ success: false, message: "No file." });
+      
+      const { adminId, adminName } = req.body;
+      const xlsx = require("xlsx");
+      const workbook = xlsx.readFile(req.file.path);
+      const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+      const fs = require("fs");
+      
+      if (rawData.length === 0) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return res.status(400).json({ success: false, message: "Empty file." });
+      }
+
+      let successCount = 0;
+      const tasksToInsert = [];
+      const { extractCoordinates } = require("../utils/geo");
+      
+      for (let i = 0; i < rawData.length; i++) {
+        const raw = rawData[i];
+        const row = {};
+        Object.keys(raw).forEach(k => row[k.toLowerCase().replace(/[^a-z0-9]/g, "")] = raw[k]);
+
+        const title = row.requestid || row.caseid || row.title || row.id;
+        const pincode = row.pincode || row.pin;
+        
+        if (!title || !pincode) continue; 
+        
+        let finalLat = row.latitude || row.lat;
+        let finalLng = row.longitude || row.lng;
+        
+        if ((row.mapurl || row.map) && (!finalLat || !finalLng)) {
+          const coords = extractCoordinates(row.mapurl || row.map);
+          if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+        }
+
+        tasksToInsert.push({
+          title: String(title),
+          pincode: String(pincode).trim(),
+          client_name: row.clientname || row.individualname || "Unknown Client",
+          map_url: row.mapurl || row.map || null,
+          address: row.address || null,
+          latitude: finalLat || null,
+          longitude: finalLng || null,
+          notes: row.notes || null,
+          status: "Unassigned",
+          created_by: adminId || null
+        });
+        successCount++;
+      }
+
+      if (tasksToInsert.length > 0) {
+        await taskService.bulkCreate(tasksToInsert);
+      }
+
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      // Note: Activity logging would go here if needed, keeping it slim for now
+      res.json({ success: true, message: `${successCount} tasks uploaded.`, successCount });
+    } catch (err) {
+      const fs = require("fs");
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * Delete a task
    */
   async deleteTask(req, res) {

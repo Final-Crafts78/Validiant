@@ -1,9 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/task.controller');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const uploadDir = path.resolve(__dirname, '../../../../uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const upload = multer({ dest: uploadDir });
 
 router.get('/', taskController.getTasks);
 router.post('/', taskController.createTask);
+router.post('/bulk-upload', upload.single('excelFile'), taskController.bulkUpload);
 router.get('/unassigned', taskController.getUnassignedTasks);
 router.post('/optimize', taskController.optimize);
 router.put('/:id', taskController.updateTask);

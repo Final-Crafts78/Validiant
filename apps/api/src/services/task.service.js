@@ -269,6 +269,15 @@ class TaskService {
     }
     return true;
   }
+
+  /**
+   * Bulk create tasks
+   */
+  async bulkCreate(tasks) {
+    const { error } = await supabase.from("tasks").insert(tasks);
+    if (error) throw error;
+    return true;
+  }
 }
 
 module.exports = new TaskService();
