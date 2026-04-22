@@ -57,6 +57,29 @@ class TaskService {
   }
 
   /**
+   * Get a single task by ID
+   */
+  async getTaskById(taskId) {
+    const { data: task, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("id", taskId)
+      .single();
+
+    if (error) throw error;
+    if (!task) throw new Error("Task not found");
+
+    const { data: users } = await supabase.from("users").select("id, name");
+    const matchedUser = users.find(u => u.id == task.assigned_to);
+    
+    return {
+      ...task,
+      clientName: task.client_name || "-",
+      assignedToName: matchedUser ? matchedUser.name : "Unassigned"
+    };
+  }
+
+  /**
    * Create a new task
    */
   async createTask(taskData) {

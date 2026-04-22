@@ -14,6 +14,7 @@ router.get('/', taskController.getTasks);
 router.post('/', taskController.createTask);
 router.post('/bulk-upload', upload.single('excelFile'), taskController.bulkUpload);
 router.get('/unassigned', taskController.getUnassignedTasks);
+router.get('/:id', taskController.getTaskById);
 router.post('/optimize', taskController.optimize);
 router.put('/:id', taskController.updateTask);
 router.post('/:taskId/unassign', taskController.unassignTask);

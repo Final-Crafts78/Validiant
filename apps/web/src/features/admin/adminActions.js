@@ -63,7 +63,7 @@ export async function openTaskDetailsModal(taskId) {
         </div>
         <div class="info-item">
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Assigned To</div>
-          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${task.employees ? escapeHtml(task.employees.name) : 'Unassigned'}</div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${escapeHtml(task.assignedToName || 'Unassigned')}</div>
         </div>
       </div>
       
