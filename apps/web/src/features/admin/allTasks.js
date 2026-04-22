@@ -286,13 +286,15 @@ function displayAllTasksList(tasks) {
 
     const mapLink = t.map_url || t.mapUrl || '';
     const mapDisplay = `
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div class="map-actions" style="display:flex; align-items:center; gap:8px;">
         ${mapLink 
-          ? `<a href="${mapLink}" target="_blank" style="color: #60A5FA; font-size: 13px; text-decoration: none;"><i class="fas fa-map-marker-alt"></i> View</a>`
-          : `<span style="color: #6B7280; font-size: 11px;">No map</span>`
+          ? `<a href="${mapLink}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px; background:rgba(30,41,59,0.5); border-color:#334155;">
+               <i class="fas fa-external-link-alt" style="margin-right:4px;"></i> View
+             </a>` 
+          : `<span class="no-map" style="color:#94a3b8; font-size:11px; font-style:italic;">No map</span>`
         }
-        <button class="btn btn-secondary btn-sm" style="padding:4px 8px; background:transparent; border:1px solid #334155; color:#94a3b8;" data-action="admin:editMapUrl" data-id="${t.id}">
-          <i class="fas fa-pen" style="font-size:10px;"></i>
+        <button class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-action="admin:editMapUrl" data-id="${t.id}">
+          <i class="fas fa-pen"></i>
         </button>
       </div>
     `;
@@ -323,8 +325,8 @@ function displayAllTasksList(tasks) {
         </td>
         <td style="padding: 12px 15px;">${slaBadge}</td>
         <td style="padding: 12px 15px; text-align:right;">
-          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}">
-            <i class="fas fa-eye"></i> View
+          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}" style="padding: 5px 12px; font-weight: 600;">
+            <i class="fas fa-eye"></i> View Details
           </button>
         </td>
       </tr>

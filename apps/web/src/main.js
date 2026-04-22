@@ -110,12 +110,18 @@ function setupEventDelegation() {
     const id = target.getAttribute('data-id');
     const status = target.getAttribute('data-status');
 
-    console.log(`[DEBUG] 🖱️ Action Dispatched: ${action} | Target:`, target);
+    console.log(`[DEBUG] 🖱️ Action: ${action} | ID: ${id} | Status: ${status}`);
 
     try {
       // Automatic Menu Highlighting for View Transitions
       if (action.startsWith('view:')) {
         setActiveMenuItem(action);
+      }
+
+      // Only prevent default for buttons/links that are part of our action system
+      // and NOT checkbox inputs which need default behavior
+      if (target.tagName !== 'INPUT') {
+        e.preventDefault();
       }
 
       // ROUTING / NAVIGATION
