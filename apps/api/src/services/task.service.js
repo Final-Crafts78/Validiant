@@ -87,7 +87,9 @@ class TaskService {
     const finalMapUrl = mapUrl || map_url || null;
     let finalLat = latitude, finalLng = longitude;
     
-    if (finalMapUrl && (!finalLat || !finalLng)) {
+    // Always re-extract from URL when present — overrides frontend-supplied coords
+    // because admin forms historically sent imprecise @viewport coordinates.
+    if (finalMapUrl) {
       const coords = extractCoordinates(finalMapUrl);
       if (coords) { 
         finalLat = coords.latitude; 

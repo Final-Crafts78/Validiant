@@ -103,30 +103,38 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 
       const mapMarkers = [];
       activeTasks.forEach((t, index) => {
-        let lat = parseFloat(t.latitude) || parseFloat(t._lat);
-        let lng = parseFloat(t.longitude) || parseFloat(t._lng);
+        let lat = null;
+        let lng = null;
         let isApproxLocation = false;
         
-        // 4. ELITE COORDINATE EXTRACTION (Legacy Parity: !3d > @viewport > ?q= > Pincode)
-        if (!lat || !lng) {
-          const link = t.map_url || t.mapUrl || t.mapurl;
-          if (link) {
-            // Prioritize !3d/!4d (Actual pin location)
-            const m3d = link.match(/!3d(-?[0-9.]+)/);
-            const m4d = link.match(/!4d(-?[0-9.]+)/);
-            if (m3d && m4d) {
-              lat = parseFloat(m3d[1]);
-              lng = parseFloat(m4d[1]);
-            } else {
-              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-              if (match) { 
-                lat = parseFloat(match[1]); 
-                lng = parseFloat(match[2]); 
-              }
+        // COORDINATE RESOLUTION: map_url !3d/!4d > map_url @ > map_url ?q= > DB > Pincode
+        // map_url extraction is attempted FIRST because DB lat/lng may contain
+        // imprecise viewport coords (legacy bug in admin forms).
+        const link = t.map_url || t.mapUrl || t.mapurl;
+        if (link) {
+          // 1. HIGHEST PRECISION: !3d/!4d (actual pin placement in Google Maps)
+          const m3d = link.match(/!3d(-?[0-9.]+)/);
+          const m4d = link.match(/!4d(-?[0-9.]+)/);
+          if (m3d && m4d) {
+            lat = parseFloat(m3d[1]);
+            lng = parseFloat(m4d[1]);
+          } else {
+            // 2. MEDIUM: @lat,lng or ?q=lat,lng
+            const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+            if (match) { 
+              lat = parseFloat(match[1]); 
+              lng = parseFloat(match[2]); 
             }
           }
         }
 
+        // 3. FALLBACK: Use DB-stored coordinates only when map_url extraction yielded nothing
+        if (!lat || !lng) {
+          lat = parseFloat(t.latitude) || parseFloat(t._lat) || null;
+          lng = parseFloat(t.longitude) || parseFloat(t._lng) || null;
+        }
+
+        // 4. LAST RESORT: Pincode centroid fallback
         if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
           lat = pincodeData[t.pincode].lat;
           lng = pincodeData[t.pincode].lng;

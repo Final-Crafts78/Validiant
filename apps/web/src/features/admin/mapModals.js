@@ -63,12 +63,26 @@ export function showEditMapModal(taskId) {
       mapInput.addEventListener('input', function() {
         const url = this.value;
         if (url) {
-          const latMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-          const qMatch = url.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-          if (latMatch) {
-            latInput.value = latMatch[1];
-            lngInput.value = latMatch[2];
-          } else if (qMatch) {
+          // 1. HIGHEST PRECISION: !3d/!4d (actual pin placement)
+          const m3d = url.match(/!3d(-?[0-9.]+)/);
+          const m4d = url.match(/!4d(-?[0-9.]+)/);
+          if (m3d && m4d) {
+            latInput.value = m3d[1];
+            lngInput.value = m4d[1];
+            return;
+          }
+
+          // 2. MEDIUM: @lat,lng (viewport center)
+          const atMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+          if (atMatch) {
+            latInput.value = atMatch[1];
+            lngInput.value = atMatch[2];
+            return;
+          }
+
+          // 3. FALLBACK: ?q=lat,lng
+          const qMatch = url.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+          if (qMatch) {
             latInput.value = qMatch[1];
             lngInput.value = qMatch[2];
           }

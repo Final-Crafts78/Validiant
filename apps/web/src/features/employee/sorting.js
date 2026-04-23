@@ -54,23 +54,23 @@ export async function sortByNearest(event) {
         console.log(`📍 [ORS-ENRICH] Enriching ${state.allEmployeeTasks.length} tasks for ORS optimization...`);
         
         const enrichedTasks = state.allEmployeeTasks.map(t => {
-          let lat = parseFloat(t.latitude) || null;
-          let lng = parseFloat(t.longitude) || null;
-          let coordSource = (lat && lng) ? 'db' : 'none';
+          let lat = null;
+          let lng = null;
+          let coordSource = 'none';
           
-          if (!lat || !lng) {
-            const link = t.map_url || t.mapUrl || t.mapurl;
-            if (link) {
-              const m3d = link.match(/!3d(-?[0-9.]+)/);
-              const m4d = link.match(/!4d(-?[0-9.]+)/);
+          // PRECISION CASCADE: map_url !3d/!4d > map_url @ > map_url ?q= > DB > Pincode
+          const link = t.map_url || t.mapUrl || t.mapurl;
+          if (link) {
+            const m3d = link.match(/!3d(-?[0-9.]+)/);
+            const m4d = link.match(/!4d(-?[0-9.]+)/);
+            if (m3d && m4d) {
+              lat = parseFloat(m3d[1]);
+              lng = parseFloat(m4d[1]);
+              coordSource = '!3d/4d-precision';
+            } else {
               const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-              const matchQ = link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-
-              if (m3d && m4d) {
-                lat = parseFloat(m3d[1]);
-                lng = parseFloat(m4d[1]);
-                coordSource = '!3d/4d-precision';
-              } else if (matchAt) { 
+              const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+              if (matchAt) { 
                 lat = parseFloat(matchAt[1]); 
                 lng = parseFloat(matchAt[2]); 
                 coordSource = '@-viewport';
@@ -80,6 +80,12 @@ export async function sortByNearest(event) {
                 coordSource = '?q=-query';
               }
             }
+          }
+          // DB fallback (only when map_url extraction yielded nothing)
+          if (!lat || !lng) {
+            lat = parseFloat(t.latitude) || null;
+            lng = parseFloat(t.longitude) || null;
+            if (lat && lng) coordSource = 'db';
           }
           if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
             lat = pincodeData[t.pincode].lat;
@@ -164,22 +170,27 @@ function fallbackSort(userLat, userLng) {
 
 export function reapplyDistanceSorting(tasks, userLat, userLng) {
   let pool = tasks.map(t => {
-    let lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
-    if (isNaN(lat) || isNaN(lng) || lat === 0) {
-      const link = t.map_url || t.mapUrl || t.mapurl;
-      if (link) {
-        const m3d = link.match(/!3d(-?[0-9.]+)/);
-        const m4d = link.match(/!4d(-?[0-9.]+)/);
-        if (m3d && m4d) {
-          lat = parseFloat(m3d[1]);
-          lng = parseFloat(m4d[1]);
-        } else {
-          const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-          if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
-        }
+    let lat = null, lng = null;
+    
+    // PRECISION CASCADE: map_url !3d/!4d > map_url @ > map_url ?q= > DB > Pincode
+    const link = t.map_url || t.mapUrl || t.mapurl;
+    if (link) {
+      const m3d = link.match(/!3d(-?[0-9.]+)/);
+      const m4d = link.match(/!4d(-?[0-9.]+)/);
+      if (m3d && m4d) {
+        lat = parseFloat(m3d[1]);
+        lng = parseFloat(m4d[1]);
+      } else {
+        const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+        if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
       }
     }
-    if ((isNaN(lat) || isNaN(lng) || lat === 0) && t.pincode && pincodeData[t.pincode]) {
+    // DB fallback
+    if (!lat || !lng) {
+      lat = parseFloat(t.latitude) || null;
+      lng = parseFloat(t.longitude) || null;
+    }
+    if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
       lat = pincodeData[t.pincode].lat;
       lng = pincodeData[t.pincode].lng;
     }

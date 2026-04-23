@@ -302,7 +302,7 @@ export async function showAssignTask() {
   `;
   content.innerHTML = html;
 
-  // Auto-coordinate extraction logic (Restored Legacy Perfection)
+  // Auto-coordinate extraction logic — Precision Cascade: !3d/!4d > @ > ?q=
   const mapUrlInput = document.getElementById('mapUrl');
   if (mapUrlInput) {
     mapUrlInput.addEventListener('input', function() {
@@ -311,15 +311,24 @@ export async function showAssignTask() {
       const lngInput = document.getElementById('longitude');
       
       if (url) {
-        // Try to find @lat,lng pattern
-        const latMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-        if (latMatch) {
-          latInput.value = latMatch[1];
-          lngInput.value = latMatch[2];
+        // 1. HIGHEST PRECISION: !3d/!4d (actual pin placement in Google Maps)
+        const m3d = url.match(/!3d(-?[0-9.]+)/);
+        const m4d = url.match(/!4d(-?[0-9.]+)/);
+        if (m3d && m4d) {
+          latInput.value = m3d[1];
+          lngInput.value = m4d[1];
+          return;
+        }
+
+        // 2. MEDIUM PRECISION: @lat,lng (viewport center — can be 200-500m off)
+        const atMatch = url.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+        if (atMatch) {
+          latInput.value = atMatch[1];
+          lngInput.value = atMatch[2];
           return;
         }
         
-        // Try to find ?q=lat,lng pattern
+        // 3. FALLBACK: ?q=lat,lng (query parameter)
         const qMatch = url.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
         if (qMatch) {
           latInput.value = qMatch[1];
