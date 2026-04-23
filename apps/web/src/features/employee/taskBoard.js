@@ -158,16 +158,26 @@ export function displayEmployeeTasks(tasks) {
               ${distanceBadge}
               ${approxBadge}
             </div>
+            ${task.notes ? `
+              <div class="task-notes-preview" style="font-size:12px; color:#64748b; margin-top:8px; display:flex; gap:6px; align-items:start; background:rgba(0,0,0,0.1); padding:6px 8px; border-radius:6px; border-left:2px solid #6366f1;">
+                <i class="fas fa-sticky-note" style="margin-top:2px; color:#818cf8; font-size:10px;"></i>
+                <span style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;">${escapeHtml(task.notes)}</span>
+              </div>
+            ` : ''}
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
             <span class="status-badge ${statusClass}">${task.status}</span>
             ${slaBadge}
-            ${mapLink ? `
-              <button onclick="event.stopPropagation(); window.open('${escapeHtml(mapLink)}', '_blank')" 
-                      class="btn btn-primary btn-sm" style="padding:5px 10px; font-size:11px; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.4); color:#60a5fa;">
-                <i class="fas fa-map-marker-alt"></i> Navigate
-              </button>
-            ` : ''}
+            <div onclick="event.stopPropagation();" style="margin-top:auto;">
+              ${mapLink ? `
+                <button onclick="window.open('${escapeHtml(mapLink)}', '_blank')" 
+                        class="btn btn-primary btn-sm navigate-btn-elite" 
+                        style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                  <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
+                  <span style="font-weight:600;">Navigate</span>
+                </button>
+              ` : ''}
+            </div>
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">

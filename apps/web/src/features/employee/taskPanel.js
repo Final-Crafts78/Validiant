@@ -64,9 +64,12 @@ export async function openTaskPanel(taskId) {
         </div>
 
         ${task.map_url || task.mapUrl ? `
-          <a href="${task.map_url || task.mapUrl}" target="_blank" class="btn btn-info" style="width:100%; justify-content:center; padding:12px; border-radius:8px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.2); color:#60a5fa;">
-            <i class="fas fa-directions"></i> Navigate to Location
-          </a>
+          <div style="margin-top:20px;">
+            <a href="${task.map_url || task.mapUrl}" target="_blank" class="btn btn-primary" 
+               style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#3b82f6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); text-decoration:none;">
+              <i class="fas fa-location-arrow"></i> Navigate to Location
+            </a>
+          </div>
         ` : ''}
       </div>
     </div>
