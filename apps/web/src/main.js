@@ -24,7 +24,7 @@ import {
 } from './features/admin/adminActions';
 import { 
   toggleSelectAll, handleSingleSelection, bulkAssignTasks, 
-  confirmBulkAssign, bulkDeleteTasks 
+  confirmBulkAssign, bulkCompleteTasks, confirmBulkComplete, bulkDeleteTasks 
 } from './features/admin/bulkOperations';
 import { showBulkUpload, processSmartText, submitFinalBulkUpload, handleBulkDuplicateChoice, downloadBulkUploadTemplate } from './features/admin/bulkUpload';
 import { showEditMapModal, saveEditedMapUrl } from './features/admin/mapModals';
