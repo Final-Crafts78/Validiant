@@ -61,21 +61,23 @@ export async function sortByNearest(event) {
           if (!lat || !lng) {
             const link = t.map_url || t.mapUrl || t.mapurl;
             if (link) {
-              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-              if (match) { 
-                lat = parseFloat(match[1]); 
-                lng = parseFloat(match[2]); 
-                coordSource = match[0].startsWith('@') ? '@-viewport' : '?q=-query';
-              }
-              // Advanced mapping checks natively executed
               const m3d = link.match(/!3d(-?[0-9.]+)/);
               const m4d = link.match(/!4d(-?[0-9.]+)/);
-              if (m3d && m4d && match) {
-                const diffLng = Math.abs(parseFloat(match[2]) - parseFloat(m4d[1]));
-                const diffLat = Math.abs(parseFloat(match[1]) - parseFloat(m3d[1]));
-                if (diffLng > 0.001 || diffLat > 0.001) {
-                  console.warn(`📍 [ORS-ENRICH] ⚠️ Task ${t.id}: DISCREPANCY @=[${match[1]},${match[2]}] vs !3d/4d=[${m3d[1]},${m4d[1]}]`);
-                }
+              const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+              const matchQ = link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+
+              if (m3d && m4d) {
+                lat = parseFloat(m3d[1]);
+                lng = parseFloat(m4d[1]);
+                coordSource = '!3d/4d-precision';
+              } else if (matchAt) { 
+                lat = parseFloat(matchAt[1]); 
+                lng = parseFloat(matchAt[2]); 
+                coordSource = '@-viewport';
+              } else if (matchQ) {
+                lat = parseFloat(matchQ[1]);
+                lng = parseFloat(matchQ[2]);
+                coordSource = '?q=-query';
               }
             }
           }
@@ -166,8 +168,15 @@ export function reapplyDistanceSorting(tasks, userLat, userLng) {
     if (isNaN(lat) || isNaN(lng) || lat === 0) {
       const link = t.map_url || t.mapUrl || t.mapurl;
       if (link) {
-        const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-        if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+        const m3d = link.match(/!3d(-?[0-9.]+)/);
+        const m4d = link.match(/!4d(-?[0-9.]+)/);
+        if (m3d && m4d) {
+          lat = parseFloat(m3d[1]);
+          lng = parseFloat(m4d[1]);
+        } else {
+          const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+          if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+        }
       }
     }
     if ((isNaN(lat) || isNaN(lng) || lat === 0) && t.pincode && pincodeData[t.pincode]) {
