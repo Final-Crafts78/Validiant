@@ -105,6 +105,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       activeTasks.forEach((t, index) => {
         let lat = parseFloat(t.latitude) || parseFloat(t._lat);
         let lng = parseFloat(t.longitude) || parseFloat(t._lng);
+        let isApproxLocation = false;
         
         // 4. ELITE COORDINATE EXTRACTION (Legacy Parity: !3d > @viewport > ?q= > Pincode)
         if (!lat || !lng) {
@@ -113,19 +114,23 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
             // Prioritize !3d/!4d (Actual pin location)
             const m3d = link.match(/!3d(-?[0-9.]+)/);
             const m4d = link.match(/!4d(-?[0-9.]+)/);
-            const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-            if (match) { 
-              lat = parseFloat(match[1]); 
-              lng = parseFloat(match[2]); 
+            if (m3d && m4d) {
+              lat = parseFloat(m3d[1]);
+              lng = parseFloat(m4d[1]);
+            } else {
+              const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+              if (match) { 
+                lat = parseFloat(match[1]); 
+                lng = parseFloat(match[2]); 
+              }
             }
           }
         }
 
-        if (!lat || !lng) {
-          if (isApproxLocation) {
-            lat = pincodeData[t.pincode].lat;
-            lng = pincodeData[t.pincode].lng;
-          }
+        if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+          lat = pincodeData[t.pincode].lat;
+          lng = pincodeData[t.pincode].lng;
+          isApproxLocation = true;
         }
 
         if (lat && lng) {
