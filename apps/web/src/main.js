@@ -343,6 +343,12 @@ function setupEventDelegation() {
         case 'sorting:pincode':
           sortByPincode();
           break;
+        case 'routing:custom':
+          {
+            const { calculateGreedyRoute } = await import('./features/employee/sorting');
+            calculateGreedyRoute(e);
+          }
+          break;
         
         // KYC ACTIONS
         case 'kyc:openModal':

@@ -92,26 +92,35 @@ export async function updateTrackerData() {
     const bounds = [];
 
     executives.forEach(exec => {
-      const lat = parseFloat(exec.latitude);
-      const lng = parseFloat(exec.longitude);
+      const lat = parseFloat(exec.latitude || exec.lat);
+      const lng = parseFloat(exec.longitude || exec.lng);
+      const lastActive = exec.lastActive ? new Date(exec.lastActive) : null;
       
-      if (!lat || !lng) {
+      if (!lastActive || isNaN(lastActive.getTime())) {
         offline++;
         return;
       }
 
-      const lastActive = new Date(exec.lastActive);
       const diffMinutes = (now - lastActive) / (1000 * 60);
       
       let statusColor = '#ef4444'; // Offline (>60m)
+      let isActuallyOnline = false;
+      
       if (diffMinutes < 10) {
         statusColor = '#10b981'; // Online (<10m)
         online++;
+        isActuallyOnline = true;
       } else if (diffMinutes < 60) {
         statusColor = '#f59e0b'; // Idle (<60m)
         idle++;
+        isActuallyOnline = true;
       } else {
         offline++;
+      }
+
+      // Only add to map if we have valid coordinates
+      if (isNaN(lat) || isNaN(lng)) {
+        return;
       }
 
       const icon = L.divIcon({

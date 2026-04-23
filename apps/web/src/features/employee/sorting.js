@@ -168,33 +168,50 @@ function fallbackSort(userLat, userLng) {
   displayEmployeeTasks(state.allEmployeeTasks);
 }
 
-export function reapplyDistanceSorting(tasks, userLat, userLng) {
-  let pool = tasks.map(t => {
-    let lat = null, lng = null;
-    
-    // PRECISION CASCADE: map_url !3d/!4d > map_url @ > map_url ?q= > DB > Pincode
-    const link = t.map_url || t.mapUrl || t.mapurl;
-    if (link) {
-      const m3d = link.match(/!3d(-?[0-9.]+)/);
-      const m4d = link.match(/!4d(-?[0-9.]+)/);
-      if (m3d && m4d) {
-        lat = parseFloat(m3d[1]);
-        lng = parseFloat(m4d[1]);
-      } else {
-        const match = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/) || link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-        if (match) { lat = parseFloat(match[1]); lng = parseFloat(match[2]); }
+/**
+ * Helper to resolve coordinates using the precision cascade:
+ * !3d/4d > @-viewport > ?q-query > DB > Pincode Fallback
+ */
+export function resolveTaskCoordinates(t) {
+  let lat = null;
+  let lng = null;
+  
+  const link = t.map_url || t.mapUrl || t.mapurl;
+  if (link) {
+    const m3d = link.match(/!3d(-?[0-9.]+)/);
+    const m4d = link.match(/!4d(-?[0-9.]+)/);
+    if (m3d && m4d) {
+      lat = parseFloat(m3d[1]);
+      lng = parseFloat(m4d[1]);
+    } else {
+      const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+      const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+      if (matchAt) { 
+        lat = parseFloat(matchAt[1]); 
+        lng = parseFloat(matchAt[2]); 
+      } else if (matchQ) {
+        lat = parseFloat(matchQ[1]);
+        lng = parseFloat(matchQ[2]);
       }
     }
-    // DB fallback
-    if (!lat || !lng) {
-      lat = parseFloat(t.latitude) || null;
-      lng = parseFloat(t.longitude) || null;
-    }
-    if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
-      lat = pincodeData[t.pincode].lat;
-      lng = pincodeData[t.pincode].lng;
-    }
-    
+  }
+
+  if (!lat || !lng) {
+    lat = parseFloat(t.latitude) || parseFloat(t._lat) || null;
+    lng = parseFloat(t.longitude) || parseFloat(t._lng) || null;
+  }
+
+  if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+    lat = pincodeData[t.pincode].lat;
+    lng = pincodeData[t.pincode].lng;
+  }
+
+  return { lat, lng };
+}
+
+export function reapplyDistanceSorting(tasks, userLat, userLng) {
+  let pool = tasks.map(t => {
+    const { lat, lng } = resolveTaskCoordinates(t);
     t.distanceKm = (lat && lng) ? calculateDistance(userLat, userLng, lat, lng).toFixed(1) : Number.MAX_VALUE;
     return t;
   });
@@ -206,4 +223,108 @@ export function reapplyDistanceSorting(tasks, userLat, userLng) {
   });
   
   state.allEmployeeTasks = pool;
+}
+
+/**
+ * Greedy Nearest-Neighbor Routing Logic:
+ * User -> Nearest Task -> Next Nearest (from Task 1) -> Next Nearest (from Task 2)...
+ */
+export async function calculateGreedyRoute(event) {
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported', 'error');
+    return;
+  }
+
+  showToast('Calculating custom greedy route...', 'info');
+  const btn = event?.target.closest('button');
+  const originalHtml = btn?.innerHTML;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Routing...';
+  }
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    try {
+      const userLat = pos.coords.latitude;
+      const userLng = pos.coords.longitude;
+      
+      const activeTasks = state.allEmployeeTasks.filter(t => {
+        const s = (t.status || '').toLowerCase();
+        return s !== 'verified' && s !== 'completed';
+      });
+
+      if (activeTasks.length === 0) {
+        showToast('No active tasks to route', 'warning');
+        return;
+      }
+
+      const optimizedOrder = [];
+      let currentLat = userLat;
+      let currentLng = userLng;
+      let pool = [...activeTasks];
+
+      while (pool.length > 0) {
+        let nearestIdx = -1;
+        let minDistance = Infinity;
+
+        for (let i = 0; i < pool.length; i++) {
+          const { lat, lng } = resolveTaskCoordinates(pool[i]);
+          if (!lat || !lng) continue;
+
+          const dist = calculateDistance(currentLat, currentLng, lat, lng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestIdx = i;
+          }
+        }
+
+        if (nearestIdx === -1) {
+          // No more tasks with coordinates, just append the rest
+          optimizedOrder.push(...pool);
+          break;
+        }
+
+        const nextTask = pool.splice(nearestIdx, 1)[0];
+        const { lat, lng } = resolveTaskCoordinates(nextTask);
+        currentLat = lat;
+        currentLng = lng;
+        optimizedOrder.push(nextTask);
+      }
+
+      // Preserve completed/verified tasks at the end if any were filtered out
+      const otherTasks = state.allEmployeeTasks.filter(t => {
+        const s = (t.status || '').toLowerCase();
+        return s === 'verified' || s === 'completed';
+      });
+
+      state.allEmployeeTasks = [...optimizedOrder, ...otherTasks];
+      
+      // Update UI
+      const map = document.getElementById('routingMap');
+      if (map && map.offsetParent !== null) {
+        const { showMapRouting } = await import('../routing/leafletEngine');
+        const { openTaskPanel } = await import('../employee/taskPanel');
+        showMapRouting(state.allEmployeeTasks, openTaskPanel);
+      }
+
+      const list = document.getElementById('todayTasksList');
+      if (list) displayEmployeeTasks(state.allEmployeeTasks);
+
+      showToast('Custom greedy route applied!', 'success');
+    } catch (err) {
+      console.error('Greedy Route Error:', err);
+      showToast('Routing failed', 'error');
+    } finally {
+      if (btn) {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      }
+    }
+  }, (err) => {
+    showToast('Location access denied', 'error');
+    if (btn) {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  });
 }
