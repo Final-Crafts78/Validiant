@@ -360,16 +360,24 @@ export async function submitFinalBulkUpload() {
 
 // 6. Duplicate Checker (Legacy L2907)
 async function checkDuplicateCases(tasks) {
-  const response = await fetch('/api/tasks?role=admin');
-  const existingTasks = await response.json();
-  const existingCaseIds = new Set(existingTasks.filter(t => t.title).map(t => t.title.trim().toLowerCase()));
+  const caseIds = tasks.map(t => t.title).filter(Boolean);
+  
+  const response = await fetch('/api/tasks/bulk/check-duplicates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caseIds })
+  });
+  
+  const result = await response.json();
+  const existingTasks = result.duplicates || [];
+  const existingCaseIds = new Map(existingTasks.map(t => [t.title.trim().toLowerCase(), t.id]));
   const duplicates = [];
   const newTasks = [];
   tasks.forEach(task => {
     const caseId = task.title.trim().toLowerCase();
     if (existingCaseIds.has(caseId)) {
-      const existing = existingTasks.find(e => e.title && e.title.trim().toLowerCase() === caseId);
-      duplicates.push({ ...task, existingId: existing.id });
+
+      duplicates.push({ ...task, existingId: existingCaseIds.get(caseId) });
     } else {
       newTasks.push(task);
     }
@@ -441,18 +449,28 @@ async function updateExistingTasks(duplicates) {
 }
 
 async function processBulkUpload(tasks) {
-  let successCount = 0;
-  for (const task of tasks) {
-    const response = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...task, createdBy: state.currentUser.id, createdByName: state.currentUser.name })
-    });
-    if (response.ok) successCount++;
+  if (!tasks || tasks.length === 0) return;
+  const payloadTasks = tasks.map(t => ({
+    ...t,
+    createdBy: state.currentUser.id,
+    createdByName: state.currentUser.name
+  }));
+  const response = await fetch('/api/tasks/bulk/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      tasks: payloadTasks,
+      adminId: state.currentUser.id,
+      adminName: state.currentUser.name
+    })
+  });
+  if (response.ok) {
+    showToast(`✓ ${tasks.length} task(s) created successfully!`, 'success');
+    if (document.getElementById('allTasksList')) loadAllTasks();
+    else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
+  } else {
+    showToast('Failed to bulk upload tasks', 'error');
   }
-  showToast(`✓ ${successCount} task(s) created successfully!`, 'success');
-  if (document.getElementById('allTasksList')) loadAllTasks();
-  else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
 }
 
 export function downloadBulkUploadTemplate() {

@@ -216,6 +216,96 @@ class TaskController {
       res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  /**
+   * Bulk Operations
+   */
+  async bulkAssign(req, res) {
+    try {
+      const { taskIds, employeeId, userId, userName } = req.body;
+      if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ success: false, message: "No tasks provided" });
+      }
+      await taskService.bulkAssign(taskIds, employeeId, userId, userName);
+      res.json({ success: true, message: "Tasks assigned successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async bulkUpdateStatus(req, res) {
+    try {
+      const { taskIds, status, userId, userName } = req.body;
+      if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ success: false, message: "No tasks provided" });
+      }
+      await taskService.bulkUpdateStatus(taskIds, status, userId, userName);
+      res.json({ success: true, message: "Task statuses updated successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async bulkDelete(req, res) {
+    try {
+      const { taskIds, adminId } = req.body;
+      if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ success: false, message: "No tasks provided" });
+      }
+      await taskService.bulkDelete(taskIds, adminId);
+      res.json({ success: true, message: "Tasks deleted successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async bulkCheckDuplicates(req, res) {
+    try {
+      const { caseIds } = req.body;
+      if (!caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
+        return res.status(400).json({ success: false, message: "No case IDs provided" });
+      }
+      const existingTasks = await taskService.checkDuplicates(caseIds);
+      res.json({ success: true, duplicates: existingTasks });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async bulkCreateJson(req, res) {
+    try {
+      const { tasks, adminId, adminName } = req.body;
+      if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+        return res.status(400).json({ success: false, message: "No tasks provided" });
+      }
+      
+      const tasksToInsert = tasks.map(taskData => {
+        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude } = taskData;
+        const finalMapUrl = mapUrl || map_url || null;
+        let initialStatus = "Unassigned";
+        let finalAssignee = null;
+        let assignedDate = null;
+        
+        if (assignedTo && assignedTo !== "Unassigned") {
+          initialStatus = "Pending";
+          finalAssignee = assignedTo;
+          assignedDate = new Date().toISOString().split('T')[0];
+        }
+        
+        return {
+          title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
+          latitude, longitude, notes, client_name: clientName, 
+          status: initialStatus, assigned_to: finalAssignee, 
+          assigned_date: assignedDate, created_by: createdBy || adminId
+        };
+      });
+
+      await taskService.bulkCreate(tasksToInsert);
+      res.json({ success: true, message: `${tasks.length} tasks created successfully` });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
 
 module.exports = new TaskController();

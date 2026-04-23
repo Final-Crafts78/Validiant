@@ -133,30 +133,30 @@ export async function confirmBulkAssign() {
   
   try {
     showToast(`Assigning ${tasksToUpdate.length} tasks...`, 'info');
-    let success = 0;
     
-    // Batch updates would be better but for now we loop
-    for (const taskId of tasksToUpdate) {
-      const res = await fetch(`/api/tasks/${taskId}/assign`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          employeeId: empId,
-          userId: state.currentUser.id,
-          userName: state.currentUser.name
-        })
-      });
-      if (res.ok) success++;
+    const res = await fetch(`/api/tasks/bulk/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        taskIds: tasksToUpdate,
+        employeeId: empId,
+        userId: state.currentUser.id,
+        userName: state.currentUser.name
+      })
+    });
+    
+    if (res.ok) {
+      showToast(`Successfully assigned ${tasksToUpdate.length} tasks`, 'success');
+      closeAllModals();
+      clearSelection();
+      
+      // Refresh current view
+      if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+      if (document.getElementById('allTasksList')) loadAllTasks();
+    } else {
+      const data = await res.json();
+      showToast(data.message || 'Bulk assign error', 'error');
     }
-    
-    showToast(`Successfully assigned ${success} tasks`, 'success');
-    closeAllModals();
-    clearSelection();
-    
-    // Refresh current view
-    if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
-    if (document.getElementById('allTasksList')) loadAllTasks();
-    
   } catch (err) {
     showToast('Bulk update error', 'error');
   }
@@ -188,28 +188,29 @@ export async function confirmBulkComplete() {
   
   try {
     showToast(`Completing ${tasksToUpdate.length} tasks...`, 'info');
-    let success = 0;
     
-    for (const taskId of tasksToUpdate) {
-      const res = await fetch(`/api/tasks/${taskId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          status: 'Completed',
-          userId: state.currentUser.id,
-          userName: state.currentUser.name
-        })
-      });
-      if (res.ok) success++;
+    const res = await fetch(`/api/tasks/bulk/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        taskIds: tasksToUpdate,
+        status: 'Completed',
+        userId: state.currentUser.id,
+        userName: state.currentUser.name
+      })
+    });
+    
+    if (res.ok) {
+      showToast(`Successfully completed ${tasksToUpdate.length} tasks`, 'success');
+      closeAllModals();
+      clearSelection();
+      
+      if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+      if (document.getElementById('allTasksList')) loadAllTasks();
+    } else {
+      const data = await res.json();
+      showToast(data.message || 'Bulk complete error', 'error');
     }
-    
-    showToast(`Successfully completed ${success} tasks`, 'success');
-    closeAllModals();
-    clearSelection();
-    
-    if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
-    if (document.getElementById('allTasksList')) loadAllTasks();
-    
   } catch (err) {
     showToast('Bulk complete error', 'error');
   }
@@ -222,21 +223,27 @@ export async function bulkDeleteTasks() {
   
   try {
     const tasksToUpdate = Array.from(window.selectedTasks);
-    let success = 0;
-    
     showToast(`Deleting ${tasksToUpdate.length} tasks...`, 'info');
     
-    for (const taskId of tasksToUpdate) {
-      const res = await fetch(`/api/tasks/${taskId}?adminId=${state.currentUser.id}`, { method: 'DELETE' });
-      if (res.ok) success++;
+    const res = await fetch(`/api/tasks/bulk/delete`, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskIds: tasksToUpdate,
+        adminId: state.currentUser.id
+      })
+    });
+    
+    if (res.ok) {
+      showToast(`Deleted ${tasksToUpdate.length} tasks`, 'success');
+      clearSelection();
+      
+      if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+      if (document.getElementById('allTasksList')) loadAllTasks();
+    } else {
+      const data = await res.json();
+      showToast(data.message || 'Bulk delete error', 'error');
     }
-    
-    showToast(`Deleted ${success} tasks`, 'success');
-    clearSelection();
-    
-    if (document.getElementById('unassignedTasksList')) loadUnassignedTasks();
-    if (document.getElementById('allTasksList')) loadAllTasks();
-    
   } catch (err) {
     showToast('Bulk delete error', 'error');
   }

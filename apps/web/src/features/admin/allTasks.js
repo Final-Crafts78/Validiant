@@ -111,12 +111,16 @@ export async function loadAllTasks() {
   const empId = document.getElementById('allTasksEmployeeFilter')?.value || 'all';
   const pincode = document.getElementById('allTasksPincodeFilter')?.value?.trim() || '';
   const search = document.getElementById('allTasksSearch')?.value?.trim() || '';
+  const fromDate = document.getElementById('allTasksFromDate')?.value || '';
+  const toDate = document.getElementById('allTasksToDate')?.value || '';
 
-  let url = `/api/tasks?role=admin`;
+  let url = `/api/tasks?role=admin&page=${currentTaskPage}&limit=${TASKS_PER_PAGE}`;
   if (status !== 'all') url += `&status=${encodeURIComponent(status)}`;
   if (empId !== 'all') url += `&employeeId=${encodeURIComponent(empId)}`;
   if (pincode) url += `&pincode=${encodeURIComponent(pincode)}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (fromDate) url += `&fromDate=${encodeURIComponent(fromDate)}`;
+  if (toDate) url += `&toDate=${encodeURIComponent(toDate)}`;
 
   try {
     // Premium Skeleton Loader while fetching
@@ -124,14 +128,14 @@ export async function loadAllTasks() {
     if (list) list.innerHTML = renderTableSkeleton();
 
     const res = await fetch(url);
-    const tasks = await res.json();
+    const responseData = await res.json();
     
-    state.allAdminTasks = Array.isArray(tasks) ? tasks : [];
-    const filtered = applyDateFilter(state.allAdminTasks); 
-    state.currentFilteredTasks = filtered;
+    // Server returns { data, totalCount, totalPages, currentPage } when limit > 0
+    state.allAdminTasks = responseData.data || [];
+    state.currentFilteredTasks = state.allAdminTasks;
 
     updateFilterChips();
-    displayAllTasksList(filtered);
+    displayAllTasksList(responseData);
   } catch (err) {
     console.error(err);
     const list = document.getElementById('allTasksList');
@@ -167,19 +171,8 @@ function renderTableSkeleton() {
 }
 
 function applyDateFilter(tasks) {
-  const fromVal = document.getElementById('allTasksFromDate')?.value;
-  const toVal = document.getElementById('allTasksToDate')?.value;
-  if (!fromVal && !toVal) return tasks;
-
-  const fromDate = fromVal ? new Date(fromVal + 'T00:00:00') : null;
-  const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
-
-  return tasks.filter(t => {
-    const d = new Date(t.assigned_date || t.assignedDate || t.created_at);
-    if (fromDate && d < fromDate) return false;
-    if (toDate && d > toDate) return false;
-    return true;
-  });
+  // Deprecated: Filtering is now handled on the server
+  return tasks;
 }
 
 export function resetAllTaskFilters() {
@@ -210,9 +203,14 @@ function updateFilterChips() {
   }
 }
 
-function displayAllTasksList(tasks) {
+function displayAllTasksList(responseData) {
   const list = document.getElementById('allTasksList');
   if (!list) return;
+
+  const tasks = responseData.data || [];
+  const totalCount = responseData.totalCount || tasks.length;
+  const totalPages = responseData.totalPages || 1;
+  window.totalTaskPages = totalPages;
 
   if (!tasks || tasks.length === 0) {
     list.innerHTML = `
@@ -225,16 +223,12 @@ function displayAllTasksList(tasks) {
     return;
   }
 
-  const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
-  if (currentTaskPage > totalPages) currentTaskPage = 1; 
-  
   const startIndex = (currentTaskPage - 1) * TASKS_PER_PAGE;
-  const endIndex = startIndex + TASKS_PER_PAGE;
-  const tasksToDisplay = tasks.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + TASKS_PER_PAGE, totalCount);
 
   let html = `
     <div class="table-header-info gpu-boost" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
-      <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${Math.min(endIndex, tasks.length)}</strong> of <strong>${tasks.length}</strong> tasks</span>
+      <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${endIndex}</strong> of <strong>${totalCount}</strong> tasks</span>
       
       <div id="bulkActionsContainer" style="display:none; animation: slideIn 0.2s ease;">
         <div style="display:flex; align-items:center; gap:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); padding:6px 15px; border-radius:12px;">
@@ -263,7 +257,7 @@ function displayAllTasksList(tasks) {
         <tbody>
   `;
 
-  tasksToDisplay.forEach(t => {
+  tasks.forEach(t => {
     // Legacy Date Format
     let dateStr = '-';
     if(t.created_at || t.assigned_date) {
@@ -396,15 +390,13 @@ function displayAllTasksList(tasks) {
 export function prevTaskPage() {
   if (currentTaskPage > 1) {
     currentTaskPage--;
-    displayAllTasksList(state.currentFilteredTasks || state.allAdminTasks);
+    loadAllTasks();
   }
 }
 
 export function nextTaskPage() {
-  const tasks = state.currentFilteredTasks || state.allAdminTasks;
-  const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
-  if (currentTaskPage < totalPages) {
+  if (currentTaskPage < (window.totalTaskPages || 1)) {
     currentTaskPage++;
-    displayAllTasksList(tasks);
+    loadAllTasks();
   }
 }

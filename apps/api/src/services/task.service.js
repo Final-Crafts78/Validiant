@@ -10,7 +10,7 @@ class TaskService {
    * Fetch all tasks with filters and search
    */
   async getTasks(filters) {
-    const { status, employeeId, pincode, search, page = 1, limit = 0 } = filters;
+    const { status, employeeId, pincode, search, page = 1, limit = 0, fromDate, toDate } = filters;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     
@@ -27,6 +27,8 @@ class TaskService {
     }
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
     if (pincode) query = query.eq("pincode", pincode);
+    if (fromDate) query = query.gte("created_at", `${fromDate}T00:00:00`);
+    if (toDate) query = query.lte("created_at", `${toDate}T23:59:59`);
     
     if (search) {
       query = query.or(`title.ilike.%${search}%,client_name.ilike.%${search}%,pincode.ilike.%${search}%`);

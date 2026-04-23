@@ -13,6 +13,14 @@ const upload = multer({ dest: uploadDir });
 router.get('/', taskController.getTasks);
 router.post('/', taskController.createTask);
 router.post('/bulk-upload', upload.single('excelFile'), taskController.bulkUpload);
+
+// Bulk Operations
+router.post('/bulk/assign', taskController.bulkAssign);
+router.post('/bulk/status', taskController.bulkUpdateStatus);
+router.post('/bulk/delete', taskController.bulkDelete);
+router.post('/bulk/check-duplicates', taskController.bulkCheckDuplicates);
+router.post('/bulk/create', taskController.bulkCreateJson);
+
 router.get('/unassigned', taskController.getUnassignedTasks);
 router.get('/:id', taskController.getTaskById);
 router.post('/optimize', taskController.optimize);
