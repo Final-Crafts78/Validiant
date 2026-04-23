@@ -56,7 +56,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
   }
 
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
+    async (pos) => {
       const mapEl = document.getElementById('routingMap');
       if (!mapEl) return;
       

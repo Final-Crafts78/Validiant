@@ -10,10 +10,13 @@ class TaskService {
    * Fetch all tasks with filters and search
    */
   async getTasks(filters) {
-    const { status, employeeId, pincode, search } = filters;
-    const selectFields = search ? "*" : "id, title, status, pincode, client_name, latitude, longitude, map_url, assigned_to, created_at, assigned_date, verified_at, completed_at, notes";
+    const { status, employeeId, pincode, search, page = 1, limit = 0 } = filters;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
     
-    let query = supabase.from("tasks").select(selectFields).order("created_at", { ascending: false });
+    let query = supabase.from("tasks")
+      .select("*, employees:users!tasks_assigned_to_fkey(name)", { count: "exact" })
+      .order("created_at", { ascending: false });
     
     if (status && status !== "all") {
       if (status === "active") {
@@ -25,33 +28,38 @@ class TaskService {
     if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
     if (pincode) query = query.eq("pincode", pincode);
     
-    const { data: tasks, error } = await query;
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,client_name.ilike.%${search}%,pincode.ilike.%${search}%`);
+    }
+
+    if (limitNum > 0) {
+      const from = (pageNum - 1) * limitNum;
+      const to = from + limitNum - 1;
+      query = query.range(from, to);
+    }
+    
+    const { data: tasks, error, count } = await query;
     if (error) throw error;
 
-    const { data: users } = await supabase.from("users").select("id, name, employee_id");
-
     const formatted = tasks.map(task => {
-      const matchedUser = users.find(u => u.id == task.assigned_to);
-      const userName = matchedUser ? matchedUser.name : "Unassigned";
       const addressText = task.address || ""; 
       return {
         ...task,
         address: addressText,
         map: addressText.length > 0 ? "Yes" : "No",
         clientName: task.client_name || "-",
-        assignedToName: userName,
+        assignedToName: task.employees ? task.employees.name : "Unassigned",
         status: task.status
       };
     });
 
-    if (search) {
-      const s = search.toLowerCase();
-      return formatted.filter(t => 
-        (t.title && t.title.toLowerCase().includes(s)) ||
-        (t.clientName && t.clientName.toLowerCase().includes(s)) ||
-        (t.pincode && t.pincode.includes(s)) ||
-        (t.assignedToName && t.assignedToName.toLowerCase().includes(s))
-      );
+    if (limitNum > 0) {
+      return { 
+        data: formatted, 
+        totalCount: count || 0, 
+        totalPages: Math.ceil((count || 0) / limitNum),
+        currentPage: pageNum
+      };
     }
     return formatted;
   }
@@ -316,6 +324,83 @@ class TaskService {
     const { error } = await supabase.from("tasks").insert(tasks);
     if (error) throw error;
     return true;
+  }
+
+  /**
+   * Bulk assign tasks
+   */
+  async bulkAssign(taskIds, employeeId, userId, userName) {
+    const { data: employee } = await supabase.from("users").select("name").eq("id", employeeId).single();
+    if (!employee) throw new Error("Employee not found");
+
+    const { error } = await supabase.from("tasks").update({
+      assigned_to: employeeId,
+      assigned_date: new Date().toISOString().split('T')[0],
+      status: "Pending",
+      updated_at: new Date()
+    }).in("id", taskIds);
+
+    if (error) throw error;
+
+    await logActivity(userId, userName, "BULK_ASSIGN", null, `Assigned ${taskIds.length} tasks to ${employee.name}`);
+    return true;
+  }
+
+  /**
+   * Bulk update status
+   */
+  async bulkUpdateStatus(taskIds, status, userId, userName) {
+    const updateData = { status, updated_at: new Date() };
+    if (status === 'Completed') updateData.completed_at = new Date();
+    if (status === 'Verified') updateData.verified_at = new Date();
+
+    const { error } = await supabase.from("tasks").update(updateData).in("id", taskIds);
+    if (error) throw error;
+
+    await logActivity(userId, userName, "BULK_STATUS_UPDATE", null, `Updated status to ${status} for ${taskIds.length} tasks`);
+    return true;
+  }
+
+  /**
+   * Bulk delete tasks
+   */
+  async bulkDelete(taskIds, adminId) {
+    const { error } = await supabase.from("tasks").delete().in("id", taskIds);
+    if (error) throw error;
+
+    if (adminId) {
+      await logActivity(adminId, "Admin", "BULK_DELETE", null, `Deleted ${taskIds.length} tasks`);
+    }
+    return true;
+  }
+
+  /**
+   * Check duplicates
+   */
+  async checkDuplicates(caseIds) {
+    const lowerCaseIds = caseIds.map(id => id.trim().toLowerCase());
+    
+    // We can't do `.in(lower(title), array)` easily without raw SQL or checking client-side. 
+    // Since this is for duplicate checking on case IDs, we fetch titles that match the array. 
+    // To handle case insensitivity, we could fetch matching rows and then filter.
+    // Or we just use `in` and assume standard case or check both.
+    // Supabase JS doesn't support case-insensitive IN natively. So we'll fetch exact matches or use a custom filter.
+    // Given the array might be large (500 items), pulling only potentially matching rows is best.
+    
+    // A better approach for case-insensitive matching with IN is to query existing records
+    // Since we need to be case-insensitive, we fetch all tasks that have titles in the list (case-sensitive)
+    // Wait, let's just fetch all tasks' titles if the table is small, but the goal is to optimize.
+    // Let's use `in` with the exact case IDs, and maybe also upper/lower versions.
+    const uniqueIds = [...new Set([...caseIds, ...lowerCaseIds, ...caseIds.map(id => id.toUpperCase())])];
+
+    const { data: existingTasks, error } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .in("title", uniqueIds);
+
+    if (error) throw error;
+
+    return existingTasks || [];
   }
 }
 
