@@ -173,13 +173,14 @@ export async function updateTrackerData() {
     let tasks = [];
     if (taskResponse.ok) {
       const allTasks = await taskResponse.json();
-      tasks = allTasks.filter(t => 
-        t.status !== 'Completed' && 
-        t.status !== 'Verified' && 
-        t.status !== 'Unassigned' && 
-        t.assigned_to != null && 
-        t.assigned_to !== ''
-      );
+      tasks = allTasks.filter(t => {
+        const isCompleted = t.status === 'Completed' || t.status === 'Verified';
+        const isUnassignedStatus = t.status === 'Unassigned';
+        const hasNoAssignee = !t.assigned_to || t.assigned_to === 'Unassigned';
+        const hasNoAssigneeName = !t.assigned_to_name || t.assigned_to_name === 'Unassigned';
+        
+        return !isCompleted && !isUnassignedStatus && !hasNoAssignee && !hasNoAssigneeName;
+      });
     }
     
     console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives and ${tasks.length} pending tasks`);
