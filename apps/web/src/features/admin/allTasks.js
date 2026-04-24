@@ -89,7 +89,11 @@ export function showAllTasks() {
   content.innerHTML = html;
 
   // Load Employees for Filter
-  fetch('/api/users').then(r => r.json()).then(users => {
+  const usersPromise = (state.allEmployees?.length > 0)
+    ? Promise.resolve(state.allEmployees)
+    : fetch('/api/users').then(r => r.json()).then(u => { state.allEmployees = u; return u; });
+
+  usersPromise.then(users => {
     const select = document.getElementById('allTasksEmployeeFilter');
     if (select) {
       users.forEach(u => {

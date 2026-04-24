@@ -90,30 +90,12 @@ class UserService {
    */
   async updateLocation(userId, latitude, longitude) {
     try {
-      // 1. Always update last_active first (this column definitely exists)
-      await supabase.from("users").update({ last_active: new Date() }).eq("id", userId);
-
-      // 2. Try to update coordinates with multiple fallbacks
-      const coordsToTry = [
-        { latitude, longitude }, // Standard
-        { lat: latitude, lng: longitude }, // Short
-        { lat: latitude, longitude: longitude }, // Mixed 1
-        { latitude: latitude, lng: longitude }  // Mixed 2
-      ];
-
-      for (const coords of coordsToTry) {
-        const { error } = await supabase.from("users").update(coords).eq("id", userId);
-        if (!error) return true; // Success!
-        
-        // If it's a "column does not exist" error, continue to next fallback
-        if (error.code === '42703') continue; 
-        
-        // Other errors (network, auth) should be logged and thrown
-        throw error;
-      }
-
-      console.warn(`[DEBUG] 📍 All coordinate fallbacks failed for user ${userId}. GPS columns might be missing.`);
-      return true; // Return true because we at least updated last_active
+      const { error } = await supabase
+        .from("users")
+        .update({ latitude, longitude, last_active: new Date() })
+        .eq("id", userId);
+      if (error) throw error;
+      return true;
     } catch (err) {
       console.error('[DEBUG] ❌ updateLocation failed:', err.message);
       throw err;
@@ -144,9 +126,10 @@ class UserService {
     // Simplified task count query
     const { data: taskCounts } = await supabase
       .from("tasks")
-      .select("assigned_to, status")
+      .select("assigned_to", { count: "exact" })
       .neq("status", "Completed")
-      .neq("status", "Verified");
+      .neq("status", "Verified")
+      .neq("status", "Unassigned");
 
     const countMap = (taskCounts || []).reduce((acc, t) => {
       if (t.assigned_to) {

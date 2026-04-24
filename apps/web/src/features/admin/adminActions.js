@@ -143,6 +143,14 @@ export async function confirmStatusUpdate(taskId) {
     if (res.ok) {
       showToast('Status updated successfully', 'success');
       closeAllModals();
+      // Patch local state to avoid full re-fetch
+      const patchStatus = (arr) => {
+        const t = arr?.find(t => t.id == taskId);
+        if (t) t.status = newStatus;
+      };
+      patchStatus(state.allAdminTasks);
+      patchStatus(state.currentFilteredTasks);
+      // Only re-render if the table is visible
       if(document.getElementById('allTasksList')) loadAllTasks();
     } else {
       showToast('Failed to update status', 'error');
@@ -311,9 +319,14 @@ export async function confirmEditNote(taskId) {
     if (res.ok) {
       showToast('Notes updated successfully', 'success');
       closeAllModals();
-      // Update local state to avoid full reload if possible, but loadAllTasks is safer
-      if(document.getElementById('allTasksList')) await loadAllTasks();
-      if(document.getElementById('unassignedTasksList')) await loadUnassignedTasks();
+      // Update cached state in-place instead of full API re-fetch
+      const updateNote = (arr) => {
+        const t = arr?.find(t => t.id == taskId);
+        if (t) t.notes = notes;
+      };
+      updateNote(state.allAdminTasks);
+      updateNote(state.currentFilteredTasks);
+      updateNote(state.allUnassignedTasks);
       
       // Re-open details if we were in it (to show the update)
       openTaskDetailsModal(parseInt(taskId));

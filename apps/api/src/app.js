@@ -9,10 +9,12 @@ const taskRoutes = require("./routes/task.routes");
 const userRoutes = require("./routes/user.routes");
 const adminRoutes = require("./routes/admin.routes");
 
+const compression = require('compression');
 const app = express();
 
 // Middlewares
 app.use(cors());
+app.use(compression());
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -45,7 +47,11 @@ app.use("/api/users", userRoutes);
 app.use("/api", adminRoutes);
 
 // Static file serving for Frontend (Production)
-app.use(express.static(webDistPath));
+app.use(express.static(webDistPath, {
+  maxAge: '1d',
+  etag: true,
+  immutable: false
+}));
 
 // Fallback to index.html for unknown routes (SPA support)
 app.get("*", (req, res, next) => {

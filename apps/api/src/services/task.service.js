@@ -72,20 +72,17 @@ class TaskService {
   async getTaskById(taskId) {
     const { data: task, error } = await supabase
       .from("tasks")
-      .select("*")
+      .select("*, employees:users!tasks_assigned_to_fkey(name)")
       .eq("id", taskId)
       .single();
 
     if (error) throw error;
     if (!task) throw new Error("Task not found");
 
-    const { data: users } = await supabase.from("users").select("id, name");
-    const matchedUser = users.find(u => u.id == task.assigned_to);
-    
     return {
       ...task,
       clientName: task.client_name || "-",
-      assignedToName: matchedUser ? matchedUser.name : "Unassigned"
+      assignedToName: task.employees ? task.employees.name : "Unassigned"
     };
   }
 
@@ -100,7 +97,7 @@ class TaskService {
     // Always re-extract from URL when present — overrides frontend-supplied coords
     // because admin forms historically sent imprecise @viewport coordinates.
     if (finalMapUrl) {
-      const coords = extractCoordinates(finalMapUrl);
+      const coords = await extractCoordinates(finalMapUrl);
       if (coords) { 
         finalLat = coords.latitude; 
         finalLng = coords.longitude; 
@@ -158,7 +155,7 @@ class TaskService {
 
       // Re-extract precise coordinates from new URL (same precision cascade as createTask)
       if (finalMapUrl) {
-        const coords = extractCoordinates(finalMapUrl);
+        const coords = await extractCoordinates(finalMapUrl);
         if (coords) {
           updateData.latitude = coords.latitude;
           updateData.longitude = coords.longitude;

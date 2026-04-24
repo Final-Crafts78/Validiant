@@ -54,12 +54,13 @@ export async function loadUnassignedTasks() {
   if (term) url += `&search=${encodeURIComponent(term)}`;
   
   try {
-    const res = await fetch(url, { cache: 'no-store' });
-    const tasks = await res.json();
-    state.allUnassignedTasks = Array.isArray(tasks) ? tasks : [];
-    
-    const empRes = await fetch(`/api/users?_t=${timestamp}`, { cache: 'no-store' });
-    const employees = await empRes.json();
+    const [tasksRes, employees] = await Promise.all([
+      fetch(url, { cache: 'no-store' }).then(r => r.json()),
+      (state.allEmployees?.length > 0)
+        ? Promise.resolve(state.allEmployees)
+        : fetch(`/api/users?_t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()).then(u => { state.allEmployees = u; return u; })
+    ]);
+    state.allUnassignedTasks = Array.isArray(tasksRes) ? tasksRes : [];
     
     displayUnassignedList(state.allUnassignedTasks, employees);
   } catch (err) {
