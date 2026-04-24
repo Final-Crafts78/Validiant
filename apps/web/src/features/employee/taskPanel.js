@@ -7,12 +7,25 @@ import { createModal, closeAllModals } from '../../utils/modals';
 
 export async function openTaskPanel(taskId) {
   // Find task in state
-  const task = state.allEmployeeTasks.find(t => t.id == taskId) || 
-               state.allAdminTasks.find(t => t.id == taskId) ||
-               state.allUnassignedTasks.find(t => t.id == taskId);
-               
+  let task = state.allEmployeeTasks.find(t => t.id == taskId) || 
+             state.allAdminTasks.find(t => t.id == taskId) ||
+             state.allUnassignedTasks.find(t => t.id == taskId);
+
+  // Fallback: fetch directly from API if not found in local state
+  // This handles stale map markers after status updates without requiring a page refresh
   if (!task) {
-    showToast('Task details not found in current view.', 'error');
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { cache: 'no-store' });
+      if (res.ok) {
+        task = await res.json();
+      }
+    } catch (e) {
+      console.error('[TaskPanel] API fallback fetch failed:', e);
+    }
+  }
+
+  if (!task) {
+    showToast('Task details not found. It may have been deleted.', 'error');
     return;
   }
 

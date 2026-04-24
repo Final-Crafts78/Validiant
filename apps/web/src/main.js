@@ -165,10 +165,20 @@ function setupEventDelegation() {
         case 'view:employeeToday':
           await fullCleanup();
           showTodayTasks();
+          window._currentRefreshHandler = () => {
+            if (state.currentUser.role === 'employee') loadTodayTasks();
+          };
           break;
         case 'view:mapRouting':
           await fullCleanup();
+          if (state.allEmployeeTasks.length === 0) {
+            await loadTodayTasks();
+          }
           showMapRouting(state.allEmployeeTasks, openTaskPanel);
+          window._currentRefreshHandler = async () => {
+            await loadTodayTasks();
+            showMapRouting(state.allEmployeeTasks, openTaskPanel);
+          };
           break;
         case 'view:adminPool':
           await fullCleanup();
@@ -381,9 +391,10 @@ function setupEventDelegation() {
   }, true); // Use capture phase to catch events earlier
 }
 
-// Global Refresh Handler for Status Updates
+// Global Refresh Handler for Status Updates (default — views override as needed)
 window._currentRefreshHandler = () => {
     if (state.currentUser.role === 'employee') loadTodayTasks();
+    else if (state.currentUser.role === 'admin') loadAllTasks();
 };
 
 /**
@@ -430,9 +441,19 @@ async function triggerInitialView(action, role) {
       break;
     case 'view:employeeToday':
       showTodayTasks();
+      window._currentRefreshHandler = () => {
+        if (state.currentUser.role === 'employee') loadTodayTasks();
+      };
       break;
     case 'view:mapRouting':
+      if (state.allEmployeeTasks.length === 0) {
+        await loadTodayTasks();
+      }
       showMapRouting(state.allEmployeeTasks, openTaskPanel);
+      window._currentRefreshHandler = async () => {
+        await loadTodayTasks();
+        showMapRouting(state.allEmployeeTasks, openTaskPanel);
+      };
       break;
     case 'view:adminPool':
       if (role === 'admin') showUnassignedTasks();
