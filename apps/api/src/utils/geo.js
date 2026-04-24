@@ -12,8 +12,8 @@ function extractCoordinates(url) {
   console.log('📍 [COORD-EXTRACT] Input URL:', url.substring(0, 200));
 
   // 1. Prioritize !3d/!4d (Actual Pin Location - High Precision)
-  const m3d = url.match(/!3d(-?[0-9.]+)/);
-  const m4d = url.match(/!4d(-?[0-9.]+)/);
+  const m3d = url.match(/!3d(-?\d+\.\d+)/);
+  const m4d = url.match(/!4d(-?\d+\.\d+)/);
   
   if (m3d && m4d) {
     const result = { latitude: parseFloat(m3d[1]), longitude: parseFloat(m4d[1]) };

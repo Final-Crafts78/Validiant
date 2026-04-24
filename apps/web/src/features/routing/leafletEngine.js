@@ -2,7 +2,6 @@
  * Leaflet Map Routing Engine
  */
 import { showToast } from '../../utils/ui';
-import { pincodeData } from '../../store/pincodes';
 
 let routingMapInstance = null;
 let markerLayer = null;
@@ -105,10 +104,10 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       const { resolveTaskCoordinates } = await import('../employee/sorting');
       const mapMarkers = [];
       activeTasks.forEach((t, index) => {
-        const { lat, lng } = resolveTaskCoordinates(t);
-        const isApproxLocation = !t.map_url && !t.mapUrl && !t.mapurl && t.pincode && pincodeData[t.pincode];
+        const { lat, lng, source } = resolveTaskCoordinates(t);
+        const isApproxLocation = source === 'pincode-fallback' || source === '@-viewport';
 
-        if (lat && lng) {
+        if (lat != null && lng != null) {
           waypoints.push([lat, lng]);
           const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444';
           

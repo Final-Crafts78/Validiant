@@ -155,17 +155,21 @@ class UserService {
       return acc;
     }, {});
 
-    return (users || []).map(u => ({
-      ...u,
-      employeeId: u.employee_id,
-      lastActive: u.last_active,
-      // Map whatever coordinate format we found to the frontend expectation
-      latitude: u.latitude || u.lat || null,
-      longitude: u.longitude || u.lng || null,
-      lat: u.latitude || u.lat || null, // Provide both for safety
-      lng: u.longitude || u.lng || null,
-      activeTasks: countMap[u.id] || 0
-    }));
+    return (users || []).map(u => {
+      const lat = parseFloat(u.latitude || u.lat || 0);
+      const lng = parseFloat(u.longitude || u.lng || 0);
+      
+      return {
+        ...u,
+        employeeId: u.employee_id,
+        lastActive: u.last_active,
+        latitude: lat || null,
+        longitude: lng || null,
+        lat: lat || null,
+        lng: lng || null,
+        activeTasks: countMap[u.id] || 0
+      };
+    });
   }
 }
 

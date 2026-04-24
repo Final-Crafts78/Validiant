@@ -58,36 +58,50 @@ export async function sortByNearest(event) {
           let lng = null;
           let coordSource = 'none';
           
-          // PRECISION CASCADE: map_url !3d/!4d > map_url @ > map_url ?q= > DB > Pincode
-          const link = t.map_url || t.mapUrl || t.mapurl;
-          if (link) {
-            const m3d = link.match(/!3d(-?[0-9.]+)/);
-            const m4d = link.match(/!4d(-?[0-9.]+)/);
-            if (m3d && m4d) {
-              lat = parseFloat(m3d[1]);
-              lng = parseFloat(m4d[1]);
-              coordSource = '!3d/4d-precision';
-            } else {
-              const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-              const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-              if (matchAt) { 
-                lat = parseFloat(matchAt[1]); 
-                lng = parseFloat(matchAt[2]); 
-                coordSource = '@-viewport';
-              } else if (matchQ) {
-                lat = parseFloat(matchQ[1]);
-                lng = parseFloat(matchQ[2]);
-                coordSource = '?q=-query';
+          // PRECISION CASCADE (DB-first):
+          // 1. DB coords (already precision-extracted by backend at creation)
+          // 2. URL !3d/!4d (actual pin drop)
+          // 3. URL @ (viewport center — 200-500m imprecise)
+          // 4. URL ?q= (query param)
+          // 5. Pincode centroid (last resort)
+          
+          // 1. HIGHEST PRIORITY: DB-stored coordinates
+          const dbLat = parseFloat(t.latitude);
+          const dbLng = parseFloat(t.longitude);
+          if (isFinite(dbLat) && isFinite(dbLng)) {
+            lat = dbLat;
+            lng = dbLng;
+            coordSource = 'db-precision';
+          }
+          
+          // 2. If no DB coords, extract from map_url
+          if (lat == null || lng == null) {
+            const link = t.map_url || t.mapUrl || t.mapurl;
+            if (link) {
+              const m3d = link.match(/!3d(-?\d+\.\d+)/);
+              const m4d = link.match(/!4d(-?\d+\.\d+)/);
+              if (m3d && m4d) {
+                lat = parseFloat(m3d[1]);
+                lng = parseFloat(m4d[1]);
+                coordSource = '!3d/4d-url';
+              } else {
+                const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+                const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+                if (matchAt) { 
+                  lat = parseFloat(matchAt[1]); 
+                  lng = parseFloat(matchAt[2]); 
+                  coordSource = '@-viewport';
+                } else if (matchQ) {
+                  lat = parseFloat(matchQ[1]);
+                  lng = parseFloat(matchQ[2]);
+                  coordSource = '?q-query';
+                }
               }
             }
           }
-          // DB fallback (only when map_url extraction yielded nothing)
-          if (!lat || !lng) {
-            lat = parseFloat(t.latitude) || null;
-            lng = parseFloat(t.longitude) || null;
-            if (lat && lng) coordSource = 'db';
-          }
-          if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+          
+          // 3. Pincode centroid fallback
+          if ((lat == null || lng == null) && t.pincode && pincodeData[t.pincode]) {
             lat = pincodeData[t.pincode].lat;
             lng = pincodeData[t.pincode].lng;
             coordSource = 'pincode-fallback';
@@ -169,50 +183,78 @@ function fallbackSort(userLat, userLng) {
 }
 
 /**
- * Helper to resolve coordinates using the precision cascade:
- * !3d/4d > @-viewport > ?q-query > DB > Pincode Fallback
+ * Helper to resolve coordinates using the precision cascade (DB-first):
+ * DB coords (precision-extracted at creation) > !3d/4d > @-viewport > ?q-query > _enriched > Pincode Fallback
+ * 
+ * Returns { lat, lng, source } where source indicates the resolution method.
  */
 export function resolveTaskCoordinates(t) {
   let lat = null;
   let lng = null;
+  let source = 'none';
   
-  const link = t.map_url || t.mapUrl || t.mapurl;
-  if (link) {
-    const m3d = link.match(/!3d(-?[0-9.]+)/);
-    const m4d = link.match(/!4d(-?[0-9.]+)/);
-    if (m3d && m4d) {
-      lat = parseFloat(m3d[1]);
-      lng = parseFloat(m4d[1]);
-    } else {
-      const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
-      const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
-      if (matchAt) { 
-        lat = parseFloat(matchAt[1]); 
-        lng = parseFloat(matchAt[2]); 
-      } else if (matchQ) {
-        lat = parseFloat(matchQ[1]);
-        lng = parseFloat(matchQ[2]);
+  // 1. HIGHEST PRIORITY: DB-stored coordinates
+  //    The backend already runs the full precision cascade (!3d/!4d > @ > ?q)
+  //    at task creation and stores the best result. Trust these first.
+  const dbLat = parseFloat(t.latitude);
+  const dbLng = parseFloat(t.longitude);
+  if (isFinite(dbLat) && isFinite(dbLng)) {
+    lat = dbLat;
+    lng = dbLng;
+    source = 'db-precision';
+  }
+
+  // 2. If no DB coords, extract from map_url using precision cascade
+  if (lat == null || lng == null) {
+    const link = t.map_url || t.mapUrl || t.mapurl;
+    if (link) {
+      const m3d = link.match(/!3d(-?\d+\.\d+)/);
+      const m4d = link.match(/!4d(-?\d+\.\d+)/);
+      if (m3d && m4d) {
+        lat = parseFloat(m3d[1]);
+        lng = parseFloat(m4d[1]);
+        source = '!3d/4d-url';
+      } else {
+        const matchAt = link.match(/@(-?[0-9.]+),(-?[0-9.]+)/);
+        const matchQ = link.match(/\?q=(-?[0-9.]+),(-?[0-9.]+)/);
+        if (matchAt) { 
+          lat = parseFloat(matchAt[1]); 
+          lng = parseFloat(matchAt[2]); 
+          source = '@-viewport';
+        } else if (matchQ) {
+          lat = parseFloat(matchQ[1]);
+          lng = parseFloat(matchQ[2]);
+          source = '?q-query';
+        }
       }
     }
   }
 
-  if (!lat || !lng) {
-    lat = parseFloat(t.latitude) || parseFloat(t._lat) || null;
-    lng = parseFloat(t.longitude) || parseFloat(t._lng) || null;
+  // 3. Check _lat/_lng (enriched fields from ORS pipeline)
+  if (lat == null || lng == null) {
+    const enrichLat = parseFloat(t._lat);
+    const enrichLng = parseFloat(t._lng);
+    if (isFinite(enrichLat) && isFinite(enrichLng)) {
+      lat = enrichLat;
+      lng = enrichLng;
+      source = '_enriched';
+    }
   }
 
-  if ((!lat || !lng) && t.pincode && pincodeData[t.pincode]) {
+  // 4. LOWEST PRIORITY: Pincode centroid fallback
+  if ((lat == null || lng == null) && t.pincode && pincodeData[t.pincode]) {
     lat = pincodeData[t.pincode].lat;
     lng = pincodeData[t.pincode].lng;
+    source = 'pincode-fallback';
   }
 
-  return { lat, lng };
+  return { lat, lng, source };
 }
 
 export function reapplyDistanceSorting(tasks, userLat, userLng) {
   let pool = tasks.map(t => {
     const { lat, lng } = resolveTaskCoordinates(t);
-    t.distanceKm = (lat && lng) ? calculateDistance(userLat, userLng, lat, lng).toFixed(1) : Number.MAX_VALUE;
+    t.distanceKm = (lat != null && lng != null) ? calculateDistance(userLat, userLng, lat, lng).toFixed(1) : Number.MAX_VALUE;
     return t;
   });
   

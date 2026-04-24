@@ -16,6 +16,84 @@ export async function showExecutiveTracker() {
   cleanupMapInstance();
   stopAutoRefresh();
 
+  // Inject Styles for Premium Pins
+  if (!document.getElementById('trackerStyles')) {
+    const style = document.createElement('style');
+    style.id = 'trackerStyles';
+    style.innerHTML = `
+      .tracker-pin-container {
+        background: transparent !important;
+        border: none !important;
+      }
+      .tracker-pin {
+        position: relative;
+        width: 38px;
+        height: 38px;
+        background: #1e293b;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid rgba(255,255,255,0.8);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+      }
+      .tracker-pin:hover {
+        transform: rotate(-45deg) scale(1.1);
+        z-index: 1000 !important;
+      }
+      .tracker-pin-inner {
+        transform: rotate(45deg);
+        color: white;
+        font-size: 16px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+      .tracker-status-online { 
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+        border-color: #d1fae5;
+      }
+      .tracker-status-idle { 
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+        border-color: #fef3c7;
+      }
+      .tracker-status-offline { 
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+        border-color: #fee2e2;
+      }
+      
+      .pulse-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: #10b981;
+        opacity: 0.6;
+        animation: pin-pulse 2s infinite;
+        z-index: -1;
+      }
+      
+      @keyframes pin-pulse {
+        0% { transform: scale(1); opacity: 0.6; }
+        100% { transform: scale(2.8); opacity: 0; }
+      }
+
+      .tracker-popup .leaflet-popup-content-wrapper {
+        background: #0f172a;
+        color: #f8fafc;
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid #334155;
+      }
+      .tracker-popup .leaflet-popup-tip {
+        background: #0f172a;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
       <h2><i class="fas fa-satellite-dish"></i> Executive Live Tracker</h2>
@@ -31,10 +109,10 @@ export async function showExecutiveTracker() {
       </div>
     </div>
 
-    <div id="trackerMap" style="width: 100%; height: 70vh; border-radius: 12px; border: 1px solid #334155; position: relative;">
-      <div id="trackerMapLoading" style="position:absolute; inset:0; background:rgba(15,23,42,0.8); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:12px;">
-        <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:#6366f1; margin-bottom:15px;"></i>
-        <p>Connecting to satellite grid...</p>
+    <div id="trackerMap" style="width: 100%; height: 75vh; border-radius: 16px; border: 1px solid #334155; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+      <div id="trackerMapLoading" style="position:absolute; inset:0; background:rgba(15,23,42,0.8); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:16px; backdrop-filter: blur(4px);">
+        <i class="fas fa-satellite fa-spin" style="font-size:2.5rem; color:#6366f1; margin-bottom:15px;"></i>
+        <p style="font-weight: 500; color: #94a3b8;">Establishing satellite uplink...</p>
       </div>
     </div>
   `;
@@ -62,10 +140,13 @@ async function initTrackerMap() {
     });
   }
 
-  trackerMap = L.map('trackerMap').setView([20.5937, 78.9629], 5); // Center of India
+  trackerMap = L.map('trackerMap', {
+    zoomControl: true,
+    attributionControl: false
+  }).setView([20.5937, 78.9629], 5); // Center of India
   
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap'
   }).addTo(trackerMap);
 
   markerLayer = L.layerGroup().addTo(trackerMap);
@@ -85,6 +166,8 @@ export async function updateTrackerData() {
     const response = await fetch('/api/users/locations');
     const executives = await response.json();
     
+    console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives`);
+    
     markerLayer.clearLayers();
     
     let online = 0, idle = 0, offline = 0;
@@ -96,66 +179,88 @@ export async function updateTrackerData() {
       const lng = parseFloat(exec.longitude || exec.lng);
       const lastActive = exec.lastActive ? new Date(exec.lastActive) : null;
       
-      if (!lastActive || isNaN(lastActive.getTime())) {
-        offline++;
-        return;
-      }
+      // Calculate status even if no coordinates
+      let statusClass = 'tracker-status-offline';
+      let isOnline = false;
+      let diffMinutes = 9999;
 
-      const diffMinutes = (now - lastActive) / (1000 * 60);
-      
-      let statusColor = '#ef4444'; // Offline (>60m)
-      let isActuallyOnline = false;
-      
-      if (diffMinutes < 10) {
-        statusColor = '#10b981'; // Online (<10m)
-        online++;
-        isActuallyOnline = true;
-      } else if (diffMinutes < 60) {
-        statusColor = '#f59e0b'; // Idle (<60m)
-        idle++;
-        isActuallyOnline = true;
+      if (lastActive && !isNaN(lastActive.getTime())) {
+        diffMinutes = Math.max(0, (now - lastActive) / (1000 * 60));
+        
+        if (diffMinutes < 10) {
+          statusClass = 'tracker-status-online';
+          online++;
+          isOnline = true;
+        } else if (diffMinutes < 60) {
+          statusClass = 'tracker-status-idle';
+          idle++;
+        } else {
+          offline++;
+        }
       } else {
         offline++;
       }
 
       // Only add to map if we have valid coordinates
-      if (isNaN(lat) || isNaN(lng)) {
+      if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
         return;
       }
 
       const icon = L.divIcon({
-        className: 'tracker-pin',
+        className: 'tracker-pin-container',
         html: `
-          <div style="position:relative;">
-            <div style="background-color:${statusColor}; width:32px; height:32px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:2px solid white; box-shadow:0 4px 10px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center;">
-              <i class="fas fa-user" style="transform:rotate(45deg); color:white; font-size:14px;"></i>
+          <div class="tracker-pin ${statusClass}">
+            <div class="tracker-pin-inner">
+               <i class="fas fa-user-tie"></i>
             </div>
+            ${isOnline ? '<div class="pulse-ring"></div>' : ''}
           </div>
         `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
+        iconSize: [38, 38],
+        iconAnchor: [19, 38],
+        popupAnchor: [0, -38]
       });
 
-      const lastSeenText = diffMinutes < 1 ? 'Just now' : `${Math.floor(diffMinutes)} mins ago`;
+      const lastSeenText = diffMinutes < 1 ? 'Just now' : diffMinutes > 1440 ? 'Over a day ago' : `${Math.floor(diffMinutes)} mins ago`;
 
       const popupContent = `
-        <div style="padding:5px; min-width:180px;">
-          <div style="font-weight:700; font-size:14px; color:#1e293b; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
-            ${exec.name}
+        <div style="padding:12px; min-width:220px; font-family: 'Inter', sans-serif;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:1px solid #334155; padding-bottom:10px;">
+            <div style="width:40px; height:40px; border-radius:10px; background:#1e293b; display:flex; align-items:center; justify-content:center; border:1px solid #475569;">
+              <i class="fas fa-user-tie" style="color:#6366f1; font-size:20px;"></i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:15px; color:#f8fafc;">${exec.name}</div>
+              <div style="font-size:11px; color:#94a3b8; font-weight:500;">${exec.employeeId || 'N/A'}</div>
+            </div>
           </div>
-          <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
-            <i class="fas fa-id-badge"></i> ID: ${exec.employeeId || 'N/A'}<br>
-            <i class="fas fa-clock"></i> Last Seen: ${lastSeenText}<br>
-            <i class="fas fa-tasks"></i> Active Tasks: <b>${exec.activeTasks || 0}</b>
+          
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+            <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Last Seen</div>
+              <div style="font-size:12px; color:#f1f5f9; font-weight:600;">${lastSeenText}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Active Tasks</div>
+              <div style="font-size:12px; color:#6366f1; font-weight:700;">${exec.activeTasks || 0}</div>
+            </div>
           </div>
-          <button class="btn btn-primary btn-sm" style="width:100%; justify-content:center;" onclick="window.location.hash='#tasks'; /* Placeholder for deep link */">
-            View Tasks
+
+          <button class="btn btn-primary btn-sm" style="width:100%; height:32px; font-size:12px; font-weight:600; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.location.hash='#employees';">
+            <i class="fas fa-external-link-alt"></i> View Profile
           </button>
         </div>
       `;
 
-      L.marker([lat, lng], { icon }).bindPopup(popupContent).addTo(markerLayer);
+      L.marker([lat, lng], { 
+        icon,
+        title: exec.name,
+        riseOnHover: true
+      }).bindPopup(popupContent, {
+        className: 'tracker-popup',
+        maxWidth: 300
+      }).addTo(markerLayer);
+      
       bounds.push([lat, lng]);
     });
 
@@ -164,9 +269,12 @@ export async function updateTrackerData() {
     document.getElementById('idleCount').textContent = idle;
     document.getElementById('offlineCount').textContent = offline;
 
-    // Center map if we have data and it's the first load
-    if (bounds.length > 0 && trackerMap.getZoom() <= 5) {
-      trackerMap.fitBounds(bounds, { padding: [50, 50] });
+    // Center map if we have data and it's the first load or zoom is too high/low
+    if (bounds.length > 0) {
+      const currentZoom = trackerMap.getZoom();
+      if (currentZoom <= 5 || currentZoom > 15) {
+        trackerMap.fitBounds(bounds, { padding: [100, 100], maxZoom: 14 });
+      }
     }
 
   } catch (err) {

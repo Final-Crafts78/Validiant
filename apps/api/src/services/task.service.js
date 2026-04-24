@@ -144,8 +144,8 @@ class TaskService {
     let changes = [];
 
     if (title) { updateData.title = title; changes.push("Title"); }
-    if (latitude !== undefined) { updateData.latitude = latitude ? parseFloat(latitude) : null; changes.push("Coordinates"); }
-    if (longitude !== undefined) { updateData.longitude = longitude ? parseFloat(longitude) : null; }
+    if (latitude !== undefined) { updateData.latitude = (latitude != null && latitude !== '') ? parseFloat(latitude) : null; changes.push("Coordinates"); }
+    if (longitude !== undefined) { updateData.longitude = (longitude != null && longitude !== '') ? parseFloat(longitude) : null; }
     if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
     if (address) { updateData.address = address; changes.push("Address"); }
     if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
@@ -155,6 +155,16 @@ class TaskService {
     if (finalMapUrl !== undefined) {
       updateData.map_url = finalMapUrl;
       changes.push("Map URL");
+
+      // Re-extract precise coordinates from new URL (same precision cascade as createTask)
+      if (finalMapUrl) {
+        const coords = extractCoordinates(finalMapUrl);
+        if (coords) {
+          updateData.latitude = coords.latitude;
+          updateData.longitude = coords.longitude;
+          changes.push("Coordinates (auto-extracted)");
+        }
+      }
     }
 
     if (status) {

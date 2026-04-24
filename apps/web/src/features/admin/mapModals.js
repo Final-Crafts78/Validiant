@@ -64,8 +64,8 @@ export function showEditMapModal(taskId) {
         const url = this.value;
         if (url) {
           // 1. HIGHEST PRECISION: !3d/!4d (actual pin placement)
-          const m3d = url.match(/!3d(-?[0-9.]+)/);
-          const m4d = url.match(/!4d(-?[0-9.]+)/);
+          const m3d = url.match(/!3d(-?\d+\.\d+)/);
+          const m4d = url.match(/!4d(-?\d+\.\d+)/);
           if (m3d && m4d) {
             latInput.value = m3d[1];
             lngInput.value = m4d[1];
