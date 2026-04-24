@@ -102,6 +102,7 @@ export async function showExecutiveTracker() {
           <span style="color:#10b981;"><i class="fas fa-circle"></i> Online: <span id="onlineCount">0</span></span>
           <span style="color:#f59e0b;"><i class="fas fa-circle"></i> Idle: <span id="idleCount">0</span></span>
           <span style="color:#ef4444;"><i class="fas fa-circle"></i> Offline: <span id="offlineCount">0</span></span>
+          <span style="color:#3b82f6; margin-left:10px;"><i class="fas fa-map-marker-alt"></i> Pending Tasks</span>
         </div>
         <button class="btn btn-secondary btn-sm" id="refreshTrackerBtn" data-action="tracker:refresh">
           <i class="fas fa-sync"></i> Refresh Now
@@ -163,10 +164,19 @@ export async function updateTrackerData() {
   if (!trackerMap) return;
 
   try {
-    const response = await fetch('/api/users/locations');
-    const executives = await response.json();
+    const [execResponse, taskResponse] = await Promise.all([
+      fetch('/api/users/locations'),
+      fetch('/api/tasks')
+    ]);
+    const executives = await execResponse.json();
     
-    console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives`);
+    let tasks = [];
+    if (taskResponse.ok) {
+      const allTasks = await taskResponse.json();
+      tasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Verified' && t.status !== 'Unassigned');
+    }
+    
+    console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives and ${tasks.length} pending tasks`);
     
     markerLayer.clearLayers();
     
@@ -174,9 +184,43 @@ export async function updateTrackerData() {
     const now = new Date();
     const bounds = [];
 
+    // 1. PLOT PENDING TASKS
+    const { resolveTaskCoordinates } = await import('../employee/sorting');
+    tasks.forEach((t, index) => {
+      const { lat, lng, source } = resolveTaskCoordinates(t);
+      if (lat != null && lng != null) {
+        bounds.push([lat, lng]);
+        const isApprox = source === 'pincode-fallback' || source === '@-viewport';
+        const pinColor = isApprox ? '#f59e0b' : '#3b82f6'; // Blue or Orange
+        const taskIcon = L.divIcon({
+          className: 'tracker-task-pin',
+          html: `<div style="background-color: ${pinColor}; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-size:10px;">${index + 1}</div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        L.marker([lat, lng], {
+          icon: taskIcon,
+          title: `Task: ${t.title || t.case_id || 'Unknown'}`,
+          riseOnHover: true
+        }).bindPopup(`
+          <div style="font-family:'Inter',sans-serif; padding:5px;">
+            <b style="color:#2563eb;">${t.title || t.case_id || 'Task'}</b><br>
+            <span style="font-size:12px; color:#64748b;">Status: ${t.status || 'Pending'}</span><br>
+            <span style="font-size:12px; color:#64748b;">Assigned To: ${t.assigned_to_name || 'Unassigned'}</span>
+          </div>
+        `).addTo(markerLayer);
+      }
+    });
+
+    // 2. PLOT EXECUTIVES
     executives.forEach(exec => {
-      const lat = parseFloat(exec.latitude || exec.lat);
-      const lng = parseFloat(exec.longitude || exec.lng);
+      // Allow raw string parsing, handle cases where lat/lng properties might be differently named
+      const latRaw = exec.latitude !== undefined && exec.latitude !== null ? exec.latitude : exec.lat;
+      const lngRaw = exec.longitude !== undefined && exec.longitude !== null ? exec.longitude : exec.lng;
+      const lat = parseFloat(latRaw);
+      const lng = parseFloat(lngRaw);
+      
       const lastActive = exec.lastActive ? new Date(exec.lastActive) : null;
       
       // Calculate status even if no coordinates
