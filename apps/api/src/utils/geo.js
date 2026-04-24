@@ -88,8 +88,86 @@ async function extractCoordinates(url) {
     return result;
   }
 
-  console.log('📍 [COORD-EXTRACT] ❌ No coordinates found in URL after expansion');
+  // E. LAST RESORT: Fetch the Google Maps page and extract coordinates from HTML
+  //    Handles Place ID-only URLs that contain zero coordinates in the URL text.
+  //    Google embeds the resolved location as "center=LAT%2CLNG" in the page response.
+  if (targetUrl.includes('google.com/maps')) {
+    console.log('📍 [COORD-EXTRACT] ⏳ No coords in URL text. Fetching page to resolve Place ID...');
+    try {
+      const pageCoords = await fetchPageCoordinates(targetUrl);
+      if (pageCoords) {
+        console.log('📍 [COORD-EXTRACT] ✅ Page-fetch resolved:', pageCoords);
+        return pageCoords;
+      }
+    } catch (err) {
+      console.error('📍 [COORD-EXTRACT] Page-fetch error:', err.message);
+    }
+  }
+
+  console.log('📍 [COORD-EXTRACT] ❌ No coordinates found after all methods');
   return null;
+}
+
+/**
+ * Fetches a Google Maps page and extracts coordinates from the HTML body.
+ * Google embeds "center=LAT%2CLNG" in the page for Place ID URLs.
+ */
+function fetchPageCoordinates(url) {
+  return new Promise((resolve) => {
+    try {
+      const req = https.get(url, { 
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 8000 
+      }, (res) => {
+        // Follow one redirect if needed
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume(); // drain the response
+          const redirectReq = https.get(res.headers.location, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 8000
+          }, (redirectRes) => {
+            collectAndParse(redirectRes, resolve);
+          });
+          redirectReq.on('error', () => resolve(null));
+          redirectReq.on('timeout', () => { redirectReq.destroy(); resolve(null); });
+          return;
+        }
+        collectAndParse(res, resolve);
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+function collectAndParse(res, resolve) {
+  let body = '';
+  res.on('data', chunk => { body += chunk; });
+  res.on('end', () => {
+    // Pattern 1: center=LAT%2CLNG (URL-encoded comma in meta/link tags)
+    const centerMatch = body.match(/center=(-?\d{1,3}\.\d{4,})%2C(-?\d{1,3}\.\d{4,})/);
+    if (centerMatch) {
+      return resolve({ latitude: parseFloat(centerMatch[1]), longitude: parseFloat(centerMatch[2]) });
+    }
+
+    // Pattern 2: !3d/!4d that appeared in the body (sometimes in embedded data)
+    const m3d = body.match(/!3d(-?\d+(?:\.\d+)?)/);
+    const m4d = body.match(/!4d(-?\d+(?:\.\d+)?)/);
+    if (m3d && m4d) {
+      return resolve({ latitude: parseFloat(m3d[1]), longitude: parseFloat(m4d[1]) });
+    }
+
+    // Pattern 3: @LAT,LNG in the body
+    const atMatch = body.match(/@(-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
+    if (atMatch) {
+      return resolve({ latitude: parseFloat(atMatch[1]), longitude: parseFloat(atMatch[2]) });
+    }
+
+    resolve(null);
+  });
+  res.on('error', () => resolve(null));
 }
 
 module.exports = { extractCoordinates };
