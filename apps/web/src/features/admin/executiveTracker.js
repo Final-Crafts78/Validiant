@@ -165,8 +165,8 @@ export async function updateTrackerData() {
 
   try {
     const [execResponse, taskResponse] = await Promise.all([
-      fetch('/api/users/locations'),
-      fetch('/api/tasks')
+      fetch(`/api/users/locations?_t=${Date.now()}`, { cache: 'no-store' }),
+      fetch(`/api/tasks?_t=${Date.now()}`, { cache: 'no-store' })
     ]);
     const executives = await execResponse.json();
     
@@ -177,7 +177,8 @@ export async function updateTrackerData() {
         const isCompleted = t.status === 'Completed' || t.status === 'Verified';
         const isUnassignedStatus = t.status === 'Unassigned';
         const hasNoAssignee = !t.assigned_to || t.assigned_to === 'Unassigned';
-        const hasNoAssigneeName = !t.assigned_to_name || t.assigned_to_name === 'Unassigned';
+        const assigneeName = t.assignedToName || t.assigned_to_name;
+        const hasNoAssigneeName = !assigneeName || assigneeName === 'Unassigned';
         
         return !isCompleted && !isUnassignedStatus && !hasNoAssignee && !hasNoAssigneeName;
       });
@@ -214,7 +215,7 @@ export async function updateTrackerData() {
           <div style="font-family:'Inter',sans-serif; padding:5px;">
             <b style="color:#2563eb;">${t.title || t.case_id || 'Task'}</b><br>
             <span style="font-size:12px; color:#64748b;">Status: ${t.status || 'Pending'}</span><br>
-            <span style="font-size:12px; color:#64748b;">Assigned To: ${t.assigned_to_name || 'Unassigned'}</span>
+            <span style="font-size:12px; color:#64748b;">Assigned To: ${t.assignedToName || t.assigned_to_name || 'Unassigned'}</span>
           </div>
         `).addTo(markerLayer);
       }
@@ -228,7 +229,8 @@ export async function updateTrackerData() {
       const lat = parseFloat(latRaw);
       const lng = parseFloat(lngRaw);
       
-      const lastActive = exec.lastActive ? new Date(exec.lastActive) : null;
+      const lastActiveDate = exec.lastActive || exec.last_active;
+      const lastActive = lastActiveDate ? new Date(lastActiveDate) : null;
       
       // Calculate status even if no coordinates
       let statusClass = 'tracker-status-offline';
@@ -273,6 +275,8 @@ export async function updateTrackerData() {
       });
 
       const lastSeenText = diffMinutes < 1 ? 'Just now' : diffMinutes > 1440 ? 'Over a day ago' : `${Math.floor(diffMinutes)} mins ago`;
+      const displayEmployeeId = exec.employeeId || exec.employee_id || 'N/A';
+      const activeTaskCount = exec.activeTasks || exec.active_tasks || 0;
 
       const popupContent = `
         <div style="padding:12px; min-width:220px; font-family: 'Inter', sans-serif;">
@@ -281,8 +285,8 @@ export async function updateTrackerData() {
               <i class="fas fa-user-tie" style="color:#6366f1; font-size:20px;"></i>
             </div>
             <div>
-              <div style="font-weight:700; font-size:15px; color:#f8fafc;">${exec.name}</div>
-              <div style="font-size:11px; color:#94a3b8; font-weight:500;">${exec.employeeId || 'N/A'}</div>
+              <div style="font-weight:700; font-size:15px; color:#f8fafc;">${exec.name || 'Unknown Executive'}</div>
+              <div style="font-size:11px; color:#94a3b8; font-weight:500;">${displayEmployeeId}</div>
             </div>
           </div>
           
@@ -293,7 +297,7 @@ export async function updateTrackerData() {
             </div>
             <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
               <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Active Tasks</div>
-              <div style="font-size:12px; color:#6366f1; font-weight:700;">${exec.activeTasks || 0}</div>
+              <div style="font-size:12px; color:#6366f1; font-weight:700;">${activeTaskCount}</div>
             </div>
           </div>
 
