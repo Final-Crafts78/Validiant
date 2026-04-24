@@ -146,8 +146,8 @@ async function initTrackerMap() {
     attributionControl: false
   }).setView([20.5937, 78.9629], 5); // Center of India
   
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap'
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
   }).addTo(trackerMap);
 
   markerLayer = L.layerGroup().addTo(trackerMap);
@@ -173,7 +173,13 @@ export async function updateTrackerData() {
     let tasks = [];
     if (taskResponse.ok) {
       const allTasks = await taskResponse.json();
-      tasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Verified' && t.status !== 'Unassigned');
+      tasks = allTasks.filter(t => 
+        t.status !== 'Completed' && 
+        t.status !== 'Verified' && 
+        t.status !== 'Unassigned' && 
+        t.assigned_to != null && 
+        t.assigned_to !== ''
+      );
     }
     
     console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives and ${tasks.length} pending tasks`);
