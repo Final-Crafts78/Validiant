@@ -91,7 +91,11 @@ export async function openTaskDetailsModal(taskId) {
           <a href="${escapeHtml(mapLink)}" target="_blank" class="btn btn-info">
             <i class="fas fa-map-marker-alt"></i> View Map
           </a>
-        ` : ''}
+        ` : (task.address ? `
+          <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.address)}" target="_blank" class="btn btn-info" style="background:#8b5cf6; border-color:#8b5cf6;">
+            <i class="fas fa-search-location"></i> Search Address
+          </a>
+        ` : '')}
         <button class="btn btn-secondary" data-action="admin:editMapUrl" data-id="${task.id}">
            <i class="fas fa-link"></i> Edit URL
         </button>

@@ -198,7 +198,7 @@ export async function updateTrackerData() {
       const { lat, lng, source } = resolveTaskCoordinates(t);
       if (lat != null && lng != null) {
         bounds.push([lat, lng]);
-        const isApprox = source === 'pincode-fallback' || source === '@-viewport';
+        const isApprox = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
         const pinColor = isApprox ? '#f59e0b' : '#3b82f6'; // Blue or Orange
         const taskIcon = L.divIcon({
           className: 'tracker-task-pin',

@@ -299,7 +299,9 @@ function displayAllTasksList(responseData) {
           ? `<a href="${mapLink}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px; background:rgba(30,41,59,0.5); border-color:#334155;">
                <i class="fas fa-external-link-alt" style="margin-right:4px;"></i> View
              </a>` 
-          : `<span class="no-map" style="color:#94a3b8; font-size:11px; font-style:italic;">No map</span>`
+          : (t.address ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.address)}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px; background:rgba(139,92,246,0.15); border-color:rgba(139,92,246,0.3); color:#c4b5fd;">
+               <i class="fas fa-search-location" style="margin-right:4px;"></i> Search
+             </a>` : `<span class="no-map" style="color:#94a3b8; font-size:11px; font-style:italic;">No map</span>`)
         }
         <button class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-action="admin:editMapUrl" data-id="${t.id}">
           <i class="fas fa-pen"></i>

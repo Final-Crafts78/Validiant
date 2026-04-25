@@ -176,7 +176,14 @@ export function displayEmployeeTasks(tasks) {
                   <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
                   <span style="font-weight:600;">Navigate</span>
                 </button>
-              ` : ''}
+              ` : (task.address ? `
+                <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.address)}', '_blank')" 
+                        class="btn btn-primary btn-sm navigate-btn-elite" 
+                        style="padding:10px 20px; font-size:12px; background:#8b5cf6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(139, 92, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                  <i class="fas fa-search-location" style="font-size:14px;"></i> 
+                  <span style="font-weight:600;">Search Address</span>
+                </button>
+              ` : '')}
             </div>
           </div>
         </div>

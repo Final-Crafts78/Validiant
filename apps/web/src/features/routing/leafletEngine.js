@@ -105,7 +105,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       const mapMarkers = [];
       activeTasks.forEach((t, index) => {
         const { lat, lng, source } = resolveTaskCoordinates(t);
-        const isApproxLocation = source === 'pincode-fallback' || source === '@-viewport';
+        const isApproxLocation = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
 
         if (lat != null && lng != null) {
           waypoints.push([lat, lng]);

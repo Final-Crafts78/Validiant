@@ -93,6 +93,18 @@ export async function showAssignTask() {
             <h4 class="section-title">
               <i class="fas fa-map-marked-alt"></i> Location Details
             </h4>
+
+            <div class="form-group">
+              <label for="address">
+                <i class="fas fa-address-card"></i> Address
+              </label>
+              <textarea 
+                id="address" 
+                rows="2" 
+                placeholder="Full street address..."
+                class="form-input"
+              ></textarea>
+            </div>
             
             <div class="form-group">
               <label for="mapUrl">
@@ -387,6 +399,7 @@ async function handleTaskSubmit(e) {
     title: document.getElementById('caseId').value,
     clientName: document.getElementById('clientName').value || null,
     pincode: pincode,
+    address: document.getElementById('address') ? document.getElementById('address').value : null,
     notes: document.getElementById('notes').value || null,
     mapUrl: document.getElementById('mapUrl').value || null,
     latitude: document.getElementById('latitude').value ? parseFloat(document.getElementById('latitude').value) : null,

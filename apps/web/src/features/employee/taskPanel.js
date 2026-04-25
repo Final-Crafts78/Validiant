@@ -76,14 +76,21 @@ export async function openTaskPanel(taskId) {
           </button>
         </div>
 
-        ${task.map_url || task.mapUrl ? `
+        ${(task.map_url || task.mapUrl) ? `
           <div style="margin-top:20px;">
             <a href="${task.map_url || task.mapUrl}" target="_blank" class="btn btn-primary" 
                style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#3b82f6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); text-decoration:none;">
               <i class="fas fa-location-arrow"></i> Navigate to Location
             </a>
           </div>
-        ` : ''}
+        ` : (task.address ? `
+          <div style="margin-top:20px;">
+            <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.address)}" target="_blank" class="btn btn-primary" 
+               style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#8b5cf6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(139, 92, 246, 0.5); text-decoration:none;">
+              <i class="fas fa-search-location"></i> Search Address on Maps
+            </a>
+          </div>
+        ` : '')}
       </div>
     </div>
   `;

@@ -207,7 +207,19 @@ export function resolveTaskCoordinates(t) {
     return { lat: enrichLat, lng: enrichLng, source: '_enriched' };
   }
 
-  // 6. PRIORITY 5: PINCODE CENTROID FALLBACK
+  // 6. PRIORITY 5: ADDRESS PINCODE EXTRACTION
+  if (t.address) {
+    const addrPinMatch = String(t.address).match(/\b[1-9][0-9]{5}\b/);
+    if (addrPinMatch && pincodeData[addrPinMatch[0]]) {
+      return { 
+        lat: pincodeData[addrPinMatch[0]].lat, 
+        lng: pincodeData[addrPinMatch[0]].lng, 
+        source: 'address-pincode' 
+      };
+    }
+  }
+
+  // 7. PRIORITY 6: PINCODE CENTROID FALLBACK
   if (t.pincode && pincodeData[t.pincode]) {
     return { lat: pincodeData[t.pincode].lat, lng: pincodeData[t.pincode].lng, source: 'pincode-fallback' };
   }

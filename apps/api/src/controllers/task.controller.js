@@ -170,8 +170,24 @@ class TaskController {
         let finalLng = row.longitude || row.lng;
         
         if ((row.mapurl || row.map) && (!finalLat || !finalLng)) {
-          const coords = extractCoordinates(row.mapurl || row.map);
+          const coords = await extractCoordinates(row.mapurl || row.map);
           if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+        }
+
+        let geocodeConfidence = null;
+        let geocodeMatchLevel = null;
+        let locationWarning = null;
+
+        if ((!finalLat || !finalLng) && (row.address || pincode)) {
+          const { geocodeFromAddress } = require("../utils/geocode");
+          const geo = await geocodeFromAddress(row.address, pincode);
+          if (geo) { 
+            finalLat = geo.latitude; 
+            finalLng = geo.longitude; 
+            geocodeConfidence = geo.confidence;
+            geocodeMatchLevel = geo.matchLevel;
+            locationWarning = geo.warning;
+          }
         }
 
         tasksToInsert.push({
@@ -184,7 +200,10 @@ class TaskController {
           longitude: finalLng || null,
           notes: row.notes || null,
           status: "Unassigned",
-          created_by: adminId || null
+          created_by: adminId || null,
+          geocode_confidence: geocodeConfidence,
+          geocode_match_level: geocodeMatchLevel,
+          location_warning: locationWarning
         });
         successCount++;
       }
@@ -279,9 +298,37 @@ class TaskController {
         return res.status(400).json({ success: false, message: "No tasks provided" });
       }
       
-      const tasksToInsert = tasks.map(taskData => {
+      const { extractCoordinates } = require("../utils/geo");
+      const { geocodeFromAddress } = require("../utils/geocode");
+      const tasksToInsert = [];
+
+      for (const taskData of tasks) {
         const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude } = taskData;
         const finalMapUrl = mapUrl || map_url || null;
+        
+        let finalLat = latitude || null;
+        let finalLng = longitude || null;
+        
+        if (finalMapUrl && (!finalLat || !finalLng)) {
+          const coords = await extractCoordinates(finalMapUrl);
+          if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
+        }
+
+        let geocodeConfidence = null;
+        let geocodeMatchLevel = null;
+        let locationWarning = null;
+
+        if ((!finalLat || !finalLng) && (address || pincode)) {
+          const geo = await geocodeFromAddress(address, pincode);
+          if (geo) {
+            finalLat = geo.latitude;
+            finalLng = geo.longitude;
+            geocodeConfidence = geo.confidence;
+            geocodeMatchLevel = geo.matchLevel;
+            locationWarning = geo.warning;
+          }
+        }
+
         let initialStatus = "Unassigned";
         let finalAssignee = null;
         let assignedDate = null;
@@ -292,13 +339,16 @@ class TaskController {
           assignedDate = new Date().toISOString().split('T')[0];
         }
         
-        return {
+        tasksToInsert.push({
           title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
-          latitude, longitude, notes, client_name: clientName, 
+          latitude: finalLat, longitude: finalLng, notes, client_name: clientName, 
           status: initialStatus, assigned_to: finalAssignee, 
-          assigned_date: assignedDate, created_by: createdBy || adminId
-        };
-      });
+          assigned_date: assignedDate, created_by: createdBy || adminId,
+          geocode_confidence: geocodeConfidence,
+          geocode_match_level: geocodeMatchLevel,
+          location_warning: locationWarning
+        });
+      }
 
       await taskService.bulkCreate(tasksToInsert);
       res.json({ success: true, message: `${tasks.length} tasks created successfully` });

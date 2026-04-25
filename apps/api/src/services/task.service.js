@@ -104,6 +104,22 @@ class TaskService {
       }
     }
 
+    let geocodeConfidence = null;
+    let geocodeMatchLevel = null;
+    let locationWarning = null;
+
+    if ((!finalLat || !finalLng) && (address || pincode)) {
+      const { geocodeFromAddress } = require("../utils/geocode");
+      const geo = await geocodeFromAddress(address, pincode);
+      if (geo) {
+        finalLat = geo.latitude;
+        finalLng = geo.longitude;
+        geocodeConfidence = geo.confidence;
+        geocodeMatchLevel = geo.matchLevel;
+        locationWarning = geo.warning;
+      }
+    }
+
     let initialStatus = "Unassigned";
     let finalAssignee = null;
     let assignedDate = null;
@@ -120,6 +136,9 @@ class TaskService {
       client_name: clientName, status: initialStatus,
       assigned_to: finalAssignee, assigned_date: assignedDate,
       created_by: createdBy,
+      geocode_confidence: geocodeConfidence,
+      geocode_match_level: geocodeMatchLevel,
+      location_warning: locationWarning
     }]).select();
 
     if (error) throw error;
