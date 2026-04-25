@@ -72,6 +72,43 @@ async function nominatimSearch(params) {
   }
 }
 
+/**
+ * Queries Google Maps Geocoding API for highest precision coordinates.
+ */
+async function googleSearch(address, pincode) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return null;
+
+  const query = pincode ? `${address}, ${pincode}, India` : `${address}, India`;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&region=in&key=${apiKey}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`⚠️ [GEOCODE] Google API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      console.log(`ℹ️ [GEOCODE] Google API returned ${data.status} for query: ${query}`);
+      return null;
+    }
+
+    const best = data.results[0];
+    return {
+      latitude: best.geometry.location.lat,
+      longitude: best.geometry.location.lng,
+      addresstype: best.geometry.location_type || 'unknown',
+      displayName: best.formatted_address,
+      source: 'google'
+    };
+  } catch (error) {
+    console.error('❌ [GEOCODE] Google API Network error:', error.message);
+    return null;
+  }
+}
+
 const geocodeCache = new Map();
 
 /**
@@ -89,6 +126,12 @@ async function geocodeAddress(rawAddress, pincode) {
     return geocodeCache.get(cacheKey);
   }
 
+  // TIER 0: Google Maps API (Commercial Maximum Precision)
+  const googleResult = await googleSearch(address, pin);
+  if (googleResult) {
+    geocodeCache.set(cacheKey, { ...googleResult, tier: 0 });
+    return geocodeCache.get(cacheKey);
+  }
   
   // TIER 1: Structured query (rooftop/building)
   if (address && pin) {
@@ -139,9 +182,16 @@ async function geocodeAddress(rawAddress, pincode) {
 }
 
 /**
- * Calculates confidence score based on Nominatim's addresstype.
+ * Calculates confidence score based on Google's location_type or Nominatim's addresstype.
  */
 function calculateConfidence(addresstype) {
+  // 1. Google Maps location types
+  if (addresstype === 'ROOFTOP') return { score: 95, level: 'rooftop' };
+  if (addresstype === 'RANGE_INTERPOLATED') return { score: 85, level: 'street' };
+  if (addresstype === 'GEOMETRIC_CENTER') return { score: 75, level: 'street' };
+  if (addresstype === 'APPROXIMATE') return { score: 60, level: 'city' };
+
+  // 2. Nominatim OpenStreetMap types
   const HIGH = ['building', 'house', 'place', 'amenity', 'shop', 'office'];
   const MEDIUM = ['highway', 'residential', 'street', 'road', 'neighbourhood', 'quarter'];
   const LOW_MEDIUM = ['postcode', 'postal_code'];
@@ -190,7 +240,9 @@ async function geocodeFromAddress(rawAddress, pincode) {
   const confidence = calculateConfidence(result.addresstype);
   const policy = applyGeoPolicy(confidence);
   
-  console.log(`🌍 [GEOCODE] ${rawAddress || pincode} → ${result.latitude},${result.longitude} | ` +
+  const engine = result.source === 'google' ? 'GOOGLE' : 'NOMINATIM';
+  
+  console.log(`🌍 [GEOCODE] [${engine}] ${rawAddress || pincode} → ${result.latitude},${result.longitude} | ` +
               `Tier ${result.tier} | ${confidence.level} (${confidence.score}%) | ${policy.action}`);
   
   return {

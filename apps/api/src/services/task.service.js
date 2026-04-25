@@ -295,7 +295,7 @@ class TaskService {
   }
 
   /**
-   * Optimize tasks using ORS
+   * Optimize tasks using Google Directions API with ORS fallback
    */
   async optimizeTasks(employeeLocation, tasks) {
     const routableTasks = tasks.filter(t => t._lat != null && t._lng != null);
@@ -303,33 +303,62 @@ class TaskService {
     
     if (routableTasks.length === 0) return [...unroutableTasks];
 
-    const orsPayload = {
-      vehicles: [{
-        id: 1,
-        profile: "driving-car",
-        start: [employeeLocation.lng, employeeLocation.lat]
-      }],
-      jobs: routableTasks.map((task, index) => ({
-        id: index,
-        location: [task._lng, task._lat]
-      }))
-    };
+    try {
+      // PRIMARY: Google Maps Directions API (optimize:true)
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) throw new Error("No Google API Key");
+      
+      const origin = `${employeeLocation.lat},${employeeLocation.lng}`;
+      // Set destination same as origin for a closed-loop round trip
+      const destination = origin;
+      
+      const waypointsStr = routableTasks.map(t => `${t._lat},${t._lng}`).join('|');
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=optimize:true|${waypointsStr}&key=${apiKey}`;
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (data.status === "OK" && data.routes && data.routes.length > 0) {
+        console.log("📍 [OPTIMIZE] Google Directions API succeeded");
+        const order = data.routes[0].waypoint_order;
+        // order is an array like [2, 0, 1] representing the optimized sequence of the provided waypoints
+        const optimizedTasks = order.map(index => routableTasks[index]);
+        return [...optimizedTasks, ...unroutableTasks];
+      } else {
+        throw new Error(`Google API failed with status: ${data.status}`);
+      }
+    } catch (googleError) {
+      console.warn("⚠️ [OPTIMIZE] Google Maps optimization failed, falling back to ORS:", googleError.message);
+      
+      // FALLBACK: OpenRouteService (ORS)
+      const orsPayload = {
+        vehicles: [{
+          id: 1,
+          profile: "driving-car",
+          start: [employeeLocation.lng, employeeLocation.lat]
+        }],
+        jobs: routableTasks.map((task, index) => ({
+          id: index,
+          location: [task._lng, task._lat]
+        }))
+      };
 
-    const response = await fetch("https://api.openrouteservice.org/optimization", {
-      method: "POST",
-      headers: {
-        "Authorization": process.env.ORS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(orsPayload)
-    });
+      const response = await fetch("https://api.openrouteservice.org/optimization", {
+        method: "POST",
+        headers: {
+          "Authorization": process.env.ORS_API_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(orsPayload)
+      });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "ORS API Failed");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ORS API Failed");
 
-    const steps = data.routes[0].steps.filter(s => s.type === "job");
-    const optimizedTasks = steps.map(step => routableTasks[step.job]);
-    return [...optimizedTasks, ...unroutableTasks];
+      const steps = data.routes[0].steps.filter(s => s.type === "job");
+      const optimizedTasks = steps.map(step => routableTasks[step.job]);
+      return [...optimizedTasks, ...unroutableTasks];
+    }
   }
 
   /**
