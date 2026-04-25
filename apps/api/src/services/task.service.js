@@ -183,7 +183,7 @@ class TaskService {
       }
     }
 
-    if (status) {
+    if (status && status !== currentTask?.status) {
       updateData.status = status;
       changes.push(`Status: ${status}`);
       if (status === 'Completed') updateData.completed_at = new Date();
@@ -204,12 +204,10 @@ class TaskService {
     const { error } = await supabase.from("tasks").update(updateData).eq("id", id);
     if (error) throw error;
 
-    if (userId) {
+    if (userId && changes.length > 0) {
         const taskTitle = currentTask?.title || id;
         const client = currentTask?.client_name || "Unknown";
-        const logDetail = changes.length > 0 
-          ? `Case: ${taskTitle} | Client: ${client} | Updated: ${changes.join(", ")}` 
-          : `Case: ${taskTitle} | Client: ${client} | Task details updated`;
+        const logDetail = `Case: ${taskTitle} | Client: ${client} | Updated: ${changes.join(", ")}`;
         
         await logActivity(userId, userName, "TASK_UPDATED", id, logDetail);
     }

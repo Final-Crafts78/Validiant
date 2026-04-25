@@ -2,46 +2,30 @@
  * Background Location Reporter for Executives
  */
 
-let reportInterval = null;
-const REPORT_INTERVAL_MS = 60 * 1000; // 60 seconds
+let watchId = null;
+let lastReportTime = 0;
+const THROTTLE_MS = 30 * 1000; // 30 seconds
 
 /**
- * Start reporting location to the server
+ * Start reporting location to the server using the robust watchPosition API
  * @param {string} userId 
  */
 export function startLocationReporting(userId) {
-  if (reportInterval) return;
+  if (watchId) return;
   if (!userId) return;
-
-  console.log(`📡 Starting location reporting for executive: ${userId}`);
-
-  // Initial report
-  reportLocation(userId);
-
-  // Periodic report
-  reportInterval = setInterval(() => {
-    reportLocation(userId);
-  }, REPORT_INTERVAL_MS);
-}
-
-/**
- * Stop reporting location
- */
-export function stopLocationReporting() {
-  if (reportInterval) {
-    clearInterval(reportInterval);
-    reportInterval = null;
-    console.log('📡 Stopped location reporting');
+  if (!navigator.geolocation) {
+    console.warn('📡 Geolocation is not supported by this browser.');
+    return;
   }
-}
 
-/**
- * Fetch GPS and send to API
- */
-async function reportLocation(userId) {
-  if (!navigator.geolocation) return;
+  console.log(`📡 Starting live location tracking for executive: ${userId}`);
 
-  navigator.geolocation.getCurrentPosition(async (pos) => {
+  watchId = navigator.geolocation.watchPosition(async (pos) => {
+    const now = Date.now();
+    
+    // Throttle API requests to save battery and network bandwidth
+    if (now - lastReportTime < THROTTLE_MS) return;
+    
     try {
       const { latitude, longitude } = pos.coords;
       
@@ -55,16 +39,26 @@ async function reportLocation(userId) {
         throw new Error('Failed to update location');
       }
       
-      // Silent success - don't spam the console or UI
+      lastReportTime = Date.now();
     } catch (err) {
       console.warn('📡 Location Update Failed:', err.message);
     }
   }, (err) => {
-    // Silent failure on GPS access
-    console.warn('📡 GPS Access Denied for reporting:', err.message);
+    console.warn('📡 GPS Tracker Error:', err.message);
   }, {
     enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 30000
+    timeout: 30000,  // Increased from 10s to 30s to allow cold GPS starts
+    maximumAge: 10000 // Accept 10-second old cached locations to speed up response
   });
+}
+
+/**
+ * Stop reporting location
+ */
+export function stopLocationReporting() {
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    console.log('📡 Stopped location reporting');
+  }
 }

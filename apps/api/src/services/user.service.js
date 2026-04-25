@@ -123,17 +123,26 @@ class UserService {
   }
 
   async _formatLocationResponse(users) {
-    // Simplified task count query
-    const { data: taskCounts } = await supabase
+    // Fetch active tasks with their creation dates for SLA calculation
+    const { data: activeTasks } = await supabase
       .from("tasks")
-      .select("assigned_to", { count: "exact" })
-      .neq("status", "Completed")
-      .neq("status", "Verified")
-      .neq("status", "Unassigned");
+      .select("assigned_to, created_at")
+      .in("status", ["Pending", "In Progress"]);
 
-    const countMap = (taskCounts || []).reduce((acc, t) => {
+    const now = new Date();
+    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+    const execStats = (activeTasks || []).reduce((acc, t) => {
       if (t.assigned_to) {
-        acc[t.assigned_to] = (acc[t.assigned_to] || 0) + 1;
+        if (!acc[t.assigned_to]) {
+          acc[t.assigned_to] = { total: 0, slaBreached: 0 };
+        }
+        acc[t.assigned_to].total += 1;
+        
+        const createdDate = new Date(t.created_at);
+        if (now - createdDate >= THREE_DAYS_MS) {
+          acc[t.assigned_to].slaBreached += 1;
+        }
       }
       return acc;
     }, {});
@@ -141,6 +150,7 @@ class UserService {
     return (users || []).map(u => {
       const lat = parseFloat(u.latitude || u.lat || 0);
       const lng = parseFloat(u.longitude || u.lng || 0);
+      const stats = execStats[u.id] || { total: 0, slaBreached: 0 };
       
       return {
         ...u,
@@ -150,7 +160,8 @@ class UserService {
         longitude: lng || null,
         lat: lat || null,
         lng: lng || null,
-        activeTasks: countMap[u.id] || 0
+        activeTasks: stats.total,
+        slaBreachedTasks: stats.slaBreached
       };
     });
   }

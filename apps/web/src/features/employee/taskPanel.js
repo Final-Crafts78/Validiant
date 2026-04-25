@@ -71,7 +71,7 @@ export async function openTaskPanel(taskId) {
             <option value="Does Not Reside" ${task.status === 'Does Not Reside' ? 'selected' : ''}>Does Not Reside</option>
             <option value="Unable To Verify" ${task.status === 'Unable To Verify' ? 'selected' : ''}>Unable To Verify</option>
           </select>
-          <button class="btn btn-primary" onclick="window._updatePanelStatus(${task.id})" style="padding:0 20px;">
+          <button class="btn btn-primary" onclick="window._updatePanelStatus(${task.id}, this)" style="padding:0 20px;">
             <i class="fas fa-save"></i> Save
           </button>
         </div>
@@ -96,7 +96,11 @@ export async function openTaskPanel(taskId) {
   `;
 
   // Attach global handler for the save button
-  window._updatePanelStatus = (tid) => {
+  window._updatePanelStatus = (tid, btnElem) => {
+    if (btnElem) {
+      btnElem.disabled = true;
+      btnElem.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
     const sel = document.getElementById('employee-panel-status');
     if (sel) updateTaskStatus(tid, sel.value);
   };

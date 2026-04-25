@@ -7,6 +7,8 @@ import { showToast } from '../../utils/ui';
 let trackerMap = null;
 let markerLayer = null;
 let refreshInterval = null;
+let filterClickListener = null;
+let selectedExecutivesFilter = [];
 const REFRESH_RATE = 30000; // 30 seconds
 
 export async function showExecutiveTracker() {
@@ -90,9 +92,55 @@ export async function showExecutiveTracker() {
       .tracker-popup .leaflet-popup-tip {
         background: #0f172a;
       }
+      
+      /* Multi-select filter styles */
+      .tracker-filter-dropdown { position: relative; display: inline-block; }
+      .tracker-filter-btn { background: #1e293b; border: 1px solid #334155; color: #f8fafc; padding: 6px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; transition: all 0.2s; font-size:12px; }
+      .tracker-filter-btn:hover { background: #334155; }
+      .tracker-filter-panel { display: none; position: absolute; top: 100%; right: 0; margin-top: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 12px; width: 260px; max-height: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 2000; padding: 12px; flex-direction: column; }
+      .tracker-filter-panel.show { display: flex; }
+      .tracker-filter-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; transition: background 0.2s; font-size:13px; color:#e2e8f0; margin:0; }
+      .tracker-filter-item:hover { background: rgba(255,255,255,0.05); }
+      .tracker-filter-item input[type="checkbox"] { accent-color: #6366f1; width: 16px; height: 16px; cursor:pointer; margin:0; }
+      .tracker-filter-footer { margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155; display: flex; justify-content: space-between; }
     `;
     document.head.appendChild(style);
   }
+
+  // Handle outside click for filter panel
+  if (filterClickListener) document.removeEventListener('click', filterClickListener);
+  filterClickListener = (e) => {
+    const container = document.getElementById('executiveFilterContainer');
+    const panel = document.getElementById('trackerFilterPanel');
+    if (container && panel && !container.contains(e.target)) {
+      panel.classList.remove('show');
+    }
+  };
+  document.addEventListener('click', filterClickListener);
+
+  // Global functions for the filter
+  window._applyTrackerFilter = () => {
+    const checkboxes = document.querySelectorAll('.tracker-filter-checkbox');
+    selectedExecutivesFilter = Array.from(checkboxes).filter(c => c.checked).map(c => c.value);
+    
+    const badge = document.getElementById('trackerFilterBadge');
+    if (selectedExecutivesFilter.length > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = selectedExecutivesFilter.length;
+    } else {
+      badge.style.display = 'none';
+    }
+    
+    const panel = document.getElementById('trackerFilterPanel');
+    if (panel) panel.classList.remove('show');
+    renderTrackerMap(); // Re-render map visually without fetching
+  };
+
+  window._clearTrackerFilter = () => {
+    const checkboxes = document.querySelectorAll('.tracker-filter-checkbox');
+    checkboxes.forEach(c => c.checked = false);
+    window._applyTrackerFilter();
+  };
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
@@ -104,6 +152,24 @@ export async function showExecutiveTracker() {
           <span style="color:#ef4444;"><i class="fas fa-circle"></i> Offline: <span id="offlineCount">0</span></span>
           <span style="color:#3b82f6; margin-left:10px;"><i class="fas fa-map-marker-alt"></i> Pending Tasks</span>
         </div>
+        
+        <div class="tracker-filter-dropdown" id="executiveFilterContainer">
+          <button class="tracker-filter-btn" onclick="document.getElementById('trackerFilterPanel').classList.toggle('show')">
+            <i class="fas fa-filter"></i> Filter Tasks
+            <span id="trackerFilterBadge" style="background:#6366f1; color:white; font-size:10px; padding:2px 6px; border-radius:10px; display:none;">0</span>
+          </button>
+          <div class="tracker-filter-panel" id="trackerFilterPanel">
+            <div style="font-size:11px; color:#94a3b8; margin-bottom:10px; font-weight:600; text-transform:uppercase;">Select Executives</div>
+            <div id="trackerFilterList" style="display:flex; flex-direction:column; gap:2px; max-height:200px; overflow-y:auto; flex:1;">
+              <!-- Checkboxes injected here -->
+            </div>
+            <div class="tracker-filter-footer">
+              <button class="btn btn-secondary btn-sm" onclick="window._clearTrackerFilter()" style="padding:4px 8px; font-size:11px;">Clear</button>
+              <button class="btn btn-primary btn-sm" onclick="window._applyTrackerFilter()" style="padding:4px 12px; font-size:11px;">Apply</button>
+            </div>
+          </div>
+        </div>
+
         <button class="btn btn-secondary btn-sm" id="refreshTrackerBtn" data-action="tracker:refresh">
           <i class="fas fa-sync"></i> Refresh Now
         </button>
@@ -173,20 +239,52 @@ export async function updateTrackerData() {
     let tasks = [];
     if (taskResponse.ok) {
       const allTasks = await taskResponse.json();
-      tasks = allTasks.filter(t => {
-        const isCompleted = t.status === 'Completed' || t.status === 'Verified';
-        const isUnassignedStatus = t.status === 'Unassigned';
-        const hasNoAssignee = !t.assigned_to || t.assigned_to === 'Unassigned';
-        const assigneeName = t.assignedToName || t.assigned_to_name;
-        const hasNoAssigneeName = !assigneeName || assigneeName === 'Unassigned';
-        
-        return !isCompleted && !isUnassignedStatus && !hasNoAssignee && !hasNoAssigneeName;
-      });
+      if (Array.isArray(allTasks)) {
+        tasks = allTasks.filter(t => {
+          const isCompleted = t.status === 'Completed' || t.status === 'Verified';
+          const isUnassignedStatus = t.status === 'Unassigned';
+          const hasNoAssignee = !t.assigned_to || t.assigned_to === 'Unassigned';
+          const assigneeName = t.assignedToName || t.assigned_to_name;
+          const hasNoAssigneeName = !assigneeName || assigneeName === 'Unassigned';
+          
+          return !isCompleted && !isUnassignedStatus && !hasNoAssignee && !hasNoAssigneeName;
+        });
+      }
     }
     
-    console.log(`📍 Executive Pin Logic: Processing ${executives.length} executives and ${tasks.length} pending tasks`);
+    // Ensure executives is a valid array
+    const execArray = Array.isArray(executives) ? executives : [];
     
-    markerLayer.clearLayers();
+    window._trackerCache = { execArray, tasks };
+    populateFilterDropdown();
+    
+    console.log(`📍 Executive Pin Logic: Processing ${execArray.length} executives and ${tasks.length} pending tasks`);
+    renderTrackerMap();
+    
+  } catch (error) {
+    console.error("❌ Failed to update tracker data:", error);
+  }
+}
+
+function populateFilterDropdown() {
+  const list = document.getElementById('trackerFilterList');
+  if (!list || !window._trackerCache) return;
+  
+  const execs = [...window._trackerCache.execArray].sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+  
+  list.innerHTML = execs.map(exec => `
+    <label class="tracker-filter-item">
+      <input type="checkbox" class="tracker-filter-checkbox" value="${exec.id}" ${selectedExecutivesFilter.includes(String(exec.id)) ? 'checked' : ''}>
+      ${exec.name || 'Unknown'} <span style="color:#94a3b8; font-size:11px;">(${exec.employeeId || exec.employee_id || 'N/A'})</span>
+    </label>
+  `).join('');
+}
+
+async function renderTrackerMap() {
+  if (!window._trackerCache) return;
+  const { execArray, tasks } = window._trackerCache;
+
+  markerLayer.clearLayers();
     
     let online = 0, idle = 0, offline = 0;
     const now = new Date();
@@ -194,7 +292,12 @@ export async function updateTrackerData() {
 
     // 1. PLOT PENDING TASKS
     const { resolveTaskCoordinates } = await import('../employee/sorting');
-    tasks.forEach((t, index) => {
+    
+    const filteredTasks = selectedExecutivesFilter.length > 0 
+      ? tasks.filter(t => selectedExecutivesFilter.includes(String(t.assigned_to))) 
+      : tasks;
+
+    filteredTasks.forEach((t, index) => {
       const { lat, lng, source } = resolveTaskCoordinates(t);
       if (lat != null && lng != null) {
         bounds.push([lat, lng]);
@@ -222,7 +325,7 @@ export async function updateTrackerData() {
     });
 
     // 2. PLOT EXECUTIVES
-    executives.forEach(exec => {
+    execArray.forEach(exec => {
       // Allow raw string parsing, handle cases where lat/lng properties might be differently named
       const latRaw = exec.latitude !== undefined && exec.latitude !== null ? exec.latitude : exec.lat;
       const lngRaw = exec.longitude !== undefined && exec.longitude !== null ? exec.longitude : exec.lng;
@@ -277,9 +380,10 @@ export async function updateTrackerData() {
       const lastSeenText = diffMinutes < 1 ? 'Just now' : diffMinutes > 1440 ? 'Over a day ago' : `${Math.floor(diffMinutes)} mins ago`;
       const displayEmployeeId = exec.employeeId || exec.employee_id || 'N/A';
       const activeTaskCount = exec.activeTasks || exec.active_tasks || 0;
+      const slaBreachedCount = exec.slaBreachedTasks || 0;
 
       const popupContent = `
-        <div style="padding:12px; min-width:220px; font-family: 'Inter', sans-serif;">
+        <div style="padding:12px; min-width:280px; font-family: 'Inter', sans-serif;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:1px solid #334155; padding-bottom:10px;">
             <div style="width:40px; height:40px; border-radius:10px; background:#1e293b; display:flex; align-items:center; justify-content:center; border:1px solid #475569;">
               <i class="fas fa-user-tie" style="color:#6366f1; font-size:20px;"></i>
@@ -290,14 +394,18 @@ export async function updateTrackerData() {
             </div>
           </div>
           
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
-            <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
-              <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Last Seen</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:15px;">
+            <div style="background:rgba(255,255,255,0.05); padding:8px 4px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Last Seen</div>
               <div style="font-size:12px; color:#f1f5f9; font-weight:600;">${lastSeenText}</div>
             </div>
-            <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
-              <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Active Tasks</div>
+            <div style="background:rgba(255,255,255,0.05); padding:8px 4px; border-radius:8px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Pending</div>
               <div style="font-size:12px; color:#6366f1; font-weight:700;">${activeTaskCount}</div>
+            </div>
+            <div style="background:rgba(239,68,68,0.1); padding:8px 4px; border-radius:8px; text-align:center; border:1px solid rgba(239,68,68,0.2);">
+              <div style="font-size:9px; color:#ef4444; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">3+ Days SLA</div>
+              <div style="font-size:12px; color:#ef4444; font-weight:700;">${slaBreachedCount}</div>
             </div>
           </div>
 
@@ -331,11 +439,6 @@ export async function updateTrackerData() {
         trackerMap.fitBounds(bounds, { padding: [100, 100], maxZoom: 14 });
       }
     }
-
-  } catch (err) {
-    console.error('Tracker Data Fetch Error:', err);
-    showToast('Failed to refresh executive locations', 'error');
-  }
 }
 
 function startAutoRefresh() {
