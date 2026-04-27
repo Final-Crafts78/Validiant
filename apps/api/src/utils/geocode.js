@@ -1,4 +1,5 @@
-const fetch = require('node-fetch');
+// Using global fetch (available in Node.js 18+)
+
 
 /**
  * Normalizes an Indian address to maximize Nominatim hit rate.
