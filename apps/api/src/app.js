@@ -40,6 +40,13 @@ if (!fs.existsSync(webDistPath)) {
 app.get("/health", (req, res) => res.json({ status: "healthy", uptime: process.uptime() }));
 app.get("/test", (req, res) => res.send("OK"));
 
+// Configuration routes
+app.get("/api/config/maps-key", (req, res) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return res.status(503).json({ success: false, message: "Maps API key not configured" });
+  res.json({ success: true, key });
+});
+
 // Feature routes
 app.use("/api", authRoutes);
 app.use("/api/tasks", taskRoutes);

@@ -89,7 +89,7 @@ export async function sortByNearest(event) {
           if (map && map.offsetParent !== null) {
             // We are on Map View - Lazy import routing engine to refresh map
             Promise.all([
-              import('../routing/leafletEngine'),
+              import('../routing/googleMapsEngine'),
               import('../employee/taskPanel')
             ]).then(([mod, panelMod]) => {
               mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel);
@@ -320,7 +320,7 @@ export async function calculateGreedyRoute(event) {
       // Update UI
       const map = document.getElementById('routingMap');
       if (map && map.offsetParent !== null) {
-        const { showMapRouting } = await import('../routing/leafletEngine');
+        const { showMapRouting } = await import('../routing/googleMapsEngine');
         const { openTaskPanel } = await import('../employee/taskPanel');
         showMapRouting(state.allEmployeeTasks, openTaskPanel);
       }

@@ -153,8 +153,6 @@ class TaskService {
   async updateTask(id, updateFields, userId, userName) {
     const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude } = updateFields;
     
-    console.log(`[UPDATE-TASK] Task ${id} | Fields received:`, Object.keys(updateFields).filter(k => updateFields[k] !== undefined && updateFields[k] !== null).join(', '));
-    
     // Fetch current task state to detect transitions and for logging
     const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to, title, client_name").eq("id", id).single();
     
@@ -378,14 +376,10 @@ class TaskService {
    * Bulk create tasks
    */
   async bulkCreate(tasks) {
-    console.log(`[BULK-INSERT] Attempting to insert ${tasks.length} tasks into Supabase`);
     const { data, error } = await supabase.from("tasks").insert(tasks);
     if (error) {
-      console.error('[BULK-INSERT] ❌ Supabase error:', error.message);
-      console.error('[BULK-INSERT] ❌ Error code:', error.code, '| Details:', error.details, '| Hint:', error.hint);
       throw error;
     }
-    console.log(`[BULK-INSERT] ✅ Insert successful`);
     return true;
   }
 

@@ -294,15 +294,10 @@ class TaskController {
   async bulkCreateJson(req, res) {
     try {
       const { tasks, adminId, adminName } = req.body;
-      console.log(`[BULK-CREATE] Received ${tasks?.length || 0} tasks from admin ${adminId}`);
       
       if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
-        console.log('[BULK-CREATE] ❌ No tasks provided in request body');
         return res.status(400).json({ success: false, message: "No tasks provided" });
       }
-      
-      // Log a sample of the first task to see field shapes
-      console.log('[BULK-CREATE] Sample task input:', JSON.stringify(tasks[0], null, 2));
       
       const { extractCoordinates } = require("../utils/geo");
       const { geocodeFromAddress } = require("../utils/geocode");
@@ -321,7 +316,7 @@ class TaskController {
             const coords = await extractCoordinates(finalMapUrl);
             if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
           } catch (coordErr) {
-            console.warn(`[BULK-CREATE] ⚠️ Coord extraction failed for task ${i} (${title}):`, coordErr.message);
+            // Silently skip coordinate errors for individual tasks in bulk mode
           }
         }
 
@@ -340,7 +335,7 @@ class TaskController {
               locationWarning = geo.warning;
             }
           } catch (geoErr) {
-            console.warn(`[BULK-CREATE] ⚠️ Geocoding failed for task ${i} (${title}):`, geoErr.message);
+            // Silently skip geocoding errors for individual tasks in bulk mode
           }
         }
 
@@ -365,15 +360,9 @@ class TaskController {
         });
       }
 
-      console.log(`[BULK-CREATE] Inserting ${tasksToInsert.length} tasks into database`);
-      console.log('[BULK-CREATE] Sample insert object:', JSON.stringify(tasksToInsert[0], null, 2));
-      
       await taskService.bulkCreate(tasksToInsert);
-      console.log(`[BULK-CREATE] ✅ Successfully inserted ${tasksToInsert.length} tasks`);
       res.json({ success: true, message: `${tasks.length} tasks created successfully` });
     } catch (err) {
-      console.error('[BULK-CREATE] ❌ Error:', err.message);
-      console.error('[BULK-CREATE] ❌ Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
       res.status(500).json({ success: false, message: err.message });
     }
   }

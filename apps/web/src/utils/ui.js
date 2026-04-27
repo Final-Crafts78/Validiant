@@ -31,7 +31,7 @@ export async function cleanupCurrentView() {
   // Lazy import to break circular dependency: ui.js ↔ leafletEngine.js
   // leafletEngine imports showToast from ui.js, so we can't statically import from leafletEngine here.
   try {
-    const mod = await import('../features/routing/leafletEngine');
+    const mod = await import('../features/routing/googleMapsEngine');
     mod.cleanupMapInstance();
   } catch (e) {
     console.error('Map cleanup failed:', e);

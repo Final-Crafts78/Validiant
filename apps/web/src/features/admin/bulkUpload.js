@@ -450,8 +450,6 @@ async function updateExistingTasks(duplicates) {
     if (dup.mapUrl) updatePayload.mapUrl = dup.mapUrl;
     if (dup.assignedTo) updatePayload.assignedTo = dup.assignedTo;
 
-    console.log(`[BULK-UPDATE] Updating existing task ${dup.existingId} (${dup.title}):`, updatePayload);
-
     try {
       const res = await fetch(`/api/tasks/${dup.existingId}`, {
         method: 'PUT',
@@ -460,13 +458,9 @@ async function updateExistingTasks(duplicates) {
       });
       if (res.ok) {
         updated++;
-        console.log(`[BULK-UPDATE] ✅ Task ${dup.existingId} updated successfully`);
-      } else {
-        const errBody = await res.json().catch(() => ({}));
-        console.error(`[BULK-UPDATE] ❌ Task ${dup.existingId} update failed:`, res.status, errBody);
       }
     } catch (err) {
-      console.error(`[BULK-UPDATE] ❌ Network error updating task ${dup.existingId}:`, err);
+      // Silently continue for bulk updates to avoid interrupting the loop
     }
   }
   showToast(`${updated} task(s) updated successfully!`, 'success');
@@ -485,9 +479,6 @@ async function processBulkUpload(tasks) {
     };
   });
 
-  console.log(`[BULK-CREATE] Sending ${payloadTasks.length} tasks to /api/tasks/bulk/create`);
-  console.log('[BULK-CREATE] Payload sample (first task):', JSON.stringify(payloadTasks[0], null, 2));
-
   try {
     const response = await fetch('/api/tasks/bulk/create', {
       method: 'POST',
@@ -504,14 +495,11 @@ async function processBulkUpload(tasks) {
       if (document.getElementById('allTasksList')) loadAllTasks();
       else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
     } else {
-      // Read the actual error from the server for diagnosis
-      const errBody = await response.json().catch(() => ({ message: 'Unknown server error' }));
-      console.error('[BULK-CREATE] ❌ Server error:', response.status, errBody);
+      const errBody = await response.json().catch(() => ({ message: 'Server error' }));
       showToast(`Failed to bulk upload: ${errBody.message || 'Server error'}`, 'error');
     }
   } catch (err) {
-    console.error('[BULK-CREATE] ❌ Network error:', err);
-    showToast('Failed to bulk upload tasks (network error)', 'error');
+    showToast('Failed to bulk upload tasks', 'error');
   }
 }
 
