@@ -19,7 +19,30 @@ class SettingsController {
   }
 
   /**
-   * Update a setting by key
+   * Update map setting for a specific employee
+   */
+  async updateEmployeeMapSetting(req, res) {
+    try {
+      const { employeeId } = req.params;
+      const { enabled, adminId, adminName } = req.body;
+      
+      const currentValue = await settingsService.getSetting('executive_map_edit') || {};
+      currentValue[employeeId] = enabled;
+      
+      await settingsService.setSetting('executive_map_edit', currentValue, adminId);
+      
+      if (adminId && adminName) {
+         await logActivity(adminId, adminName, 'SETTING_UPDATED', null, `Updated map access for employee ${employeeId} to ${enabled}`);
+      }
+      
+      res.json({ success: true, message: "Setting updated successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Update a global setting by key
    */
   async updateSetting(req, res) {
     try {

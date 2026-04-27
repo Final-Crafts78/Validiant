@@ -14,7 +14,18 @@ export function showEmployees() {
       <h2><i class="fas fa-users"></i> Employees</h2>
       <button class="btn btn-primary" data-action="admin:showAddEmployee"><i class="fas fa-user-plus"></i> Add Employee</button>
     </div>
+    </div>
     <div id="employeesList"><div class="loading-spinner show">Loading...</div></div>
+    <style>
+      /* Toggle Switch */
+      .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #374151; transition: .4s; border-radius: 34px; }
+      .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+      input:checked + .slider { background-color: #10B981; }
+      input:focus + .slider { box-shadow: 0 0 1px #10B981; }
+      input:checked + .slider:before { transform: translateX(26px); }
+    </style>
   `;
 
   loadEmployeesList();
@@ -22,9 +33,21 @@ export function showEmployees() {
 
 export async function loadEmployeesList() {
   try {
-    const res = await fetch('/api/users');
-    const users = await res.json();
+    const [usersRes, mapSettingRes] = await Promise.all([
+      fetch('/api/users'),
+      fetch('/api/settings/executive_map_edit').catch(() => ({ ok: false }))
+    ]);
+    
+    const users = await usersRes.json();
     state.allEmployees = users;
+    
+    let mapAccess = {};
+    if (mapSettingRes && mapSettingRes.ok) {
+       const settingData = await mapSettingRes.json();
+       if (settingData.success && settingData.value) {
+           mapAccess = settingData.value;
+       }
+    }
     
     const list = document.getElementById('employeesList');
     if (!list) return;
@@ -43,6 +66,7 @@ export async function loadEmployeesList() {
               <th>ID</th>
               <th>Email</th>
               <th>Active Tasks</th>
+              <th>Map Access</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -51,11 +75,18 @@ export async function loadEmployeesList() {
     
     users.forEach(u => {
       const activeTasks = u.tasks ? u.tasks.filter(t => t.status !== 'Completed' && t.status !== 'Verified').length : 0;
+      const hasMapAccess = mapAccess[u.id] === true;
       html += `<tr style="border-bottom:1px solid #334155;">
         <td style="padding:12px 15px;"><strong>${escapeHtml(u.name)}</strong></td>
         <td style="padding:12px 15px;">${escapeHtml(u.employeeId)}</td>
         <td style="padding:12px 15px;">${escapeHtml(u.email)}</td>
         <td style="padding:12px 15px; text-align:center;"><span class="info-badge" style="background:#312e81; color:#c7d2fe;">${activeTasks}</span></td>
+        <td style="padding:12px 15px; text-align:center;">
+          <label class="switch" style="transform: scale(0.8); margin: 0;">
+            <input type="checkbox" ${hasMapAccess ? 'checked' : ''} onchange="window._toggleEmployeeMapAccess(${u.id}, this.checked, this)">
+            <span class="slider"></span>
+          </label>
+        </td>
         <td style="padding:12px 15px; display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" data-action="admin:editEmployee" data-id="${u.id}">
             <i class="fas fa-edit"></i> Edit
@@ -72,6 +103,34 @@ export async function loadEmployeesList() {
     
     html += '</tbody></table></div>';
     list.innerHTML = html;
+
+    window._toggleEmployeeMapAccess = async (empId, isEnabled, checkboxElem) => {
+      checkboxElem.disabled = true;
+      try {
+        const payload = {
+          enabled: isEnabled,
+          adminId: state.currentUser.id,
+          adminName: state.currentUser.name
+        };
+        const res = await fetch(`/api/settings/executive_map_edit/${empId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+          showToast(`Map access ${isEnabled ? 'enabled' : 'disabled'} for employee`, 'success');
+        } else {
+          showToast('Failed to save setting', 'error');
+          checkboxElem.checked = !isEnabled; // Revert
+        }
+      } catch (err) {
+        showToast('Network error', 'error');
+        checkboxElem.checked = !isEnabled; // Revert
+      } finally {
+        checkboxElem.disabled = false;
+      }
+    };
   } catch (err) {
     showToast('Failed to load employees', 'error');
   }

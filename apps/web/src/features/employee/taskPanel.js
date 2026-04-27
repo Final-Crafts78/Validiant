@@ -34,12 +34,12 @@ export async function openTaskPanel(taskId) {
     try {
       const res = await fetch('/api/settings/executive_map_edit');
       const data = await res.json();
-      state.featureFlags.executive_map_edit = data.success && data.value && data.value.enabled;
+      state.featureFlags.executive_map_edit = (data.success && data.value) ? data.value : {};
     } catch (e) {
-      state.featureFlags.executive_map_edit = false;
+      state.featureFlags.executive_map_edit = {};
     }
   }
-  const canEditMap = state.featureFlags.executive_map_edit && state.currentUser.role === 'employee';
+  const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
 
   const html = `
     <div class="task-detail-view">

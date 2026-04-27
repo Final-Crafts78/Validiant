@@ -67,9 +67,9 @@ export async function loadTodayTasks(searchTerm = "") {
       try {
         const flagRes = await fetch('/api/settings/executive_map_edit');
         const flagData = await flagRes.json();
-        state.featureFlags.executive_map_edit = flagData.success && flagData.value && flagData.value.enabled;
+        state.featureFlags.executive_map_edit = (flagData.success && flagData.value) ? flagData.value : {};
       } catch (e) {
-        state.featureFlags.executive_map_edit = false;
+        state.featureFlags.executive_map_edit = {};
       }
     }
 
@@ -154,7 +154,7 @@ export function displayEmployeeTasks(tasks) {
       ? `<span style="background:rgba(16,185,129,0.15); color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
 
-    const canEditMap = state.featureFlags.executive_map_edit && state.currentUser.role === 'employee';
+    const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
     const noMapLink = !task.map_url && !task.mapUrl && !task.mapurl;
     
     const addMapBadge = (canEditMap && noMapLink) ? 

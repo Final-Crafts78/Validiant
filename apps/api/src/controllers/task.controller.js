@@ -80,7 +80,7 @@ class TaskController {
       const settingsService = require("../services/settings.service");
       const setting = await settingsService.getSetting("executive_map_edit");
       
-      if (!setting || !setting.enabled) {
+      if (!setting || setting[userId] !== true) {
         return res.status(403).json({ success: false, message: "Feature disabled by admin" });
       }
 

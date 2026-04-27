@@ -504,10 +504,10 @@ async function processBulkUpload(tasks) {
 }
 
 export function downloadBulkUploadTemplate() {
-  const csvContent = `CaseID,Pincode,ClientName,EmployeeID,MapURL,Notes
-CASE001,560001,ABC Company,,http://maps.google.com/example,Priority task
-CASE002,560002,XYZ Corp,EMP123,,Assign to specific ID
-CASE003,560003,Test Client,,,Leave EmployeeID empty for pool`;
+  const csvContent = `CaseID,Pincode,ClientName,Address,EmployeeID,MapURL,Notes
+CASE001,560001,ABC Company,123 MG Road Bangalore 560001,,http://maps.google.com/example,Priority task
+CASE002,560002,XYZ Corp,456 Anna Salai Chennai 560002,EMP123,,Assign to specific ID
+CASE003,560003,Test Client,789 Park Street Kolkata 560003,,,Leave EmployeeID empty for pool`;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
