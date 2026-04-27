@@ -25,6 +25,7 @@ router.get('/unassigned', taskController.getUnassignedTasks);
 router.get('/:id', taskController.getTaskById);
 router.post('/optimize', taskController.optimize);
 router.put('/:id', taskController.updateTask);
+router.put('/:taskId/map-url', taskController.updateMapUrl);
 router.post('/:taskId/unassign', taskController.unassignTask);
 router.put('/:taskId/assign', taskController.assignTask);
 router.put('/:taskId/reassign', taskController.reassignTask);

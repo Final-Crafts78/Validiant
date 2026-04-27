@@ -63,6 +63,16 @@ export async function loadTodayTasks(searchTerm = "") {
     const list = document.getElementById('todayTasksList');
     if (list) list.innerHTML = renderTaskSkeleton();
 
+    if (state.featureFlags.executive_map_edit === undefined) {
+      try {
+        const flagRes = await fetch('/api/settings/executive_map_edit');
+        const flagData = await flagRes.json();
+        state.featureFlags.executive_map_edit = flagData.success && flagData.value && flagData.value.enabled;
+      } catch (e) {
+        state.featureFlags.executive_map_edit = false;
+      }
+    }
+
     const ts = Date.now();
     const url = `/api/tasks?role=employee&status=active&employeeId=${state.currentUser.id}&_t=${ts}` + 
                 (searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '');
@@ -144,6 +154,13 @@ export function displayEmployeeTasks(tasks) {
       ? `<span style="background:rgba(16,185,129,0.15); color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
 
+    const canEditMap = state.featureFlags.executive_map_edit && state.currentUser.role === 'employee';
+    const noMapLink = !task.map_url && !task.mapUrl && !task.mapurl;
+    
+    const addMapBadge = (canEditMap && noMapLink) ? 
+      `<span style="background:rgba(99,102,241,0.15); color:#818cf8; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;" onclick="event.stopPropagation(); const card = document.querySelector('[data-action=\\'task:openPanel\\'][data-id=\\'${task.id}\\']'); if(card) card.click(); setTimeout(() => { const btn = document.querySelector('#editMapContainer_${task.id}'); if(btn) { btn.style.display='block'; btn.previousElementSibling.firstElementChild.style.display='none'; } }, 300);"><i class="fas fa-plus"></i> Add Map Link</span>`
+      : '';
+
     return `
       <div class="mobile-optimized-card gpu-boost" data-action="task:openPanel" data-id="${task.id}" style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1); cursor:pointer; opacity: 0; transform: translateY(20px); transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); contain: content;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
@@ -157,6 +174,7 @@ export function displayEmployeeTasks(tasks) {
               <span class="pincode-tag"><i class="fas fa-map-pin" style="color:#60a5fa;"></i> ${task.pincode}</span>
               ${distanceBadge}
               ${approxBadge}
+              ${addMapBadge}
             </div>
             ${task.notes ? `
               <div class="task-notes-preview" style="font-size:12px; color:#64748b; margin-top:8px; display:flex; gap:6px; align-items:start; background:rgba(0,0,0,0.1); padding:6px 8px; border-radius:6px; border-left:2px solid #6366f1;">

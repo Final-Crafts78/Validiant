@@ -66,6 +66,41 @@ class TaskController {
   }
 
   /**
+   * Update Map URL (Executive Self-Service)
+   */
+  async updateMapUrl(req, res) {
+    try {
+      const { taskId } = req.params;
+      const { map_url, userId, userName } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const settingsService = require("../services/settings.service");
+      const setting = await settingsService.getSetting("executive_map_edit");
+      
+      if (!setting || !setting.enabled) {
+        return res.status(403).json({ success: false, message: "Feature disabled by admin" });
+      }
+
+      const taskService = require("../services/task.service");
+      const task = await taskService.getTaskById(taskId);
+      
+      if (task.assigned_to !== parseInt(userId)) {
+        return res.status(403).json({ success: false, message: "You can only update tasks assigned to you" });
+      }
+
+      // Reusing updateTask logic from service to handle extraction & logging
+      await taskService.updateTask(taskId, { map_url }, userId, userName);
+
+      res.json({ success: true, message: "Map link updated successfully" });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * Unassign a task
    */
   async unassignTask(req, res) {

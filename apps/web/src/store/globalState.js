@@ -13,7 +13,8 @@ export const state = {
   allUnassignedTasks: [],
   allEmployees: [],
   isNearestSortActive: false,
-  savedEmployeeLocation: null
+  savedEmployeeLocation: null,
+  featureFlags: {}
 };
 
 export const setState = (key, value) => {

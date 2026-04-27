@@ -52,6 +52,8 @@ app.use("/api", authRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api", adminRoutes);
+const settingsRoutes = require("./routes/settings.routes");
+app.use("/api/settings", settingsRoutes);
 
 // Static file serving for Frontend (Production)
 app.use(express.static(webDistPath, {

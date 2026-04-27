@@ -29,6 +29,18 @@ export async function openTaskPanel(taskId) {
     return;
   }
 
+  // Check feature flag
+  if (state.featureFlags.executive_map_edit === undefined) {
+    try {
+      const res = await fetch('/api/settings/executive_map_edit');
+      const data = await res.json();
+      state.featureFlags.executive_map_edit = data.success && data.value && data.value.enabled;
+    } catch (e) {
+      state.featureFlags.executive_map_edit = false;
+    }
+  }
+  const canEditMap = state.featureFlags.executive_map_edit && state.currentUser.role === 'employee';
+
   const html = `
     <div class="task-detail-view">
       <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:20px;">
@@ -91,6 +103,22 @@ export async function openTaskPanel(taskId) {
             </a>
           </div>
         ` : '')}
+
+        ${canEditMap ? `
+          <div style="margin-top:15px; text-align:center;">
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('editMapContainer_${task.id}').style.display='block'; this.style.display='none';">
+              <i class="fas fa-edit"></i> Edit Map Link
+            </button>
+          </div>
+          <div id="editMapContainer_${task.id}" style="display:none; margin-top:15px; background:rgba(0,0,0,0.2); padding:15px; border-radius:8px; border:1px solid #334155;">
+            <label style="display:block; font-size:11px; color:#94a3b8; text-transform:uppercase; margin-bottom:8px;"><i class="fas fa-link"></i> New Google Maps URL</label>
+            <input type="url" id="newMapUrl_${task.id}" class="form-input" style="width:100%; margin-bottom:10px;" placeholder="Paste Google Maps link here" value="${task.map_url || task.mapUrl || ''}" />
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="window._saveExecutiveMapUrl(${task.id}, this)">Save Link</button>
+              <button class="btn btn-secondary" onclick="document.getElementById('editMapContainer_${task.id}').style.display='none'; this.parentElement.parentElement.previousElementSibling.firstElementChild.style.display='inline-block';">Cancel</button>
+            </div>
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
@@ -103,6 +131,47 @@ export async function openTaskPanel(taskId) {
     }
     const sel = document.getElementById('employee-panel-status');
     if (sel) updateTaskStatus(tid, sel.value);
+  };
+
+  window._saveExecutiveMapUrl = async (tid, btnElem) => {
+    const input = document.getElementById(`newMapUrl_${tid}`);
+    if (!input || !input.value) return showToast('Please enter a valid map URL', 'warning');
+    
+    if (btnElem) {
+      btnElem.disabled = true;
+      btnElem.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
+    
+    try {
+      const res = await fetch(`/api/tasks/${tid}/map-url`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          map_url: input.value,
+          userId: state.currentUser.id,
+          userName: state.currentUser.name
+        })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Map link updated successfully!', 'success');
+        closeAllModals();
+        if (window._currentRefreshHandler) window._currentRefreshHandler();
+      } else {
+        showToast(data.message || 'Failed to update map link', 'error');
+        if (btnElem) {
+          btnElem.disabled = false;
+          btnElem.innerHTML = 'Save Link';
+        }
+      }
+    } catch (err) {
+      showToast('Network error', 'error');
+      if (btnElem) {
+        btnElem.disabled = false;
+        btnElem.innerHTML = 'Save Link';
+      }
+    }
   };
 
   createModal('Task Details', html, { icon: 'fas fa-clipboard-list', size: 'medium' });
