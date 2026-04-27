@@ -436,40 +436,82 @@ export async function handleBulkDuplicateChoice(choice) {
 async function updateExistingTasks(duplicates) {
   let updated = 0;
   for (const dup of duplicates) {
-    if (dup.assignedTo) {
+    // Build update payload with ALL available fields, not just assignedTo
+    const updatePayload = {
+      userId: state.currentUser.id,
+      userName: state.currentUser.name
+    };
+
+    // Include all fields that have values
+    if (dup.pincode) updatePayload.pincode = dup.pincode;
+    if (dup.address) updatePayload.address = dup.address;
+    if (dup.notes) updatePayload.notes = dup.notes;
+    if (dup.clientName) updatePayload.clientName = dup.clientName;
+    if (dup.mapUrl) updatePayload.mapUrl = dup.mapUrl;
+    if (dup.assignedTo) updatePayload.assignedTo = dup.assignedTo;
+
+    console.log(`[BULK-UPDATE] Updating existing task ${dup.existingId} (${dup.title}):`, updatePayload);
+
+    try {
       const res = await fetch(`/api/tasks/${dup.existingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedTo: dup.assignedTo, userId: state.currentUser.id, userName: state.currentUser.name })
+        body: JSON.stringify(updatePayload)
       });
-      if (res.ok) updated++;
+      if (res.ok) {
+        updated++;
+        console.log(`[BULK-UPDATE] ✅ Task ${dup.existingId} updated successfully`);
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        console.error(`[BULK-UPDATE] ❌ Task ${dup.existingId} update failed:`, res.status, errBody);
+      }
+    } catch (err) {
+      console.error(`[BULK-UPDATE] ❌ Network error updating task ${dup.existingId}:`, err);
     }
   }
-  showToast(`${updated} task(s) reassigned successfully!`, 'success');
+  showToast(`${updated} task(s) updated successfully!`, 'success');
 }
 
 async function processBulkUpload(tasks) {
   if (!tasks || tasks.length === 0) return;
-  const payloadTasks = tasks.map(t => ({
-    ...t,
-    createdBy: state.currentUser.id,
-    createdByName: state.currentUser.name
-  }));
-  const response = await fetch('/api/tasks/bulk/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      tasks: payloadTasks,
-      adminId: state.currentUser.id,
-      adminName: state.currentUser.name
-    })
+
+  // Strip non-API fields (existingId from duplicate detection) and add admin context
+  const payloadTasks = tasks.map(t => {
+    const { existingId, ...cleanTask } = t;
+    return {
+      ...cleanTask,
+      createdBy: state.currentUser.id,
+      createdByName: state.currentUser.name
+    };
   });
-  if (response.ok) {
-    showToast(`✓ ${tasks.length} task(s) created successfully!`, 'success');
-    if (document.getElementById('allTasksList')) loadAllTasks();
-    else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
-  } else {
-    showToast('Failed to bulk upload tasks', 'error');
+
+  console.log(`[BULK-CREATE] Sending ${payloadTasks.length} tasks to /api/tasks/bulk/create`);
+  console.log('[BULK-CREATE] Payload sample (first task):', JSON.stringify(payloadTasks[0], null, 2));
+
+  try {
+    const response = await fetch('/api/tasks/bulk/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        tasks: payloadTasks,
+        adminId: state.currentUser.id,
+        adminName: state.currentUser.name
+      })
+    });
+
+    if (response.ok) {
+      showToast(`✓ ${tasks.length} task(s) created successfully!`, 'success');
+      if (document.getElementById('allTasksList')) loadAllTasks();
+      else if (document.getElementById('unassignedTasksList')) showUnassignedTasks();
+    } else {
+      // Read the actual error from the server for diagnosis
+      const errBody = await response.json().catch(() => ({ message: 'Unknown server error' }));
+      console.error('[BULK-CREATE] ❌ Server error:', response.status, errBody);
+      showToast(`Failed to bulk upload: ${errBody.message || 'Server error'}`, 'error');
+    }
+  } catch (err) {
+    console.error('[BULK-CREATE] ❌ Network error:', err);
+    showToast('Failed to bulk upload tasks (network error)', 'error');
   }
 }
 
