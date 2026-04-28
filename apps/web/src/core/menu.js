@@ -20,6 +20,7 @@ export function initMenu() {
     { icon: 'fa-upload', text: 'Bulk Upload', action: 'admin:showBulkUpload' },
     { icon: 'fa-download', text: 'Export CSV', action: 'admin:exportTasks' },
     { icon: 'fa-fingerprint', text: 'Digital KYC', action: 'view:kyc' },
+    { icon: 'fa-cog', text: 'Settings', action: 'view:adminSettings' },
     { icon: 'fa-sign-out-alt', text: 'Logout', action: 'auth:logout', style: 'margin-top: auto; color: #ef4444;' }
   ] : [
     { icon: 'fa-tasks', text: "Today's Tasks", action: 'view:employeeToday' },

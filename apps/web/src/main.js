@@ -37,6 +37,7 @@ import {
 } from './features/admin/kycService';
 import { startLocationReporting, stopLocationReporting } from './core/locationReporter';
 import { showExecutiveTracker, cleanupTracker, updateTrackerData } from './features/admin/executiveTracker';
+import { showAdminSettings } from './features/admin/adminSettings';
 
 /**
  * SESSION MANAGEMENT (30 Minutes Inactivity Timeout)
@@ -212,6 +213,10 @@ function setupEventDelegation() {
         case 'view:trackExecutives':
           await fullCleanup();
           showExecutiveTracker();
+          break;
+        case 'view:adminSettings':
+          await fullCleanup();
+          showAdminSettings();
           break;
 
         case 'tracker:refresh':
@@ -469,6 +474,9 @@ async function triggerInitialView(action, role) {
       break;
     case 'view:trackExecutives':
       if (role === 'admin') showExecutiveTracker();
+      break;
+    case 'view:adminSettings':
+      if (role === 'admin') showAdminSettings();
       break;
     case 'view:kyc':
       if (role === 'admin') showKYCDashboard();
