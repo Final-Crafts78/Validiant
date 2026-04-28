@@ -115,13 +115,99 @@ export async function sortByNearest(event) {
       }
     },
     (err) => {
-      showToast('Location error: Please allow access', 'error');
-      if (sortBtn) {
-        sortBtn.innerHTML = originalBtnContent;
-        sortBtn.disabled = false;
+      // If timeout or unavailable, retry with low accuracy
+      if (err.code === 2 || err.code === 3) {
+        console.warn('High-accuracy GPS failed for ORS sort, retrying with low accuracy...', err);
+        if (sortBtn) {
+          sortBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying GPS...';
+        }
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const userLat = pos.coords.latitude;
+              const userLng = pos.coords.longitude;
+              state.savedEmployeeLocation = { latitude: userLat, longitude: userLng };
+              state.isNearestSortActive = true;
+              
+              const enrichedTasks = state.allEmployeeTasks.map(t => {
+                const { lat, lng } = resolveTaskCoordinates(t);
+                return { ...t, _lat: lat, _lng: lng };
+              });
+              
+              const requestPayload = {
+                employeeLocation: { lat: userLat, lng: userLng },
+                tasks: enrichedTasks.map(t => ({
+                  id: t.id, _lat: t._lat, _lng: t._lng, title: t.title, pincode: t.pincode
+                }))
+              };
+              
+              const response = await fetch('/api/tasks/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload)
+              });
+              
+              const result = await response.json();
+              
+              if (result.success && result.optimizedTasks) {
+                const optimizedOrder = result.optimizedTasks.map(opt => {
+                  const task = state.allEmployeeTasks.find(t => String(t.id) === String(opt.id));
+                  if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
+                  return task;
+                }).filter(t => t);
+                
+                state.allEmployeeTasks = optimizedOrder;
+                
+                const list = document.getElementById('todayTasksList');
+                const map = document.getElementById('routingMap');
+                
+                if (map && map.offsetParent !== null) {
+                  Promise.all([
+                    import('../routing/googleMapsEngine'),
+                    import('../employee/taskPanel')
+                  ]).then(([mod, panelMod]) => {
+                    mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel);
+                  }).catch(err => console.error('Failed to refresh map after sort:', err));
+                }
+                
+                if (list) {
+                  displayEmployeeTasks(state.allEmployeeTasks);
+                }
+                
+                showToast('Route optimized!', 'success');
+              } else {
+                fallbackSort(userLat, userLng);
+              }
+            } catch (retryErr) {
+              console.error('ORS Error on retry', retryErr);
+              fallbackSort(pos.coords.latitude, pos.coords.longitude);
+            } finally {
+              if (sortBtn) {
+                sortBtn.innerHTML = originalBtnContent;
+                sortBtn.disabled = false;
+              }
+            }
+          },
+          (retryErr) => {
+            const msg = retryErr.code === 1 ? 'Location permission denied. Please allow access.' : 'Could not determine your location. Please try again.';
+            showToast(msg, 'error');
+            if (sortBtn) {
+              sortBtn.innerHTML = originalBtnContent;
+              sortBtn.disabled = false;
+            }
+          },
+          { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 }
+        );
+      } else {
+        // Permission denied — don't retry
+        showToast('Location permission denied. Please allow access in browser settings.', 'error');
+        if (sortBtn) {
+          sortBtn.innerHTML = originalBtnContent;
+          sortBtn.disabled = false;
+        }
       }
     },
-    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 }
   );
 }
 
@@ -339,10 +425,64 @@ export async function calculateGreedyRoute(event) {
       }
     }
   }, (err) => {
-    showToast('Location access denied', 'error');
-    if (btn) {
-      btn.innerHTML = originalHtml;
-      btn.disabled = false;
+    // If timeout or unavailable, retry with low accuracy
+    if (err.code === 2 || err.code === 3) {
+      console.warn('High-accuracy GPS failed for greedy route, retrying...', err);
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying GPS...';
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          const userLat = pos.coords.latitude;
+          const userLng = pos.coords.longitude;
+          const activeTasks = state.allEmployeeTasks.filter(t => {
+            const s = (t.status || '').toLowerCase();
+            return s !== 'verified' && s !== 'completed';
+          });
+          if (activeTasks.length === 0) { showToast('No active tasks to route', 'warning'); return; }
+          const optimizedOrder = [];
+          let currentLat = userLat, currentLng = userLng;
+          let pool = [...activeTasks];
+          while (pool.length > 0) {
+            let nearestIdx = -1, minDistance = Infinity;
+            for (let i = 0; i < pool.length; i++) {
+              const { lat, lng } = resolveTaskCoordinates(pool[i]);
+              if (!lat || !lng) continue;
+              const dist = calculateDistance(currentLat, currentLng, lat, lng);
+              if (dist < minDistance) { minDistance = dist; nearestIdx = i; }
+            }
+            if (nearestIdx === -1) { optimizedOrder.push(...pool); break; }
+            const nextTask = pool.splice(nearestIdx, 1)[0];
+            const { lat, lng } = resolveTaskCoordinates(nextTask);
+            currentLat = lat; currentLng = lng;
+            optimizedOrder.push(nextTask);
+          }
+          const otherTasks = state.allEmployeeTasks.filter(t => {
+            const s = (t.status || '').toLowerCase();
+            return s === 'verified' || s === 'completed';
+          });
+          state.allEmployeeTasks = [...optimizedOrder, ...otherTasks];
+          const map = document.getElementById('routingMap');
+          if (map && map.offsetParent !== null) {
+            const { showMapRouting } = await import('../routing/googleMapsEngine');
+            const { openTaskPanel } = await import('../employee/taskPanel');
+            showMapRouting(state.allEmployeeTasks, openTaskPanel);
+          }
+          const list = document.getElementById('todayTasksList');
+          if (list) displayEmployeeTasks(state.allEmployeeTasks);
+          showToast('Custom greedy route applied!', 'success');
+        } catch (retryErr) {
+          console.error('Greedy Route Retry Error:', retryErr);
+          showToast('Routing failed', 'error');
+        } finally {
+          if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+        }
+      }, (retryErr) => {
+        const msg = retryErr.code === 1 ? 'Location permission denied.' : 'Could not determine location.';
+        showToast(msg, 'error');
+        if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+      }, { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 });
+    } else {
+      showToast('Location permission denied. Please allow access.', 'error');
+      if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
     }
-  });
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 });
 }

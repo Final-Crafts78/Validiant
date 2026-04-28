@@ -106,17 +106,24 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 
       const { resolveTaskCoordinates } = await import('../employee/sorting');
       const mapMarkers = [];
-      activeTasks.forEach((t, index) => {
+      let skippedPincodeTasks = 0;
+      let markerIndex = 0;
+      activeTasks.forEach((t) => {
         const { lat, lng, source } = resolveTaskCoordinates(t);
-        const isApproxLocation = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
+
+        // Skip tasks that only have pincode-based approximate coordinates
+        if (source === 'pincode-fallback' || source === 'address-pincode') {
+          skippedPincodeTasks++;
+          return;
+        }
 
         if (lat != null && lng != null) {
           waypoints.push([lat, lng]);
-          const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444';
+          const pinColor = source === '@-viewport' ? '#f59e0b' : '#ef4444';
           
           const taskIcon = L.divIcon({
             className: 'custom-task-icon gpu-boost',
-            html: `<div style="background-color: ${pinColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${index + 1}</div>`,
+            html: `<div style="background-color: ${pinColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${markerIndex + 1}</div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
@@ -125,8 +132,13 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
             openTaskDetailsModal(t.id);
           });
           mapMarkers.push(marker);
+          markerIndex++;
         }
       });
+
+      if (skippedPincodeTasks > 0) {
+        showToast(`${skippedPincodeTasks} task(s) hidden — no map coordinates (pincode only)`, 'info');
+      }
 
       L.layerGroup(mapMarkers).addTo(markerLayer);
 

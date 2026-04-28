@@ -17,11 +17,18 @@ function loadGoogleMapsApi(apiKey) {
   if (mapsApiPromise) return mapsApiPromise;
 
   mapsApiPromise = new Promise((resolve, reject) => {
+    // Use a named callback so Google Maps knows we handle initialization ourselves.
+    // This suppresses the "loaded directly without loading=async" console warning.
+    const callbackName = '__gmapsLoaded_' + Date.now();
+    window[callbackName] = () => {
+      delete window[callbackName];
+      resolve();
+    };
+
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&v=weekly&callback=${callbackName}`;
     script.async = true;
     script.defer = true;
-    script.onload = resolve;
     script.onerror = () => reject(new Error('Failed to load Google Maps API'));
     document.head.appendChild(script);
   });
@@ -142,27 +149,33 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
           const { resolveTaskCoordinates } = await import('../employee/sorting');
           const waypoints = [];
           const taskCoordsList = [];
+          let skippedPincodeTasks = 0;
+          let markerIndex = 0;
 
-          activeTasks.forEach((t, index) => {
+          activeTasks.forEach((t) => {
             const { lat, lng, source } = resolveTaskCoordinates(t);
-            const isApproxLocation = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
+
+            // Skip tasks that only have pincode-based approximate coordinates.
+            // Only show tasks with real map URL or DB-precision coordinates on the map.
+            if (source === 'pincode-fallback' || source === 'address-pincode') {
+              skippedPincodeTasks++;
+              return; // skip this task
+            }
 
             if (lat != null && lng != null) {
               waypoints.push({ lat, lng });
-              taskCoordsList.push({ lat, lng, t, index, isApproxLocation });
+              taskCoordsList.push({ lat, lng, t, index: markerIndex, isApproxLocation: false });
 
               // Create Custom Numbered Marker
-              const pinColor = isApproxLocation ? '#f59e0b' : '#ef4444'; // Amber or Red
+              const pinColor = source === '@-viewport' ? '#f59e0b' : '#ef4444'; // Amber for viewport-level, Red for precise
               
-              // We'll use a simpler standard marker approach instead of advanced marker for broad compatibility
               const markerLabel = {
-                  text: (index + 1).toString(),
+                  text: (markerIndex + 1).toString(),
                   color: 'white',
                   fontSize: '12px',
                   fontWeight: 'bold'
               };
               
-              // Custom SVG icon to mimic the previous HTML marker
               const svgIcon = {
                   path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
                   fillColor: pinColor,
@@ -179,7 +192,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                 icon: svgIcon,
                 label: markerLabel,
                 title: t.case_id || t.caseId || 'Task',
-                zIndex: 100 // ensure task pins are above route line
+                zIndex: 100
               });
 
               taskMarker.addListener('click', () => {
@@ -187,8 +200,13 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
               });
               
               markers.push(taskMarker);
+              markerIndex++;
             }
           });
+
+          if (skippedPincodeTasks > 0) {
+            showToast(`${skippedPincodeTasks} task(s) hidden — no map coordinates (pincode only)`, 'info');
+          }
 
           // Route Computation and Rendering
           if (taskCoordsList.length > 0) {
@@ -210,6 +228,22 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                 // We'll take max 98 to avoid API error if they have more
                 const limitedIntermediates = intermediates.slice(0, 98);
 
+                // Build request body — omit intermediates if empty (empty array causes 400)
+                const routeRequestBody = {
+                  origin: {
+                    location: { latLng: { latitude: userLat, longitude: userLng } }
+                  },
+                  destination: {
+                    location: { latLng: { latitude: lastTask.lat, longitude: lastTask.lng } }
+                  },
+                  travelMode: 'DRIVE',
+                  polylineQuality: 'HIGH_QUALITY'
+                };
+                
+                if (limitedIntermediates.length > 0) {
+                  routeRequestBody.intermediates = limitedIntermediates;
+                }
+
                 const routeResponse = await fetch(
                   'https://routes.googleapis.com/directions/v2:computeRoutes',
                   {
@@ -220,18 +254,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                       // Field Masking for performance and cost: Only request what we need
                       'X-Goog-FieldMask': 'routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration,routes.distanceMeters,routes.duration'
                     },
-                    body: JSON.stringify({
-                      origin: {
-                        location: { latLng: { latitude: userLat, longitude: userLng } }
-                      },
-                      destination: {
-                        location: { latLng: { latitude: lastTask.lat, longitude: lastTask.lng } }
-                      },
-                      intermediates: limitedIntermediates,
-                      travelMode: 'DRIVE',
-                      routingPreference: 'TRAFFIC_AWARE',
-                      polylineQuality: 'HIGH_QUALITY'
-                    })
+                    body: JSON.stringify(routeRequestBody)
                   }
                 );
 
