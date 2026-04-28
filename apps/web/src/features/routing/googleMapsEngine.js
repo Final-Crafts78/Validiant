@@ -17,7 +17,7 @@ function loadGoogleMapsApi(apiKey) {
 
   mapsApiPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&loading=async&v=weekly`;
     script.async = true;
     script.defer = true;
     script.onload = resolve;
@@ -58,7 +58,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
   const mapContainer = document.getElementById('routingMap');
 
   try {
-    showLoading();
+    // DO NOT call showLoading() here! It replaces mainContainer.innerHTML and destroys the map DOM we just built above.
     
     // Fetch API Key from our backend
     const configRes = await fetch('/api/config/maps-key');
@@ -75,11 +75,17 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
     // Load Google Maps JS API
     await loadGoogleMapsApi(window._googleMapsApiKey);
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+    // Helper function to initialize the map once location is acquired
+    const initMapWithLocation = async (pos) => {
         try {
           const loadingEl = document.getElementById('mapLoading');
           if (loadingEl) loadingEl.style.display = 'none';
+          
+          if (!mapContainer) {
+              console.error("Map container not found after getting location. DOM might have been altered.");
+              return;
+          }
+          
           if (mapContainer) {
             mapContainer.style.display = 'block';
             mapContainer.style.opacity = '1';
@@ -339,18 +345,62 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
           showToast('Error mapping tasks', 'error');
           fallbackToLeaflet(allEmployeeTasks, openTaskDetailsModal);
         }
-      },
-      (err) => {
+    }; // end initMapWithLocation
+
+    // Error handler for geolocation
+    const handleGeoError = (err) => {
         console.error("GPS Error:", err);
-        hideLoading();
         const loadingEl = document.getElementById('mapLoading');
-        if (loadingEl) {
-          loadingEl.innerHTML = '<h3 style="color:#ef4444; text-align:center;">Location Access Denied</h3>';
+        
+        let errorMsg = 'Could not determine location.';
+        let toastType = 'error';
+        
+        if (err.code === 1) { // PERMISSION_DENIED
+            errorMsg = 'Location Access Denied. Please enable location permissions.';
+            toastType = 'warning';
+        } else if (err.code === 2) { // POSITION_UNAVAILABLE
+            errorMsg = 'Location unavailable. Check your device settings.';
+        } else if (err.code === 3) { // TIMEOUT
+            errorMsg = 'GPS request timed out. Please try again.';
         }
-        showToast('Please enable location access to see routing', 'warning');
+
+        if (loadingEl) {
+          loadingEl.innerHTML = `<div style="padding: 20px;">
+              <i class="fas fa-exclamation-triangle" style="font-size:3rem; color:#ef4444; margin-bottom:15px;"></i>
+              <h3 style="color:#ef4444; margin-bottom:10px;">Location Error</h3>
+              <p style="color:#4b5563;">${errorMsg}</p>
+          </div>`;
+        }
+        hideLoading();
+        showToast(errorMsg, toastType);
+    };
+
+    // Attempt high accuracy first
+    navigator.geolocation.getCurrentPosition(
+      initMapWithLocation,
+      (err) => {
+          console.warn("High-accuracy GPS failed. Trying low-accuracy fallback...", err);
+          // If timeout or unavailable, try again with low accuracy
+          if (err.code === 2 || err.code === 3) {
+             const loadingEl = document.getElementById('mapLoading');
+             if (loadingEl) {
+                 const p = loadingEl.querySelector('p');
+                 if(p) p.innerText = 'Retrying with approximate location...';
+             }
+             
+             navigator.geolocation.getCurrentPosition(
+                 initMapWithLocation,
+                 handleGeoError,
+                 { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 }
+             );
+          } else {
+             // If permission denied, don't bother retrying
+             handleGeoError(err);
+          }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 }
     );
+
   } catch (initErr) {
       console.error("Google Maps initialization failed:", initErr);
       hideLoading();
