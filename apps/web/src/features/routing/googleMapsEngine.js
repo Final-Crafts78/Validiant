@@ -159,13 +159,25 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
               return;
             }
 
+            // Skip geocoded-from-address tasks with <95% confidence.
+            // These need a map URL set for precise routing.
+            // Map URL sources (!3d/4d-url, path-url, @-viewport, ?q-query) are always trusted.
+            if (source === 'db-precision' || source === '_enriched') {
+              const confidence = parseFloat(t.geocode_confidence) || 0;
+              const hasMapUrl = !!(t.map_url || t.mapUrl || t.mapurl);
+              if (!hasMapUrl && confidence < 0.95) {
+                skippedPincodeTasks++;
+                return;
+              }
+            }
+
             if (lat != null && lng != null) {
               taskCoordsList.push({ lat, lng, t, source, isApproxLocation: false });
             }
           });
 
           if (skippedPincodeTasks > 0) {
-            showToast(`${skippedPincodeTasks} task(s) hidden — no map coordinates (pincode only)`, 'info');
+            showToast(`${skippedPincodeTasks} task(s) hidden — no map URL or low geocode accuracy (<95%)`, 'info');
           }
 
           // Route Computation and Rendering

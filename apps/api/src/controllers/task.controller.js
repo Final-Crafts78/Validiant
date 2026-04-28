@@ -217,11 +217,14 @@ class TaskController {
           const { geocodeFromAddress } = require("../utils/geocode");
           const geo = await geocodeFromAddress(row.address, pincode);
           if (geo) { 
-            finalLat = geo.latitude; 
-            finalLng = geo.longitude; 
             geocodeConfidence = geo.confidence;
             geocodeMatchLevel = geo.matchLevel;
             locationWarning = geo.warning;
+            // Only store coordinates if geocode confidence >= 95%
+            if (geo.confidence >= 0.95) {
+              finalLat = geo.latitude; 
+              finalLng = geo.longitude;
+            }
           }
         }
 
@@ -363,11 +366,14 @@ class TaskController {
           try {
             const geo = await geocodeFromAddress(address, pincode);
             if (geo) {
-              finalLat = geo.latitude;
-              finalLng = geo.longitude;
               geocodeConfidence = geo.confidence;
               geocodeMatchLevel = geo.matchLevel;
               locationWarning = geo.warning;
+              // Only store coordinates if geocode confidence >= 95%
+              if (geo.confidence >= 0.95) {
+                finalLat = geo.latitude;
+                finalLng = geo.longitude;
+              }
             }
           } catch (geoErr) {
             // Silently skip geocoding errors for individual tasks in bulk mode

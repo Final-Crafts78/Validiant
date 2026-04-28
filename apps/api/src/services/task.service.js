@@ -112,11 +112,17 @@ class TaskService {
       const { geocodeFromAddress } = require("../utils/geocode");
       const geo = await geocodeFromAddress(address, pincode);
       if (geo) {
-        finalLat = geo.latitude;
-        finalLng = geo.longitude;
         geocodeConfidence = geo.confidence;
         geocodeMatchLevel = geo.matchLevel;
         locationWarning = geo.warning;
+        // Only store coordinates if geocode confidence >= 95%
+        // Below 95% = unreliable; task needs a map URL for precise routing
+        if (geo.confidence >= 0.95) {
+          finalLat = geo.latitude;
+          finalLng = geo.longitude;
+        } else {
+          console.log(`📍 [GEOCODE] Skipping coords for "${title}" — confidence ${(geo.confidence * 100).toFixed(0)}% < 95% threshold`);
+        }
       }
     }
 
@@ -293,7 +299,10 @@ class TaskService {
   }
 
   /**
-   * Optimize tasks using Google Directions API with ORS fallback
+   * Optimize tasks using Google Route Optimization API with ORS fallback
+   *
+   * Tier 1: Google Route Optimization API (optimizeTours) — fleet-grade TSP solver, 5,000 free units/month
+   * Tier 2: ORS Optimization API — VROOM solver, 500 free requests/day
    */
   async optimizeTasks(employeeLocation, tasks) {
     const routableTasks = tasks.filter(t => t._lat != null && t._lng != null);
@@ -301,34 +310,78 @@ class TaskService {
     
     if (routableTasks.length === 0) return [...unroutableTasks];
 
+    // ═══════════════════════════════════════════════════════════
+    // TIER 1: Google Route Optimization API (optimizeTours)
+    // ═══════════════════════════════════════════════════════════
     try {
-      // PRIMARY: Google Maps Directions API (optimize:true)
       const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) throw new Error("No Google API Key");
+      const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
       
-      const origin = `${employeeLocation.lat},${employeeLocation.lng}`;
-      // Set destination same as origin for a closed-loop round trip
-      const destination = origin;
+      if (!apiKey || !projectId) throw new Error("Google API key or Cloud project ID not configured");
+
+      // Build shipments — each task is a pickup-only shipment
+      const shipments = routableTasks.map(task => ({
+        pickups: [{
+          arrivalLocation: {
+            latitude: task._lat,
+            longitude: task._lng
+          }
+        }]
+      }));
+
+      const requestBody = {
+        model: {
+          shipments,
+          vehicles: [{
+            startLocation: {
+              latitude: employeeLocation.lat,
+              longitude: employeeLocation.lng
+            },
+            endLocation: {
+              latitude: employeeLocation.lat,
+              longitude: employeeLocation.lng
+            }
+          }]
+        }
+      };
+
+      const url = `https://cloudrouteoptimization.googleapis.com/v1/projects/${projectId}/locations/us-central1:optimizeTours?key=${apiKey}`;
       
-      const waypointsStr = routableTasks.map(t => `${t._lat},${t._lng}`).join('|');
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=optimize:true|${waypointsStr}&key=${apiKey}`;
-      
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody)
+      });
+
       const data = await res.json();
       
-      if (data.status === "OK" && data.routes && data.routes.length > 0) {
-        console.log("📍 [OPTIMIZE] Google Directions API succeeded");
-        const order = data.routes[0].waypoint_order;
-        // order is an array like [2, 0, 1] representing the optimized sequence of the provided waypoints
-        const optimizedTasks = order.map(index => routableTasks[index]);
-        return [...optimizedTasks, ...unroutableTasks];
-      } else {
-        throw new Error(`Google API failed with status: ${data.status}`);
+      if (!res.ok) {
+        // Log quota/error details for diagnostics
+        const errMsg = data.error?.message || `HTTP ${res.status}`;
+        console.error(`📍 [OPTIMIZE] Google Route Optimization API error:`, errMsg);
+        throw new Error(errMsg);
       }
+
+      if (data.routes && data.routes.length > 0 && data.routes[0].visits) {
+        const visits = data.routes[0].visits;
+        const optimizedTasks = visits.map(visit => routableTasks[visit.shipmentIndex]);
+        
+        // Safety: include any tasks not visited (edge case)
+        const visitedIndices = new Set(visits.map(v => v.shipmentIndex));
+        const missed = routableTasks.filter((_, i) => !visitedIndices.has(i));
+        
+        console.log(`📍 [OPTIMIZE] Google Route Optimization API succeeded — ${visits.length} stops optimized`);
+        return [...optimizedTasks, ...missed, ...unroutableTasks];
+      } else {
+        throw new Error("No routes returned from Route Optimization API");
+      }
+
     } catch (googleError) {
-      console.warn("⚠️ [OPTIMIZE] Google Maps optimization failed, falling back to ORS:", googleError.message);
+      console.warn("⚠️ [OPTIMIZE] Google Route Optimization failed, falling back to ORS:", googleError.message);
       
-      // FALLBACK: OpenRouteService (ORS)
+      // ═══════════════════════════════════════════════════════════
+      // TIER 2: ORS Optimization API (VROOM solver)
+      // ═══════════════════════════════════════════════════════════
       const orsPayload = {
         vehicles: [{
           id: 1,
@@ -355,6 +408,7 @@ class TaskService {
 
       const steps = data.routes[0].steps.filter(s => s.type === "job");
       const optimizedTasks = steps.map(step => routableTasks[step.job]);
+      console.log(`📍 [OPTIMIZE] ORS Optimization fallback succeeded — ${optimizedTasks.length} stops optimized`);
       return [...optimizedTasks, ...unroutableTasks];
     }
   }
