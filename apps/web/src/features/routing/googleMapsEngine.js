@@ -145,62 +145,22 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
             return;
           }
 
-          // Resolve Coordinates
+          // Resolve Coordinates (collect only — markers created AFTER sort)
           const { resolveTaskCoordinates } = await import('../employee/sorting');
-          const waypoints = [];
           let taskCoordsList = [];
           let skippedPincodeTasks = 0;
-          let markerIndex = 0;
 
           activeTasks.forEach((t) => {
             const { lat, lng, source } = resolveTaskCoordinates(t);
 
             // Skip tasks that only have pincode-based approximate coordinates.
-            // Only show tasks with real map URL or DB-precision coordinates on the map.
             if (source === 'pincode-fallback' || source === 'address-pincode') {
               skippedPincodeTasks++;
-              return; // skip this task
+              return;
             }
 
             if (lat != null && lng != null) {
-              waypoints.push({ lat, lng });
-              taskCoordsList.push({ lat, lng, t, index: markerIndex, isApproxLocation: false });
-
-              // Create Custom Numbered Marker
-              const pinColor = source === '@-viewport' ? '#f59e0b' : '#ef4444'; // Amber for viewport-level, Red for precise
-              
-              const markerLabel = {
-                  text: (markerIndex + 1).toString(),
-                  color: 'white',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-              };
-              
-              const svgIcon = {
-                  path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
-                  fillColor: pinColor,
-                  fillOpacity: 1,
-                  strokeColor: 'white',
-                  strokeWeight: 2,
-                  scale: 1,
-                  labelOrigin: new google.maps.Point(0, -28)
-              };
-
-              const taskMarker = new google.maps.Marker({
-                position: { lat, lng },
-                map: mapInstance,
-                icon: svgIcon,
-                label: markerLabel,
-                title: t.case_id || t.caseId || 'Task',
-                zIndex: 100
-              });
-
-              taskMarker.addListener('click', () => {
-                openTaskDetailsModal(t.id);
-              });
-              
-              markers.push(taskMarker);
-              markerIndex++;
+              taskCoordsList.push({ lat, lng, t, source, isApproxLocation: false });
             }
           });
 
@@ -211,8 +171,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
           // Route Computation and Rendering
           if (taskCoordsList.length > 0) {
              // ─── Auto-sort by nearest-neighbor before rendering ───
-             // Without this, the first render uses raw DB order (252km for 41 tasks).
-             // Nearest-neighbor reduces this to ~97km without needing the user to click Optimize.
+             // Ensures route order is geographically efficient from the user's location.
              const haversineDistance = (lat1, lng1, lat2, lng2) => {
                const R = 6371; // km
                const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -244,6 +203,45 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
              }
              taskCoordsList = sorted;
              // ─── End auto-sort ───
+
+             // ─── Create numbered markers in ROUTE ORDER ───
+             // Marker #1 = first task to visit, #2 = second, etc.
+             taskCoordsList.forEach((item, idx) => {
+               const pinColor = item.source === '@-viewport' ? '#f59e0b' : '#ef4444';
+               
+               const markerLabel = {
+                 text: (idx + 1).toString(),
+                 color: 'white',
+                 fontSize: '14px',
+                 fontWeight: 'bold'
+               };
+               
+               const svgIcon = {
+                 path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
+                 fillColor: pinColor,
+                 fillOpacity: 1,
+                 strokeColor: 'white',
+                 strokeWeight: 2,
+                 scale: 1.4,
+                 labelOrigin: new google.maps.Point(0, -29)
+               };
+
+               const taskMarker = new google.maps.Marker({
+                 position: { lat: item.lat, lng: item.lng },
+                 map: mapInstance,
+                 icon: svgIcon,
+                 label: markerLabel,
+                 title: item.t.case_id || item.t.caseId || `Task ${idx + 1}`,
+                 zIndex: 100
+               });
+
+               taskMarker.addListener('click', () => {
+                 openTaskDetailsModal(item.t.id);
+               });
+               
+               markers.push(taskMarker);
+             });
+             // ─── End markers ───
 
              const lastTask = taskCoordsList[taskCoordsList.length - 1];
              const middleTasks = taskCoordsList.slice(0, -1);
