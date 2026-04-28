@@ -219,81 +219,57 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
              const orsUrl = `https://maps.openrouteservice.org/directions?a=${orsCoordsString}&b=1a&c=0&k1=en-US&k2=km`;
 
              // ═══════════════════════════════════════════════════════════
-              // TIER 1: Google Routes API (Primary) — max 25 intermediates
+              // TIER 1: ORS Directions via Backend (Primary) — ALL waypoints, no limit
               // ═══════════════════════════════════════════════════════════
               let routeRendered = false;
 
               try {
-                const MAX_ROUTE_INTERMEDIATES = 25;
-                const allIntermediates = middleTasks.map(task => ({
-                  location: { latLng: { latitude: task.lat, longitude: task.lng } }
-                }));
+                // ORS expects [lng, lat] order (GeoJSON convention)
+                const orsCoordinates = [
+                  [userLng, userLat],
+                  ...taskCoordsList.map(t => [t.lng, t.lat])
+                ];
 
-                // Evenly sample if more than 25 intermediates
-                let limitedIntermediates;
-                if (allIntermediates.length > MAX_ROUTE_INTERMEDIATES) {
-                  limitedIntermediates = [];
-                  const step = allIntermediates.length / MAX_ROUTE_INTERMEDIATES;
-                  for (let i = 0; i < MAX_ROUTE_INTERMEDIATES; i++) {
-                    limitedIntermediates.push(allIntermediates[Math.floor(i * step)]);
-                  }
-                  console.log(`📍 Routes API: Sampled ${MAX_ROUTE_INTERMEDIATES} of ${allIntermediates.length} intermediates`);
-                } else {
-                  limitedIntermediates = allIntermediates;
+                console.log(`📍 ORS: Requesting route for ${orsCoordinates.length} coordinates (all waypoints)`);
+
+                const orsResponse = await fetch('/api/routes/directions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ coordinates: orsCoordinates })
+                });
+
+                if (!orsResponse.ok) {
+                  const errData = await orsResponse.json().catch(() => ({}));
+                  console.error('ORS Directions error:', errData);
+                  throw new Error(errData.message || `ORS returned ${orsResponse.status}`);
                 }
 
-                const routeRequestBody = {
-                  origin: { location: { latLng: { latitude: userLat, longitude: userLng } } },
-                  destination: { location: { latLng: { latitude: lastTask.lat, longitude: lastTask.lng } } },
-                  travelMode: 'DRIVE',
-                  polylineQuality: 'HIGH_QUALITY'
-                };
-                if (limitedIntermediates.length > 0) {
-                  routeRequestBody.intermediates = limitedIntermediates;
-                }
+                const orsData = await orsResponse.json();
 
-                const routeResponse = await fetch(
-                  'https://routes.googleapis.com/directions/v2:computeRoutes',
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'X-Goog-Api-Key': window._googleMapsApiKey,
-                      'X-Goog-FieldMask': 'routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration,routes.distanceMeters,routes.duration'
-                    },
-                    body: JSON.stringify(routeRequestBody)
-                  }
-                );
+                if (orsData.success && orsData.coordinates && orsData.coordinates.length > 0) {
+                  // ORS returns [lng, lat] — Google Maps needs {lat, lng}
+                  const routePath = orsData.coordinates.map(coord => ({
+                    lat: coord[1],
+                    lng: coord[0]
+                  }));
 
-                if (!routeResponse.ok) {
-                  // Log full error body for diagnostics
-                  const errorBody = await routeResponse.text();
-                  console.error(`Routes API ${routeResponse.status} response:`, errorBody);
-                  throw new Error(`Routes API returned ${routeResponse.status}`);
-                }
-
-                const routeData = await routeResponse.json();
-
-                if (routeData.routes && routeData.routes.length > 0) {
-                  const route = routeData.routes[0];
-                  if (route.polyline && route.polyline.encodedPolyline) {
-                    const decodedPath = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
-                    routePolyline = new google.maps.Polyline({
-                      path: decodedPath,
-                      geodesic: true,
-                      strokeColor: '#6366f1',
-                      strokeOpacity: 0.85,
-                      strokeWeight: 5,
-                      map: mapInstance
-                    });
-                  }
+                  routePolyline = new google.maps.Polyline({
+                    path: routePath,
+                    geodesic: true,
+                    strokeColor: '#6366f1',
+                    strokeOpacity: 0.85,
+                    strokeWeight: 5,
+                    map: mapInstance
+                  });
 
                   // Route stats badge
-                  const totalDistKm = (route.distanceMeters / 1000).toFixed(1);
-                  const totalMins = Math.round(parseInt(route.duration.replace('s', '')) / 60);
+                  const totalDistKm = (orsData.distance / 1000).toFixed(1);
+                  const totalMins = Math.round(orsData.duration / 60);
                   const hours = Math.floor(totalMins / 60);
                   const mins = totalMins % 60;
                   const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                  console.log(`📍 ORS route loaded: ${totalDistKm} km (~${durationStr})`);
 
                   const mapHeader = document.getElementById('mapHeaderActions');
                   if (mapHeader && !document.getElementById('routeStatsBadge')) {
@@ -304,14 +280,14 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                   }
                   routeRendered = true;
                 } else {
-                  throw new Error('No routes returned from Routes API');
+                  throw new Error('No route geometry returned from ORS');
                 }
 
-              } catch (routesApiErr) {
-                console.warn('⚠️ Routes API failed, trying DirectionsService fallback:', routesApiErr.message);
+              } catch (orsErr) {
+                console.warn('⚠️ ORS routing failed, trying Google DirectionsService fallback:', orsErr.message);
 
                 // ═══════════════════════════════════════════════════════════
-                // TIER 2: DirectionsService Fallback — max 25 waypoints (23 intermediates)
+                // TIER 2: Google DirectionsService Fallback — max 23 intermediates (sampled)
                 // ═══════════════════════════════════════════════════════════
                 try {
                   const directionsService = new google.maps.DirectionsService();

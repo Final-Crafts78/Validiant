@@ -47,6 +47,103 @@ app.get("/api/config/maps-key", (req, res) => {
   res.json({ success: true, key });
 });
 
+// ORS Directions API Proxy — returns road-following route geometry for ALL waypoints
+// Keeps ORS_API_KEY server-side, splits into segments if >50 coordinates
+app.post("/api/routes/directions", async (req, res) => {
+  try {
+    const { coordinates } = req.body; // [[lng, lat], [lng, lat], ...]
+    if (!coordinates || coordinates.length < 2) {
+      return res.status(400).json({ success: false, message: "At least 2 coordinates required" });
+    }
+
+    const orsKey = process.env.ORS_API_KEY;
+    if (!orsKey) {
+      return res.status(503).json({ success: false, message: "ORS API key not configured" });
+    }
+
+    const MAX_ORS_COORDS = 50; // ORS free tier limit per request
+    
+    if (coordinates.length <= MAX_ORS_COORDS) {
+      // Single request — all coordinates fit in one call
+      const orsRes = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/geojson", {
+        method: "POST",
+        headers: {
+          "Authorization": orsKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ coordinates })
+      });
+      
+      const data = await orsRes.json();
+      if (!orsRes.ok) {
+        console.error("ORS Directions error:", data);
+        return res.status(orsRes.status).json({ success: false, message: data.error?.message || "ORS API error" });
+      }
+
+      const feature = data.features[0];
+      const geojsonCoords = feature.geometry.coordinates; // [[lng, lat], ...]
+      const summary = feature.properties.summary;
+
+      return res.json({
+        success: true,
+        coordinates: geojsonCoords,
+        distance: summary.distance, // meters
+        duration: summary.duration  // seconds
+      });
+    }
+
+    // Multi-segment: split into chunks of MAX_ORS_COORDS with 1-point overlap to stitch
+    console.log(`📍 [ORS] Splitting ${coordinates.length} coordinates into segments of ${MAX_ORS_COORDS}`);
+    const allCoords = [];
+    let totalDistance = 0;
+    let totalDuration = 0;
+
+    for (let i = 0; i < coordinates.length; i += MAX_ORS_COORDS - 1) {
+      const segment = coordinates.slice(i, i + MAX_ORS_COORDS);
+      if (segment.length < 2) break;
+
+      const orsRes = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/geojson", {
+        method: "POST",
+        headers: {
+          "Authorization": orsKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ coordinates: segment })
+      });
+
+      const data = await orsRes.json();
+      if (!orsRes.ok) {
+        console.error(`ORS Directions segment error:`, data);
+        return res.status(orsRes.status).json({ success: false, message: data.error?.message || "ORS segment error" });
+      }
+
+      const feature = data.features[0];
+      const segCoords = feature.geometry.coordinates;
+      const summary = feature.properties.summary;
+
+      // Skip first point of subsequent segments (it's the overlap point)
+      if (allCoords.length > 0) {
+        allCoords.push(...segCoords.slice(1));
+      } else {
+        allCoords.push(...segCoords);
+      }
+      totalDistance += summary.distance;
+      totalDuration += summary.duration;
+    }
+
+    return res.json({
+      success: true,
+      coordinates: allCoords,
+      distance: totalDistance,
+      duration: totalDuration
+    });
+
+  } catch (err) {
+    console.error("ORS Directions proxy error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Feature routes
 app.use("/api", authRoutes);
 app.use("/api/tasks", taskRoutes);
