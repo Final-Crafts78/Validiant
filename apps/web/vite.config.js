@@ -15,6 +15,8 @@ export default defineConfig({
     target: 'es2020',
     minify: 'esbuild',
     cssMinify: true,
+    sourcemap: false,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -22,9 +24,20 @@ export default defineConfig({
         signin: resolve(__dirname, 'signin.html')
       },
       output: {
-        manualChunks: {
-          vendor: []
-        }
+        manualChunks(id) {
+          // Map engines — only loaded when user navigates to map views
+          if (id.includes('googleMapsEngine') || id.includes('leafletEngine')) {
+            return 'map-engines';
+          }
+          // Bulk upload — only loaded on admin bulk upload action
+          if (id.includes('bulkUpload')) {
+            return 'bulk-upload';
+          }
+        },
+        // Content-hashed filenames for long-term caching
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]'
       }
     }
   }

@@ -669,10 +669,9 @@ export function cleanupMapInstance() {
       markers = [];
   }
   
-  // Note: We don't fully destroy the google.maps.Map instance,
-  // we just clear it. Re-using it is better for performance.
-  // If we really need to destroy the container's contents:
-  // mapInstance = null;
+  // In an SPA where the DOM container is frequently destroyed and re-created,
+  // we must nullify the mapInstance so it properly binds to the new container.
+  mapInstance = null;
   
   // Remove generated buttons/badges
   const orsBtn = document.getElementById('orsNavBtn');

@@ -3,7 +3,7 @@
  */
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
-import { state } from '../../store/globalState';
+import { state, fetchEmployeesIfStale } from '../../store/globalState';
 import { loadAllTasks } from './allTasks';
 import { showUnassignedTasks } from './unassignedTasks';
 
@@ -38,14 +38,7 @@ export async function showBulkUpload() {
   const libsReady = await loadDependencies();
   if (!libsReady) return;
   
-  if (!state.allEmployees || state.allEmployees.length === 0) {
-    try {
-      const response = await fetch('/api/users');
-      state.allEmployees = await response.json();
-    } catch (e) {
-      console.error('Failed to load employees', e);
-    }
-  }
+  await fetchEmployeesIfStale();
 
   const content = `
     <div class="smart-upload-tabs">

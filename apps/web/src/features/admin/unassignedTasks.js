@@ -1,7 +1,7 @@
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
-import { state } from '../../store/globalState';
+import { state, fetchEmployeesIfStale } from '../../store/globalState';
 
 export function showUnassignedTasks() {
   const content = document.getElementById('mainContainer');
@@ -56,9 +56,7 @@ export async function loadUnassignedTasks() {
   try {
     const [tasksRes, employees] = await Promise.all([
       fetch(url, { cache: 'no-store' }).then(r => r.json()),
-      (state.allEmployees?.length > 0)
-        ? Promise.resolve(state.allEmployees)
-        : fetch(`/api/users?_t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()).then(u => { state.allEmployees = u; return u; })
+      fetchEmployeesIfStale()
     ]);
     state.allUnassignedTasks = Array.isArray(tasksRes) ? tasksRes : [];
     

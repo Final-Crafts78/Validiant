@@ -1,7 +1,7 @@
 /**
  * Admin Dashboard & Task Creation
  */
-import { state } from '../../store/globalState';
+import { state, fetchEmployeesIfStale } from '../../store/globalState';
 import { showToast, showLoading, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { showAllTasks } from './allTasks';
@@ -363,9 +363,7 @@ export async function showAssignTask() {
 
 async function populateEmployeesDropdown() {
   try {
-    const res = await fetch('/api/users');
-    const employees = await res.json();
-    state.allEmployees = employees;
+    const employees = await fetchEmployeesIfStale();
     const select = document.getElementById('employee');
     if (!select) return;
     

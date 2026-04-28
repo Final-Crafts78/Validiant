@@ -1,7 +1,7 @@
 /**
  * Admin: Employee Management Feature
  */
-import { state } from '../../store/globalState';
+import { state, fetchEmployeesIfStale } from '../../store/globalState';
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 
@@ -33,13 +33,10 @@ export function showEmployees() {
 
 export async function loadEmployeesList() {
   try {
-    const [usersRes, mapSettingRes] = await Promise.all([
-      fetch('/api/users'),
+    const [users, mapSettingRes] = await Promise.all([
+      fetchEmployeesIfStale(0), // Force refresh for employee management view
       fetch('/api/settings/executive_map_edit').catch(() => ({ ok: false }))
     ]);
-    
-    const users = await usersRes.json();
-    state.allEmployees = users;
     
     let mapAccess = {};
     if (mapSettingRes && mapSettingRes.ok) {

@@ -153,6 +153,14 @@ const settingsRoutes = require("./routes/settings.routes");
 app.use("/api/settings", settingsRoutes);
 
 // Static file serving for Frontend (Production)
+// Hashed assets (Vite output: assets/main-abc123.js) — immutable, cache for 1 year
+app.use('/assets', express.static(path.join(webDistPath, 'assets'), {
+  maxAge: '1y',
+  immutable: true,
+  etag: false
+}));
+
+// Root files (index.html, dashboard.html) — short cache, always revalidate
 app.use(express.static(webDistPath, {
   maxAge: '1d',
   etag: true,
