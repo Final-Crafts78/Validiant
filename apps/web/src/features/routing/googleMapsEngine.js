@@ -148,7 +148,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
           // Resolve Coordinates
           const { resolveTaskCoordinates } = await import('../employee/sorting');
           const waypoints = [];
-          const taskCoordsList = [];
+          let taskCoordsList = [];
           let skippedPincodeTasks = 0;
           let markerIndex = 0;
 
@@ -210,6 +210,41 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 
           // Route Computation and Rendering
           if (taskCoordsList.length > 0) {
+             // ─── Auto-sort by nearest-neighbor before rendering ───
+             // Without this, the first render uses raw DB order (252km for 41 tasks).
+             // Nearest-neighbor reduces this to ~97km without needing the user to click Optimize.
+             const haversineDistance = (lat1, lng1, lat2, lng2) => {
+               const R = 6371; // km
+               const dLat = (lat2 - lat1) * Math.PI / 180;
+               const dLng = (lng2 - lng1) * Math.PI / 180;
+               const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                         Math.sin(dLng/2) * Math.sin(dLng/2);
+               return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+             };
+
+             const sorted = [];
+             const pool = [...taskCoordsList];
+             let curLat = userLat, curLng = userLng;
+
+             while (pool.length > 0) {
+               let nearestIdx = 0;
+               let nearestDist = Infinity;
+               for (let i = 0; i < pool.length; i++) {
+                 const d = haversineDistance(curLat, curLng, pool[i].lat, pool[i].lng);
+                 if (d < nearestDist) {
+                   nearestDist = d;
+                   nearestIdx = i;
+                 }
+               }
+               const nearest = pool.splice(nearestIdx, 1)[0];
+               curLat = nearest.lat;
+               curLng = nearest.lng;
+               sorted.push(nearest);
+             }
+             taskCoordsList = sorted;
+             // ─── End auto-sort ───
+
              const lastTask = taskCoordsList[taskCoordsList.length - 1];
              const middleTasks = taskCoordsList.slice(0, -1);
              
