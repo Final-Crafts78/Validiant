@@ -91,7 +91,7 @@ class TaskService {
    */
   async createTask(taskData) {
     const { title, pincode, address, mapUrl, map_url, notes, createdBy, createdByName, assignedTo, clientName, latitude, longitude } = taskData;
-    const finalMapUrl = mapUrl || map_url || null;
+    let finalMapUrl = mapUrl || map_url || null;
     let finalLat = latitude, finalLng = longitude;
     
     // Always re-extract from URL when present — overrides frontend-supplied coords
@@ -108,7 +108,11 @@ class TaskService {
     let geocodeMatchLevel = null;
     let locationWarning = null;
 
-    if ((!finalLat || !finalLng) && (address || pincode)) {
+    const settingsService = require("./settings.service");
+    const addressRoutingSetting = await settingsService.getSetting("address_routing");
+    const isAddressRoutingEnabled = addressRoutingSetting?.enabled !== false;
+
+    if (isAddressRoutingEnabled && (!finalLat || !finalLng) && (address || pincode)) {
       const { geocodeFromAddress } = require("../utils/geocode");
       const geo = await geocodeFromAddress(address, pincode);
       if (geo) {
@@ -120,6 +124,7 @@ class TaskService {
         if (geo.confidence >= 0.95) {
           finalLat = geo.latitude;
           finalLng = geo.longitude;
+          finalMapUrl = `https://www.google.com/maps/search/?api=1&query=${finalLat},${finalLng}`;
         } else {
           console.log(`📍 [GEOCODE] Skipping coords for "${title}" — confidence ${(geo.confidence * 100).toFixed(0)}% < 95% threshold`);
         }

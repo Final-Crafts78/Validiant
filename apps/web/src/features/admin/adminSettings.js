@@ -104,13 +104,24 @@ async function loadSettings() {
   if (!container) return;
 
   try {
-    const res = await fetch('/api/settings/executive_map_edit');
-    const data = await res.json();
+    const [resExec, resAddr] = await Promise.all([
+      fetch('/api/settings/executive_map_edit'),
+      fetch('/api/settings/address_routing')
+    ]);
+    
+    const dataExec = await resExec.json();
+    const dataAddr = await resAddr.json();
     
     // Default to false if setting is missing or api fails
-    let isEnabled = false;
-    if (data.success && data.value) {
-      isEnabled = data.value.enabled === true;
+    let isEnabledExec = false;
+    if (dataExec.success && dataExec.value) {
+      isEnabledExec = dataExec.value.enabled === true;
+    }
+    
+    // Default to true for backward compatibility unless explicitly disabled
+    let isEnabledAddr = true;
+    if (dataAddr.success && dataAddr.value) {
+      isEnabledAddr = dataAddr.value.enabled !== false;
     }
 
     container.innerHTML = `
@@ -124,7 +135,23 @@ async function loadSettings() {
         </div>
         <div class="setting-action" style="padding-top: 5px;">
           <label class="switch">
-            <input type="checkbox" id="toggle_executive_map_edit" ${isEnabled ? 'checked' : ''} onchange="window._toggleExecutiveMapEdit(this.checked)">
+            <input type="checkbox" id="toggle_executive_map_edit" ${isEnabledExec ? 'checked' : ''} onchange="window._toggleExecutiveMapEdit(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <div class="setting-info">
+          <div class="setting-title"><i class="fas fa-location-arrow" style="color: #10B981; margin-right: 8px;"></i> Address Routing (Geocoding)</div>
+          <div class="setting-desc">
+            Automatically geocode addresses and generate Map URLs for tasks created or uploaded without a map link.
+            When disabled, geocoding will be skipped entirely.
+          </div>
+        </div>
+        <div class="setting-action" style="padding-top: 5px;">
+          <label class="switch">
+            <input type="checkbox" id="toggle_address_routing" ${isEnabledAddr ? 'checked' : ''} onchange="window._toggleAddressRouting(this.checked)">
             <span class="slider"></span>
           </label>
         </div>
@@ -152,6 +179,38 @@ async function loadSettings() {
         const result = await res.json();
         if (result.success) {
           showToast(`Executive map link editing ${checked ? 'enabled' : 'disabled'}`, 'success');
+        } else {
+          showToast('Failed to save setting', 'error');
+          if (toggle) toggle.checked = !checked; // revert UI
+        }
+      } catch (err) {
+        showToast('Network error', 'error');
+        if (toggle) toggle.checked = !checked; // revert UI
+      } finally {
+        if (toggle) toggle.disabled = false;
+      }
+    };
+
+    window._toggleAddressRouting = async (checked) => {
+      const toggle = document.getElementById('toggle_address_routing');
+      if (toggle) toggle.disabled = true;
+      
+      try {
+        const payload = {
+          value: { enabled: checked },
+          adminId: state.currentUser.id,
+          adminName: state.currentUser.name
+        };
+        
+        const res = await fetch('/api/settings/address_routing', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+          showToast(`Address routing ${checked ? 'enabled' : 'disabled'}`, 'success');
         } else {
           showToast('Failed to save setting', 'error');
           if (toggle) toggle.checked = !checked; // revert UI

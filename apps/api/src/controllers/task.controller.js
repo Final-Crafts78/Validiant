@@ -190,6 +190,10 @@ class TaskController {
       let successCount = 0;
       const tasksToInsert = [];
       const { extractCoordinates } = require("../utils/geo");
+      const settingsService = require("../services/settings.service");
+      
+      const addressRoutingSetting = await settingsService.getSetting("address_routing");
+      const isAddressRoutingEnabled = addressRoutingSetting?.enabled !== false;
       
       for (let i = 0; i < rawData.length; i++) {
         const raw = rawData[i];
@@ -203,9 +207,10 @@ class TaskController {
         
         let finalLat = row.latitude || row.lat;
         let finalLng = row.longitude || row.lng;
+        let finalMapUrl = row.mapurl || row.map || null;
         
-        if ((row.mapurl || row.map) && (!finalLat || !finalLng)) {
-          const coords = await extractCoordinates(row.mapurl || row.map);
+        if (finalMapUrl && (!finalLat || !finalLng)) {
+          const coords = await extractCoordinates(finalMapUrl);
           if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
         }
 
@@ -213,7 +218,7 @@ class TaskController {
         let geocodeMatchLevel = null;
         let locationWarning = null;
 
-        if ((!finalLat || !finalLng) && (row.address || pincode)) {
+        if (isAddressRoutingEnabled && (!finalLat || !finalLng) && (row.address || pincode)) {
           const { geocodeFromAddress } = require("../utils/geocode");
           const geo = await geocodeFromAddress(row.address, pincode);
           if (geo) { 
@@ -224,6 +229,7 @@ class TaskController {
             if (geo.confidence >= 0.95) {
               finalLat = geo.latitude; 
               finalLng = geo.longitude;
+              finalMapUrl = `https://www.google.com/maps/search/?api=1&query=${finalLat},${finalLng}`;
             }
           }
         }
@@ -232,7 +238,7 @@ class TaskController {
           title: String(title),
           pincode: String(pincode).trim(),
           client_name: row.clientname || row.individualname || "Unknown Client",
-          map_url: row.mapurl || row.map || null,
+          map_url: finalMapUrl,
           address: row.address || null,
           latitude: finalLat || null,
           longitude: finalLng || null,
@@ -339,12 +345,16 @@ class TaskController {
       
       const { extractCoordinates } = require("../utils/geo");
       const { geocodeFromAddress } = require("../utils/geocode");
+      const settingsService = require("../services/settings.service");
+      
+      const addressRoutingSetting = await settingsService.getSetting("address_routing");
+      const isAddressRoutingEnabled = addressRoutingSetting?.enabled !== false;
       const tasksToInsert = [];
 
       for (let i = 0; i < tasks.length; i++) {
         const taskData = tasks[i];
         const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude } = taskData;
-        const finalMapUrl = mapUrl || map_url || null;
+        let finalMapUrl = mapUrl || map_url || null;
         
         let finalLat = latitude || null;
         let finalLng = longitude || null;
@@ -362,7 +372,7 @@ class TaskController {
         let geocodeMatchLevel = null;
         let locationWarning = null;
 
-        if ((!finalLat || !finalLng) && (address || pincode)) {
+        if (isAddressRoutingEnabled && (!finalLat || !finalLng) && (address || pincode)) {
           try {
             const geo = await geocodeFromAddress(address, pincode);
             if (geo) {
@@ -373,6 +383,7 @@ class TaskController {
               if (geo.confidence >= 0.95) {
                 finalLat = geo.latitude;
                 finalLng = geo.longitude;
+                finalMapUrl = `https://www.google.com/maps/search/?api=1&query=${finalLat},${finalLng}`;
               }
             }
           } catch (geoErr) {
