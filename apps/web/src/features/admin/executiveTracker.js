@@ -305,9 +305,9 @@ async function renderTrackerMap() {
         const pinColor = isApprox ? '#f59e0b' : '#3b82f6'; // Blue or Orange
         const taskIcon = L.divIcon({
           className: 'tracker-task-pin',
-          html: `<div style="background-color: ${pinColor}; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-size:10px;">${index + 1}</div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
+          html: `<div style="background-color: ${pinColor}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-size:12px;">${index + 1}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
         });
 
         L.marker([lat, lng], {

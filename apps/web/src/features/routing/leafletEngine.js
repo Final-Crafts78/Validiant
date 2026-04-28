@@ -123,9 +123,9 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
           
           const taskIcon = L.divIcon({
             className: 'custom-task-icon gpu-boost',
-            html: `<div style="background-color: ${pinColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">${markerIndex + 1}</div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
+            html: `<div style="background-color: ${pinColor}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);">${markerIndex + 1}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
           });
 
           const marker = L.marker([lat, lng], { icon: taskIcon, riseOnHover: true }).on('click', () => {

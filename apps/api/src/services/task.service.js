@@ -321,8 +321,7 @@ class TaskService {
         vehicles: [{
           id: 1,
           profile: "driving-car",
-          start: [employeeLocation.lng, employeeLocation.lat],
-          end: [employeeLocation.lng, employeeLocation.lat]
+          start: [employeeLocation.lng, employeeLocation.lat]
         }],
         jobs: routableTasks.map((task, index) => ({
           id: index,
@@ -344,7 +343,14 @@ class TaskService {
 
       const steps = data.routes[0].steps.filter(s => s.type === "job");
       const optimizedTasks = steps.map(step => routableTasks[step.job]);
-      console.log(`📍 [OPTIMIZE] ORS Optimization succeeded — ${optimizedTasks.length} stops, ${Math.round(data.routes[0].distance/1000)}km`);
+      const vroomDistKm = Math.round(data.routes[0].distance / 1000);
+      const vroomDurMin = Math.round(data.routes[0].duration / 60);
+      const inputOrder = routableTasks.map(t => t.id).join(',');
+      const outputOrder = optimizedTasks.map(t => t.id).join(',');
+      console.log(`📍 [OPTIMIZE] ORS VROOM succeeded — ${optimizedTasks.length} stops, ${vroomDistKm}km, ~${vroomDurMin}min`);
+      console.log(`📍 [OPTIMIZE] Input order:  ${inputOrder}`);
+      console.log(`📍 [OPTIMIZE] Output order: ${outputOrder}`);
+      console.log(`📍 [OPTIMIZE] Order changed: ${inputOrder !== outputOrder}`);
       return [...optimizedTasks, ...unroutableTasks];
 
     } catch (orsError) {
@@ -369,8 +375,7 @@ class TaskService {
           model: {
             shipments,
             vehicles: [{
-              startLocation: { latitude: employeeLocation.lat, longitude: employeeLocation.lng },
-              endLocation: { latitude: employeeLocation.lat, longitude: employeeLocation.lng }
+              startLocation: { latitude: employeeLocation.lat, longitude: employeeLocation.lng }
             }]
           }
         };

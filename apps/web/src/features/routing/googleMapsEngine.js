@@ -116,6 +116,24 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
             mapInstance.setCenter({ lat: userLat, lng: userLng });
           }
 
+          // ─── CRITICAL: Wipe previous render artifacts ───
+          // Without this, every re-render (Optimize Route, Refresh, etc.)
+          // stacks new markers on top of old ones → overlapping numbers.
+          markers.forEach(m => m.setMap(null));
+          markers = [];
+          if (routePolyline) {
+            routePolyline.setMap(null);
+            routePolyline = null;
+          }
+          // Also remove stale stats badge and nav buttons from previous render
+          const staleStats = document.getElementById('routeStatsBadge');
+          if (staleStats) staleStats.remove();
+          const staleOrs = document.getElementById('orsNavBtn');
+          if (staleOrs) staleOrs.remove();
+          const staleGmaps = document.getElementById('gmapsNavBtn');
+          if (staleGmaps) staleGmaps.remove();
+          // ─── End cleanup ───
+
           // "You Are Here" Marker (Blue dot)
           const youAreHereMarker = new google.maps.Marker({
             position: { lat: userLat, lng: userLng },
@@ -241,7 +259,7 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
                  fillOpacity: 1,
                  strokeColor: 'white',
                  strokeWeight: 2,
-                 scale: 1.4,
+                 scale: 1.8,
                  labelOrigin: new google.maps.Point(0, -29)
                };
 
