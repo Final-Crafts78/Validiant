@@ -155,11 +155,12 @@ export function displayEmployeeTasks(tasks) {
       : '';
 
     const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
-    const noMapLink = !task.map_url && !task.mapUrl && !task.mapurl;
+    const confidence = parseFloat(task.geocode_confidence) || 0;
+    const hasCoords = parseFloat(task.latitude) && parseFloat(task.longitude);
+    const noMapLink = !mapLink;
     
-    const addMapBadge = (canEditMap && noMapLink) ? 
-      `<span style="background:rgba(99,102,241,0.15); color:#818cf8; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;" onclick="event.stopPropagation(); const card = document.querySelector('[data-action=\\'task:openPanel\\'][data-id=\\'${task.id}\\']'); if(card) card.click(); setTimeout(() => { const btn = document.querySelector('#editMapContainer_${task.id}'); if(btn) { btn.style.display='block'; btn.previousElementSibling.firstElementChild.style.display='none'; } }, 300);"><i class="fas fa-plus"></i> Add Map Link</span>`
-      : '';
+    // The inline 'Add Map Link' badge is removed since it's becoming a full button below
+    const addMapBadge = '';
 
     return `
       <div class="mobile-optimized-card gpu-boost" data-action="task:openPanel" data-id="${task.id}" style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1); cursor:pointer; opacity: 0; transform: translateY(20px); transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); contain: content;">
@@ -187,21 +188,46 @@ export function displayEmployeeTasks(tasks) {
             <span class="status-badge ${statusClass}">${task.status}</span>
             ${slaBadge}
             <div onclick="event.stopPropagation();" style="margin-top:auto;">
-              ${mapLink ? `
-                <button onclick="window.open('${escapeHtml(mapLink)}', '_blank')" 
-                        class="btn btn-primary btn-sm navigate-btn-elite" 
-                        style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
-                  <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
-                  <span style="font-weight:600;">Navigate</span>
-                </button>
-              ` : (task.address ? `
-                <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.address)}', '_blank')" 
-                        class="btn btn-primary btn-sm navigate-btn-elite" 
-                        style="padding:10px 20px; font-size:12px; background:#8b5cf6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(139, 92, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
-                  <i class="fas fa-search-location" style="font-size:14px;"></i> 
-                  <span style="font-weight:600;">Search Address</span>
-                </button>
-              ` : '')}
+              ${(() => {
+                if (mapLink) {
+                  return `
+                    <button onclick="window.open('${escapeHtml(mapLink)}', '_blank')" 
+                            class="btn btn-primary btn-sm navigate-btn-elite" 
+                            style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                      <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
+                      <span style="font-weight:600;">Navigate</span>
+                    </button>
+                  `;
+                } else if (hasCoords && confidence >= 95) {
+                  return `
+                    <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}', '_blank')" 
+                            class="btn btn-primary btn-sm navigate-btn-elite" 
+                            style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                      <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
+                      <span style="font-weight:600;">Navigate</span>
+                    </button>
+                  `;
+                } else if (hasCoords && confidence >= 75) {
+                  return `
+                    <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}', '_blank')" 
+                            class="btn btn-warning btn-sm navigate-btn-elite" 
+                            style="padding:10px 20px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(245, 158, 11, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;" title="Location is approximate">
+                      <i class="fas fa-exclamation-triangle" style="font-size:14px;"></i> 
+                      <span style="font-weight:600;">Navigate</span>
+                    </button>
+                  `;
+                } else if (canEditMap) {
+                  return `
+                    <button onclick="event.stopPropagation(); const card = document.querySelector('[data-action=\\'task:openPanel\\'][data-id=\\'${task.id}\\']'); if(card) card.click(); setTimeout(() => { const btn = document.querySelector('#editMapContainer_${task.id}'); if(btn) { btn.style.display='block'; if(btn.previousElementSibling) btn.previousElementSibling.style.display='none'; } }, 300);" 
+                            class="btn btn-primary btn-sm navigate-btn-elite" 
+                            style="padding:10px 20px; font-size:12px; background:#6366f1; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(99, 102, 241, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                      <i class="fas fa-plus-circle" style="font-size:14px;"></i> 
+                      <span style="font-weight:600;">Add Map Link</span>
+                    </button>
+                  `;
+                }
+                return '';
+              })()}
             </div>
           </div>
         </div>

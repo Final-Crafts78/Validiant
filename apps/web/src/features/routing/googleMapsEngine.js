@@ -29,8 +29,33 @@ function loadGoogleMapsApi(apiKey) {
 }
 
 export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
+  const content = document.getElementById('mainContainer');
+  if (!content) return;
+
+  if (!document.getElementById('routingMap')) {
+    content.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2><i class="fas fa-map-marked-alt"></i> Live Route Map</h2>
+      <div id="mapHeaderActions" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" data-action="routing:custom" style="background:#6366f1; border:none;"><i class="fas fa-route"></i> Custom Routing</button>
+        <button class="btn btn-warning btn-sm" data-action="sorting:nearest"><i class="fas fa-location-arrow"></i> Optimize Route (ORS)</button>
+        <button class="btn btn-info btn-sm" data-action="routing:refresh"><i class="fas fa-sync"></i> Refresh Map</button>
+      </div>
+    </div>
+    
+    <div id="mapLoading" class="loading-spinner show" style="justify-content:center; padding:50px; text-align:center;">
+      <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:#6366f1; margin-bottom:15px; display:block;"></i>
+      <p>Acquiring GPS and loading map engine...</p>
+    </div>
+    
+    <div id="routingMap" style="width: 100%; height: 65vh; border-radius: 12px; border: 2px solid #374151; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 1;"></div>
+  `;
+  } else {
+    document.getElementById('mapLoading').style.display = 'flex';
+    document.getElementById('routingMap').style.opacity = '0.5';
+  }
+
   const mapContainer = document.getElementById('routingMap');
-  if (!mapContainer) return;
 
   try {
     showLoading();
@@ -53,6 +78,13 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
+          const loadingEl = document.getElementById('mapLoading');
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (mapContainer) {
+            mapContainer.style.display = 'block';
+            mapContainer.style.opacity = '1';
+          }
+
           const userLat = pos.coords.latitude;
           const userLng = pos.coords.longitude;
 
@@ -311,6 +343,10 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       (err) => {
         console.error("GPS Error:", err);
         hideLoading();
+        const loadingEl = document.getElementById('mapLoading');
+        if (loadingEl) {
+          loadingEl.innerHTML = '<h3 style="color:#ef4444; text-align:center;">Location Access Denied</h3>';
+        }
         showToast('Please enable location access to see routing', 'warning');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

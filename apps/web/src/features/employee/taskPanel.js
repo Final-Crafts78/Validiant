@@ -40,6 +40,11 @@ export async function openTaskPanel(taskId) {
     }
   }
   const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
+  
+  const mapLink = task.map_url || task.mapUrl || task.mapurl;
+  const confidence = parseFloat(task.geocode_confidence) || 0;
+  const hasCoords = parseFloat(task.latitude) && parseFloat(task.longitude);
+  const noMapLink = !mapLink;
 
   const html = `
     <div class="task-detail-view">
@@ -88,37 +93,73 @@ export async function openTaskPanel(taskId) {
           </button>
         </div>
 
-        ${(task.map_url || task.mapUrl) ? `
-          <div style="margin-top:20px;">
-            <a href="${task.map_url || task.mapUrl}" target="_blank" class="btn btn-primary" 
-               style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#3b82f6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); text-decoration:none;">
-              <i class="fas fa-location-arrow"></i> Navigate to Location
-            </a>
-          </div>
-        ` : (task.address ? `
-          <div style="margin-top:20px;">
-            <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.address)}" target="_blank" class="btn btn-primary" 
-               style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#8b5cf6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(139, 92, 246, 0.5); text-decoration:none;">
-              <i class="fas fa-search-location"></i> Search Address on Maps
-            </a>
-          </div>
-        ` : '')}
+        ${(() => {
+          if (mapLink) {
+            return `
+              <div style="margin-top:20px;">
+                <a href="${escapeHtml(mapLink)}" target="_blank" class="btn btn-primary" 
+                   style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#3b82f6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); text-decoration:none;">
+                  <i class="fas fa-location-arrow"></i> Navigate to Location
+                </a>
+              </div>
+            `;
+          } else if (hasCoords && confidence >= 95) {
+            return `
+              <div style="margin-top:20px;">
+                <a href="https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}" target="_blank" class="btn btn-primary" 
+                   style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#3b82f6; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); text-decoration:none;">
+                  <i class="fas fa-location-arrow"></i> Navigate to Location
+                </a>
+              </div>
+            `;
+          } else if (hasCoords && confidence >= 75) {
+            return `
+              <div style="margin-top:20px;">
+                <a href="https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}" target="_blank" class="btn btn-warning" 
+                   style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#f59e0b; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(245, 158, 11, 0.5); text-decoration:none;" title="Location is approximate">
+                  <i class="fas fa-exclamation-triangle"></i> Navigate (Approximate)
+                </a>
+              </div>
+            `;
+          } else if (canEditMap) {
+             return `
+               <div style="margin-top:20px;">
+                 <button class="btn btn-primary" onclick="document.getElementById('editMapContainer_${task.id}').style.display='block'; this.parentElement.style.display='none';"
+                    style="width:100%; justify-content:center; padding:14px; border-radius:10px; background:#6366f1; border:none; color:white; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:0 4px 6px -1px rgba(99, 102, 241, 0.5); text-decoration:none; cursor:pointer;">
+                   <i class="fas fa-plus-circle"></i> Add Map Link
+                 </button>
+               </div>
+             `;
+          }
+          return '';
+        })()}
 
-        ${canEditMap ? `
+        ${canEditMap && mapLink ? `
           <div style="margin-top:15px; text-align:center;">
             <button class="btn btn-secondary btn-sm" onclick="document.getElementById('editMapContainer_${task.id}').style.display='block'; this.style.display='none';">
               <i class="fas fa-edit"></i> Edit Map Link
             </button>
           </div>
+        ` : ''}
           <div id="editMapContainer_${task.id}" style="display:none; margin-top:15px; background:rgba(0,0,0,0.2); padding:15px; border-radius:8px; border:1px solid #334155;">
             <label style="display:block; font-size:11px; color:#94a3b8; text-transform:uppercase; margin-bottom:8px;"><i class="fas fa-link"></i> New Google Maps URL</label>
-            <input type="url" id="newMapUrl_${task.id}" class="form-input" style="width:100%; margin-bottom:10px;" placeholder="Paste Google Maps link here" value="${task.map_url || task.mapUrl || ''}" />
+            <input type="url" id="newMapUrl_${task.id}" class="form-input" style="width:100%; margin-bottom:10px;" placeholder="Paste Google Maps link here" value="${mapLink || ''}" />
             <div style="display:flex; gap:10px;">
               <button class="btn btn-primary" style="flex:1;" onclick="window._saveExecutiveMapUrl(${task.id}, this)">Save Link</button>
-              <button class="btn btn-secondary" onclick="document.getElementById('editMapContainer_${task.id}').style.display='none'; this.parentElement.parentElement.previousElementSibling.firstElementChild.style.display='inline-block';">Cancel</button>
+              <button class="btn btn-secondary" onclick="
+                const container = document.getElementById('editMapContainer_${task.id}');
+                container.style.display='none'; 
+                // Target the edit/add button wrapping div or the button itself depending on what hid it
+                const prevWrapper = container.previousElementSibling;
+                if(prevWrapper) {
+                  prevWrapper.style.display = 'block'; // Or flex/text-align center based on previous elements
+                  // Also reveal child button if it was hidden
+                  const childBtn = prevWrapper.querySelector('button');
+                  if(childBtn) childBtn.style.display='inline-block';
+                }
+              ">Cancel</button>
             </div>
           </div>
-        ` : ''}
       </div>
     </div>
   `;
