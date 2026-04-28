@@ -218,28 +218,23 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
              const orsCoordsString = allCoords.map(wp => `${wp[1]},${wp[0]}`).join(',');
              const orsUrl = `https://maps.openrouteservice.org/directions?a=${orsCoordsString}&b=1a&c=0&k1=en-US&k2=km`;
 
-             try {
-                // 1. Attempt to fetch real road route via Google Routes API
+             // ═══════════════════════════════════════════════════════════
+              // TIER 1: Google Routes API (Primary) — supports up to 98 lat/lng intermediates
+              // ═══════════════════════════════════════════════════════════
+              let routeRendered = false;
+
+              try {
                 const intermediates = middleTasks.map(task => ({
                   location: { latLng: { latitude: task.lat, longitude: task.lng } }
                 }));
-
-                // Limit is 98 intermediates. 
-                // We'll take max 98 to avoid API error if they have more
                 const limitedIntermediates = intermediates.slice(0, 98);
 
-                // Build request body — omit intermediates if empty (empty array causes 400)
                 const routeRequestBody = {
-                  origin: {
-                    location: { latLng: { latitude: userLat, longitude: userLng } }
-                  },
-                  destination: {
-                    location: { latLng: { latitude: lastTask.lat, longitude: lastTask.lng } }
-                  },
+                  origin: { location: { latLng: { latitude: userLat, longitude: userLng } } },
+                  destination: { location: { latLng: { latitude: lastTask.lat, longitude: lastTask.lng } } },
                   travelMode: 'DRIVE',
                   polylineQuality: 'HIGH_QUALITY'
                 };
-                
                 if (limitedIntermediates.length > 0) {
                   routeRequestBody.intermediates = limitedIntermediates;
                 }
@@ -251,7 +246,6 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                     headers: {
                       'Content-Type': 'application/json',
                       'X-Goog-Api-Key': window._googleMapsApiKey,
-                      // Field Masking for performance and cost: Only request what we need
                       'X-Goog-FieldMask': 'routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration,routes.distanceMeters,routes.duration'
                     },
                     body: JSON.stringify(routeRequestBody)
@@ -259,74 +253,142 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
                 );
 
                 if (!routeResponse.ok) {
-                    throw new Error(`Routes API returned ${routeResponse.status}`);
+                  // Log full error body for diagnostics
+                  const errorBody = await routeResponse.text();
+                  console.error(`Routes API ${routeResponse.status} response:`, errorBody);
+                  throw new Error(`Routes API returned ${routeResponse.status}`);
                 }
 
                 const routeData = await routeResponse.json();
-                
+
                 if (routeData.routes && routeData.routes.length > 0) {
-                    const route = routeData.routes[0];
-                    
-                    // Decode and render the polyline
-                    if (route.polyline && route.polyline.encodedPolyline) {
-                        const decodedPath = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
-                        
-                        routePolyline = new google.maps.Polyline({
-                            path: decodedPath,
-                            geodesic: true,
-                            strokeColor: '#6366f1', // Indigo to match existing theme
-                            strokeOpacity: 0.85,
-                            strokeWeight: 5,
-                            map: mapInstance
-                        });
-                    }
-                    
-                    // Add summary badge
-                    const totalDistKm = (route.distanceMeters / 1000).toFixed(1);
-                    const totalMins = Math.round(parseInt(route.duration.replace('s', '')) / 60);
-                    const hours = Math.floor(totalMins / 60);
-                    const mins = totalMins % 60;
-                    const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-                    
-                    const mapHeader = document.getElementById('mapHeaderActions');
-                    if (mapHeader && !document.getElementById('routeStatsBadge')) {
-                       // Prepend stats badge
-                       const statsHtml = `<span id="routeStatsBadge" class="status-badge status-in-progress" style="margin-right: 10px;">
-                                            <i class="fas fa-car"></i> ${totalDistKm} km (~${durationStr})
-                                          </span>`;
-                       mapHeader.insertAdjacentHTML('afterbegin', statsHtml);
-                    }
+                  const route = routeData.routes[0];
+                  if (route.polyline && route.polyline.encodedPolyline) {
+                    const decodedPath = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
+                    routePolyline = new google.maps.Polyline({
+                      path: decodedPath,
+                      geodesic: true,
+                      strokeColor: '#6366f1',
+                      strokeOpacity: 0.85,
+                      strokeWeight: 5,
+                      map: mapInstance
+                    });
+                  }
+
+                  // Route stats badge
+                  const totalDistKm = (route.distanceMeters / 1000).toFixed(1);
+                  const totalMins = Math.round(parseInt(route.duration.replace('s', '')) / 60);
+                  const hours = Math.floor(totalMins / 60);
+                  const mins = totalMins % 60;
+                  const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                  const mapHeader = document.getElementById('mapHeaderActions');
+                  if (mapHeader && !document.getElementById('routeStatsBadge')) {
+                    const statsHtml = `<span id="routeStatsBadge" class="status-badge status-in-progress" style="margin-right: 10px;">
+                                        <i class="fas fa-car"></i> ${totalDistKm} km (~${durationStr})
+                                      </span>`;
+                    mapHeader.insertAdjacentHTML('afterbegin', statsHtml);
+                  }
+                  routeRendered = true;
                 } else {
-                    throw new Error('No routes returned from API');
+                  throw new Error('No routes returned from Routes API');
                 }
 
-             } catch (routeErr) {
-                 console.warn('Google Routes API failed, falling back to straight polyline:', routeErr);
-                 // Fallback: draw straight lines (like Leaflet did)
-                 const pathCoords = [
-                     { lat: userLat, lng: userLng },
-                     ...taskCoordsList.map(t => ({ lat: t.lat, lng: t.lng }))
-                 ];
-                 
-                 routePolyline = new google.maps.Polyline({
-                    path: pathCoords,
+              } catch (routesApiErr) {
+                console.warn('⚠️ Routes API failed, trying DirectionsService fallback:', routesApiErr.message);
+
+                // ═══════════════════════════════════════════════════════════
+                // TIER 2: DirectionsService Fallback — max 25 waypoints (23 intermediates)
+                // ═══════════════════════════════════════════════════════════
+                try {
+                  const directionsService = new google.maps.DirectionsService();
+                  const MAX_DIR_WAYPOINTS = 23;
+                  let waypointsForRoute = middleTasks.map(task => ({
+                    location: new google.maps.LatLng(task.lat, task.lng),
+                    stopover: true
+                  }));
+
+                  if (waypointsForRoute.length > MAX_DIR_WAYPOINTS) {
+                    const sampled = [];
+                    const step = waypointsForRoute.length / MAX_DIR_WAYPOINTS;
+                    for (let i = 0; i < MAX_DIR_WAYPOINTS; i++) {
+                      sampled.push(waypointsForRoute[Math.floor(i * step)]);
+                    }
+                    waypointsForRoute = sampled;
+                    console.log(`📍 Sampled ${MAX_DIR_WAYPOINTS} of ${middleTasks.length} waypoints for DirectionsService`);
+                  }
+
+                  const directionsResult = await new Promise((resolve, reject) => {
+                    directionsService.route({
+                      origin: new google.maps.LatLng(userLat, userLng),
+                      destination: new google.maps.LatLng(lastTask.lat, lastTask.lng),
+                      waypoints: waypointsForRoute,
+                      travelMode: google.maps.TravelMode.DRIVING,
+                      optimizeWaypoints: false
+                    }, (result, status) => {
+                      if (status === 'OK') resolve(result);
+                      else reject(new Error(`DirectionsService: ${status}`));
+                    });
+                  });
+
+                  const routePath = directionsResult.routes[0].overview_path;
+                  routePolyline = new google.maps.Polyline({
+                    path: routePath,
                     geodesic: true,
                     strokeColor: '#6366f1',
-                    strokeOpacity: 0.6,
-                    strokeWeight: 4,
-                    // Cannot easily dash Google Polyline like Leaflet, but we'll use a symbol pattern
-                    icons: [{
-                        icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
-                        offset: '0',
-                        repeat: '20px'
-                    }],
+                    strokeOpacity: 0.85,
+                    strokeWeight: 5,
                     map: mapInstance
-                 });
-                 // Make base line transparent so only dashes show
-                 routePolyline.setOptions({ strokeOpacity: 0 });
-                 
-                 showToast('Could not load driving route. Showing direct path.', 'warning');
-             }
+                  });
+
+                  // Stats badge from DirectionsService
+                  const legs = directionsResult.routes[0].legs;
+                  const totalDistM = legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+                  const totalDurS = legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+                  const totalDistKm = (totalDistM / 1000).toFixed(1);
+                  const totalMins = Math.round(totalDurS / 60);
+                  const hours = Math.floor(totalMins / 60);
+                  const mins = totalMins % 60;
+                  const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                  const mapHeader = document.getElementById('mapHeaderActions');
+                  if (mapHeader && !document.getElementById('routeStatsBadge')) {
+                    const statsHtml = `<span id="routeStatsBadge" class="status-badge status-in-progress" style="margin-right: 10px;">
+                                        <i class="fas fa-car"></i> ${totalDistKm} km (~${durationStr})
+                                      </span>`;
+                    mapHeader.insertAdjacentHTML('afterbegin', statsHtml);
+                  }
+                  routeRendered = true;
+
+                } catch (dirErr) {
+                  console.warn('⚠️ DirectionsService also failed:', dirErr.message);
+                }
+              }
+
+              // ═══════════════════════════════════════════════════════════
+              // TIER 3: Straight Polylines (Last Resort)
+              // ═══════════════════════════════════════════════════════════
+              if (!routeRendered) {
+                const pathCoords = [
+                  { lat: userLat, lng: userLng },
+                  ...taskCoordsList.map(t => ({ lat: t.lat, lng: t.lng }))
+                ];
+                routePolyline = new google.maps.Polyline({
+                  path: pathCoords,
+                  geodesic: true,
+                  strokeColor: '#6366f1',
+                  strokeOpacity: 0.6,
+                  strokeWeight: 4,
+                  icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+                    offset: '0',
+                    repeat: '20px'
+                  }],
+                  map: mapInstance
+                });
+                routePolyline.setOptions({ strokeOpacity: 0 });
+                showToast('Could not load driving route. Showing direct path.', 'warning');
+              }
 
              // Render Navigation Buttons
              const mapHeader = document.getElementById('mapHeaderActions');
