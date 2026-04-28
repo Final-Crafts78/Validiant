@@ -29,8 +29,10 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
     <div id="routingMap" style="width: 100%; height: 65vh; border-radius: 12px; border: 2px solid #374151; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 1;"></div>
   `;
   } else {
-    document.getElementById('mapLoading').style.display = 'flex';
-    document.getElementById('routingMap').style.opacity = '0.5';
+    const loadingEl = document.getElementById('mapLoading');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    const mapEl = document.getElementById('routingMap');
+    if (mapEl) mapEl.style.opacity = '0.5';
   }
 
   // 1. Dynamically load Leaflet.js
@@ -59,7 +61,8 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       const mapEl = document.getElementById('routingMap');
       if (!mapEl) return;
       
-      document.getElementById('mapLoading').style.display = 'none';
+      const loadingDiv = document.getElementById('mapLoading');
+      if (loadingDiv) loadingDiv.style.display = 'none';
       mapEl.style.display = 'block';
       mapEl.style.opacity = '1';
 
@@ -147,7 +150,10 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
       }
     },
     (err) => {
-      document.getElementById('mapLoading').innerHTML = `<h3 style="color:#ef4444; text-align:center;">Location Access Denied</h3>`;
+      const loadingEl = document.getElementById('mapLoading');
+      if (loadingEl) {
+        loadingEl.innerHTML = `<h3 style="color:#ef4444; text-align:center;">Location Access Denied</h3>`;
+      }
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
   );

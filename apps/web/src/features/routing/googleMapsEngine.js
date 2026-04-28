@@ -1,8 +1,9 @@
 import { showToast, showLoading } from '../../utils/ui';
 
 function hideLoading() {
-  const spinner = document.querySelector('.loading-spinner');
-  if (spinner) spinner.remove();
+  // Only remove generic loading spinners that are NOT our map-specific mapLoading div
+  const spinners = document.querySelectorAll('.loading-spinner:not(#mapLoading)');
+  spinners.forEach(s => s.remove());
 }
 
 let mapInstance = null;
@@ -17,7 +18,7 @@ function loadGoogleMapsApi(apiKey) {
 
   mapsApiPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&loading=async&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&v=weekly`;
     script.async = true;
     script.defer = true;
     script.onload = resolve;
@@ -412,6 +413,23 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 // Fallback logic if Google Maps fails to load or error occurs early on
 async function fallbackToLeaflet(allEmployeeTasks, openTaskDetailsModal) {
     try {
+        // Reset the DOM to a clean state before handing off to Leaflet.
+        // The Google Maps engine may have partially modified the DOM (hidden mapLoading,
+        // altered routingMap, etc.), so Leaflet's showMapRouting needs a fresh start.
+        const content = document.getElementById('mainContainer');
+        if (content) {
+            // Remove the existing routingMap so Leaflet's showMapRouting
+            // takes the 'create from scratch' branch instead of the
+            // 'reuse existing elements' branch (which crashes on null refs).
+            const existingMap = document.getElementById('routingMap');
+            if (existingMap) existingMap.remove();
+            const existingLoading = document.getElementById('mapLoading');
+            if (existingLoading) existingLoading.remove();
+        }
+        
+        // Reset the Google Maps instance since we're abandoning it
+        mapInstance = null;
+        
         const { showMapRouting: leafletShowMapRouting } = await import('./leafletEngine');
         return leafletShowMapRouting(allEmployeeTasks, openTaskDetailsModal);
     } catch (err) {
