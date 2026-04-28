@@ -92,7 +92,7 @@ export async function sortByNearest(event) {
               import('../routing/googleMapsEngine'),
               import('../employee/taskPanel')
             ]).then(([mod, panelMod]) => {
-              mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel);
+              mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel, true);
             }).catch(err => console.error('Failed to refresh map after sort:', err));
           }
           

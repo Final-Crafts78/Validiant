@@ -299,10 +299,10 @@ class TaskService {
   }
 
   /**
-   * Optimize tasks using Google Route Optimization API with ORS fallback
+   * Optimize tasks using ORS Optimization API with Google Route Optimization fallback
    *
-   * Tier 1: Google Route Optimization API (optimizeTours) — fleet-grade TSP solver, 5,000 free units/month
-   * Tier 2: ORS Optimization API — VROOM solver, 500 free requests/day
+   * Tier 1: ORS Optimization API — VROOM solver, 500 free requests/day
+   * Tier 2: Google Route Optimization API (optimizeTours) — fleet-grade TSP solver, 5,000 free units/month
    */
   async optimizeTasks(employeeLocation, tasks) {
     const routableTasks = tasks.filter(t => t._lat != null && t._lng != null);
@@ -311,82 +311,18 @@ class TaskService {
     if (routableTasks.length === 0) return [...unroutableTasks];
 
     // ═══════════════════════════════════════════════════════════
-    // TIER 1: Google Route Optimization API (optimizeTours)
+    // TIER 1: ORS Optimization API (VROOM solver)
     // ═══════════════════════════════════════════════════════════
     try {
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-      
-      if (!apiKey || !projectId) throw new Error("Google API key or Cloud project ID not configured");
+      const orsKey = process.env.ORS_API_KEY;
+      if (!orsKey) throw new Error("ORS API key not configured");
 
-      // Build shipments — each task is a pickup-only shipment
-      const shipments = routableTasks.map(task => ({
-        pickups: [{
-          arrivalLocation: {
-            latitude: task._lat,
-            longitude: task._lng
-          }
-        }]
-      }));
-
-      const requestBody = {
-        model: {
-          shipments,
-          vehicles: [{
-            startLocation: {
-              latitude: employeeLocation.lat,
-              longitude: employeeLocation.lng
-            },
-            endLocation: {
-              latitude: employeeLocation.lat,
-              longitude: employeeLocation.lng
-            }
-          }]
-        }
-      };
-
-      const url = `https://cloudrouteoptimization.googleapis.com/v1/projects/${projectId}/locations/us-central1:optimizeTours?key=${apiKey}`;
-      
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        // Log quota/error details for diagnostics
-        const errMsg = data.error?.message || `HTTP ${res.status}`;
-        console.error(`📍 [OPTIMIZE] Google Route Optimization API error:`, errMsg);
-        throw new Error(errMsg);
-      }
-
-      if (data.routes && data.routes.length > 0 && data.routes[0].visits) {
-        const visits = data.routes[0].visits;
-        const optimizedTasks = visits.map(visit => routableTasks[visit.shipmentIndex]);
-        
-        // Safety: include any tasks not visited (edge case)
-        const visitedIndices = new Set(visits.map(v => v.shipmentIndex));
-        const missed = routableTasks.filter((_, i) => !visitedIndices.has(i));
-        
-        console.log(`📍 [OPTIMIZE] Google Route Optimization API succeeded — ${visits.length} stops optimized`);
-        return [...optimizedTasks, ...missed, ...unroutableTasks];
-      } else {
-        throw new Error("No routes returned from Route Optimization API");
-      }
-
-    } catch (googleError) {
-      console.warn("⚠️ [OPTIMIZE] Google Route Optimization failed, falling back to ORS:", googleError.message);
-      
-      // ═══════════════════════════════════════════════════════════
-      // TIER 2: ORS Optimization API (VROOM solver)
-      // ═══════════════════════════════════════════════════════════
       const orsPayload = {
         vehicles: [{
           id: 1,
           profile: "driving-car",
-          start: [employeeLocation.lng, employeeLocation.lat]
+          start: [employeeLocation.lng, employeeLocation.lat],
+          end: [employeeLocation.lng, employeeLocation.lat]
         }],
         jobs: routableTasks.map((task, index) => ({
           id: index,
@@ -397,19 +333,72 @@ class TaskService {
       const response = await fetch("https://api.openrouteservice.org/optimization", {
         method: "POST",
         headers: {
-          "Authorization": process.env.ORS_API_KEY,
+          "Authorization": orsKey,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(orsPayload)
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "ORS API Failed");
+      if (!response.ok) throw new Error(data.error?.message || data.error || "ORS API Failed");
 
       const steps = data.routes[0].steps.filter(s => s.type === "job");
       const optimizedTasks = steps.map(step => routableTasks[step.job]);
-      console.log(`📍 [OPTIMIZE] ORS Optimization fallback succeeded — ${optimizedTasks.length} stops optimized`);
+      console.log(`📍 [OPTIMIZE] ORS Optimization succeeded — ${optimizedTasks.length} stops, ${Math.round(data.routes[0].distance/1000)}km`);
       return [...optimizedTasks, ...unroutableTasks];
+
+    } catch (orsError) {
+      console.warn("⚠️ [OPTIMIZE] ORS Optimization failed, falling back to Google:", orsError.message);
+      
+      // ═══════════════════════════════════════════════════════════
+      // TIER 2: Google Route Optimization API (optimizeTours)
+      // ═══════════════════════════════════════════════════════════
+      try {
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+        
+        if (!apiKey || !projectId) throw new Error("Google API key or Cloud project ID not configured");
+
+        const shipments = routableTasks.map(task => ({
+          pickups: [{
+            arrivalLocation: { latitude: task._lat, longitude: task._lng }
+          }]
+        }));
+
+        const requestBody = {
+          model: {
+            shipments,
+            vehicles: [{
+              startLocation: { latitude: employeeLocation.lat, longitude: employeeLocation.lng },
+              endLocation: { latitude: employeeLocation.lat, longitude: employeeLocation.lng }
+            }]
+          }
+        };
+
+        const url = `https://cloudrouteoptimization.googleapis.com/v1/projects/${projectId}/locations/us-central1:optimizeTours?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody)
+        });
+
+        const gData = await res.json();
+        if (!res.ok) throw new Error(gData.error?.message || `HTTP ${res.status}`);
+
+        if (gData.routes && gData.routes.length > 0 && gData.routes[0].visits) {
+          const visits = gData.routes[0].visits;
+          const optimizedTasks = visits.map(visit => routableTasks[visit.shipmentIndex]);
+          const visitedIndices = new Set(visits.map(v => v.shipmentIndex));
+          const missed = routableTasks.filter((_, i) => !visitedIndices.has(i));
+          console.log(`📍 [OPTIMIZE] Google Route Optimization fallback succeeded — ${visits.length} stops`);
+          return [...optimizedTasks, ...missed, ...unroutableTasks];
+        }
+        throw new Error("No routes returned");
+      } catch (googleError) {
+        console.error("⚠️ [OPTIMIZE] Google Route Optimization also failed:", googleError.message);
+        // Return tasks as-is (frontend nearest-neighbor will handle on re-render)
+        return [...routableTasks, ...unroutableTasks];
+      }
     }
   }
 

@@ -36,7 +36,7 @@ function loadGoogleMapsApi(apiKey) {
   return mapsApiPromise;
 }
 
-export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
+export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isPreOptimized = false) {
   const content = document.getElementById('mainContainer');
   if (!content) return;
 
@@ -182,38 +182,45 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
 
           // Route Computation and Rendering
           if (taskCoordsList.length > 0) {
-             // ─── Auto-sort by nearest-neighbor before rendering ───
-             // Ensures route order is geographically efficient from the user's location.
-             const haversineDistance = (lat1, lng1, lat2, lng2) => {
-               const R = 6371; // km
-               const dLat = (lat2 - lat1) * Math.PI / 180;
-               const dLng = (lng2 - lng1) * Math.PI / 180;
-               const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                         Math.sin(dLng/2) * Math.sin(dLng/2);
-               return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-             };
+             // ─── Auto-sort: only when NOT pre-optimized ───
+             // On initial load: nearest-neighbor gives a decent route quickly.
+             // After user clicks "Optimize Route": tasks arrive in ORS/Google-optimized
+             // order — we MUST preserve that order, not override it.
+             if (!isPreOptimized) {
+               const haversineDistance = (lat1, lng1, lat2, lng2) => {
+                 const R = 6371; // km
+                 const dLat = (lat2 - lat1) * Math.PI / 180;
+                 const dLng = (lng2 - lng1) * Math.PI / 180;
+                 const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                           Math.sin(dLng/2) * Math.sin(dLng/2);
+                 return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+               };
 
-             const sorted = [];
-             const pool = [...taskCoordsList];
-             let curLat = userLat, curLng = userLng;
+               const sorted = [];
+               const pool = [...taskCoordsList];
+               let curLat = userLat, curLng = userLng;
 
-             while (pool.length > 0) {
-               let nearestIdx = 0;
-               let nearestDist = Infinity;
-               for (let i = 0; i < pool.length; i++) {
-                 const d = haversineDistance(curLat, curLng, pool[i].lat, pool[i].lng);
-                 if (d < nearestDist) {
-                   nearestDist = d;
-                   nearestIdx = i;
+               while (pool.length > 0) {
+                 let nearestIdx = 0;
+                 let nearestDist = Infinity;
+                 for (let i = 0; i < pool.length; i++) {
+                   const d = haversineDistance(curLat, curLng, pool[i].lat, pool[i].lng);
+                   if (d < nearestDist) {
+                     nearestDist = d;
+                     nearestIdx = i;
+                   }
                  }
+                 const nearest = pool.splice(nearestIdx, 1)[0];
+                 curLat = nearest.lat;
+                 curLng = nearest.lng;
+                 sorted.push(nearest);
                }
-               const nearest = pool.splice(nearestIdx, 1)[0];
-               curLat = nearest.lat;
-               curLng = nearest.lng;
-               sorted.push(nearest);
+               taskCoordsList = sorted;
+               console.log('📍 Route order: nearest-neighbor (initial)');
+             } else {
+               console.log('📍 Route order: pre-optimized (ORS/Google)');
              }
-             taskCoordsList = sorted;
              // ─── End auto-sort ───
 
              // ─── Create numbered markers in ROUTE ORDER ───
