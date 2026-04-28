@@ -102,9 +102,11 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
           const userLat = pos.coords.latitude;
           const userLng = pos.coords.longitude;
 
+          let currentMapContainer = document.getElementById('routingMap');
+
           // Initialize Google Map (Light Theme)
           if (!mapInstance) {
-            mapInstance = new google.maps.Map(mapContainer, {
+            mapInstance = new google.maps.Map(currentMapContainer, {
               center: { lat: userLat, lng: userLng },
               zoom: 13,
               mapTypeControl: false,
@@ -113,7 +115,17 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
               clickableIcons: false
             });
           } else {
+            // Restore the orphaned map instance to the new DOM container
+            const orphanedDiv = mapInstance.getDiv();
+            if (currentMapContainer && currentMapContainer !== orphanedDiv) {
+              currentMapContainer.replaceWith(orphanedDiv);
+            }
+            orphanedDiv.style.display = 'block';
+            orphanedDiv.style.opacity = '1';
+
             mapInstance.setCenter({ lat: userLat, lng: userLng });
+            // Important: trigger resize when a map is re-attached to the DOM
+            google.maps.event.trigger(mapInstance, 'resize');
           }
 
           // ─── CRITICAL: Wipe previous render artifacts ───
@@ -669,9 +681,10 @@ export function cleanupMapInstance() {
       markers = [];
   }
   
-  // In an SPA where the DOM container is frequently destroyed and re-created,
-  // we must nullify the mapInstance so it properly binds to the new container.
-  mapInstance = null;
+  // Note: We don't fully destroy the google.maps.Map instance,
+  // we just clear it. Re-using it is better for performance.
+  // The map's DOM element will be re-attached on the next render.
+  // mapInstance = null;
   
   // Remove generated buttons/badges
   const orsBtn = document.getElementById('orsNavBtn');
