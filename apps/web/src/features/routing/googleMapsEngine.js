@@ -219,15 +219,28 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal) {
              const orsUrl = `https://maps.openrouteservice.org/directions?a=${orsCoordsString}&b=1a&c=0&k1=en-US&k2=km`;
 
              // ═══════════════════════════════════════════════════════════
-              // TIER 1: Google Routes API (Primary) — supports up to 98 lat/lng intermediates
+              // TIER 1: Google Routes API (Primary) — max 25 intermediates
               // ═══════════════════════════════════════════════════════════
               let routeRendered = false;
 
               try {
-                const intermediates = middleTasks.map(task => ({
+                const MAX_ROUTE_INTERMEDIATES = 25;
+                const allIntermediates = middleTasks.map(task => ({
                   location: { latLng: { latitude: task.lat, longitude: task.lng } }
                 }));
-                const limitedIntermediates = intermediates.slice(0, 98);
+
+                // Evenly sample if more than 25 intermediates
+                let limitedIntermediates;
+                if (allIntermediates.length > MAX_ROUTE_INTERMEDIATES) {
+                  limitedIntermediates = [];
+                  const step = allIntermediates.length / MAX_ROUTE_INTERMEDIATES;
+                  for (let i = 0; i < MAX_ROUTE_INTERMEDIATES; i++) {
+                    limitedIntermediates.push(allIntermediates[Math.floor(i * step)]);
+                  }
+                  console.log(`📍 Routes API: Sampled ${MAX_ROUTE_INTERMEDIATES} of ${allIntermediates.length} intermediates`);
+                } else {
+                  limitedIntermediates = allIntermediates;
+                }
 
                 const routeRequestBody = {
                   origin: { location: { latLng: { latitude: userLat, longitude: userLng } } },
