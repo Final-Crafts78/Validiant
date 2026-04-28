@@ -238,7 +238,7 @@ class TaskController {
           created_by: adminId || null,
           geocode_confidence: geocodeConfidence,
           geocode_match_level: geocodeMatchLevel,
-          location_warning: locationWarning
+          location_warning: !!locationWarning
         });
         successCount++;
       }
@@ -391,7 +391,7 @@ class TaskController {
           assigned_date: assignedDate, created_by: createdBy || adminId,
           geocode_confidence: geocodeConfidence,
           geocode_match_level: geocodeMatchLevel,
-          location_warning: locationWarning
+          location_warning: !!locationWarning
         });
       }
 

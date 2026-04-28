@@ -138,7 +138,7 @@ class TaskService {
       created_by: createdBy,
       geocode_confidence: geocodeConfidence,
       geocode_match_level: geocodeMatchLevel,
-      location_warning: locationWarning
+      location_warning: !!locationWarning
     }]).select();
 
     if (error) throw error;
