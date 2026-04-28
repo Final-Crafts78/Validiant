@@ -200,21 +200,63 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
 
           // Route Computation and Rendering
           if (taskCoordsList.length > 0) {
-             // ─── Auto-sort: only when NOT pre-optimized ───
-             // On initial load: nearest-neighbor gives a decent route quickly.
-             // After user clicks "Optimize Route": tasks arrive in ORS/Google-optimized
-             // order — we MUST preserve that order, not override it.
-             if (!isPreOptimized) {
-               const haversineDistance = (lat1, lng1, lat2, lng2) => {
-                 const R = 6371; // km
-                 const dLat = (lat2 - lat1) * Math.PI / 180;
-                 const dLng = (lng2 - lng1) * Math.PI / 180;
-                 const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                           Math.sin(dLng/2) * Math.sin(dLng/2);
-                 return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-               };
+             // ─── Haversine utility (shared by all sort methods) ───
+             const haversineDistance = (lat1, lng1, lat2, lng2) => {
+               const R = 6371; // km
+               const dLat = (lat2 - lat1) * Math.PI / 180;
+               const dLng = (lng2 - lng1) * Math.PI / 180;
+               const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                         Math.sin(dLng/2) * Math.sin(dLng/2);
+               return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+             };
 
+             // ─── Calculate total route distance for any task order ───
+             const totalRouteDistance = (route, startLat, startLng) => {
+               let dist = haversineDistance(startLat, startLng, route[0].lat, route[0].lng);
+               for (let i = 0; i < route.length - 1; i++) {
+                 dist += haversineDistance(route[i].lat, route[i].lng, route[i+1].lat, route[i+1].lng);
+               }
+               return dist;
+             };
+
+             // ─── 2-opt local search: eliminates crossing/backtracking routes ───
+             // Iteratively reverses sub-segments when a swap reduces total distance.
+             // This catches patterns like 16→17(north)→18(east)→19(back to center)
+             // and fixes them to 16→19(center)→...→17→18(outliers at end).
+             const twoOptImprove = (route, startLat, startLng) => {
+               const n = route.length;
+               if (n < 4) return route; // Need at least 4 points for meaningful swaps
+
+               let improved = [...route];
+               let bestDist = totalRouteDistance(improved, startLat, startLng);
+               let madeImprovement = true;
+
+               while (madeImprovement) {
+                 madeImprovement = false;
+                 for (let i = 0; i < n - 1; i++) {
+                   for (let j = i + 2; j < n; j++) {
+                     // Try reversing the segment between i+1 and j
+                     const newRoute = [
+                       ...improved.slice(0, i + 1),
+                       ...improved.slice(i + 1, j + 1).reverse(),
+                       ...improved.slice(j + 1)
+                     ];
+                     const newDist = totalRouteDistance(newRoute, startLat, startLng);
+                     if (newDist < bestDist - 0.01) { // 10m threshold to avoid floating-point noise
+                       improved = newRoute;
+                       bestDist = newDist;
+                       madeImprovement = true;
+                     }
+                   }
+                 }
+               }
+               return improved;
+             };
+
+             // ─── Auto-sort: only when NOT pre-optimized ───
+             if (!isPreOptimized) {
+               // Step 1: Greedy nearest-neighbor (fast initial order)
                const sorted = [];
                const pool = [...taskCoordsList];
                let curLat = userLat, curLng = userLng;
@@ -234,10 +276,44 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
                  curLng = nearest.lng;
                  sorted.push(nearest);
                }
-               taskCoordsList = sorted;
-               console.log('📍 Route order: nearest-neighbor (initial)');
+
+               const nnDist = totalRouteDistance(sorted, userLat, userLng);
+
+               // Step 2: 2-opt improvement (eliminates backtracking/crossings)
+               taskCoordsList = twoOptImprove(sorted, userLat, userLng);
+               const improvedDist = totalRouteDistance(taskCoordsList, userLat, userLng);
+
+               console.log(`📍 Route order: nearest-neighbor + 2-opt (${nnDist.toFixed(1)}km → ${improvedDist.toFixed(1)}km, saved ${(nnDist - improvedDist).toFixed(1)}km)`);
              } else {
-               console.log('📍 Route order: pre-optimized (ORS/Google)');
+               // ─── VROOM quality guard ───
+               // If VROOM/ORS produced a route, verify it's actually better than
+               // nearest-neighbor + 2-opt. If not, override with the better route.
+               const vroomDist = totalRouteDistance(taskCoordsList, userLat, userLng);
+
+               // Build nearest-neighbor for comparison
+               const nnPool = [...taskCoordsList];
+               const nnSorted = [];
+               let nnLat = userLat, nnLng = userLng;
+               while (nnPool.length > 0) {
+                 let idx = 0, best = Infinity;
+                 for (let i = 0; i < nnPool.length; i++) {
+                   const d = haversineDistance(nnLat, nnLng, nnPool[i].lat, nnPool[i].lng);
+                   if (d < best) { best = d; idx = i; }
+                 }
+                 const pick = nnPool.splice(idx, 1)[0];
+                 nnLat = pick.lat; nnLng = pick.lng;
+                 nnSorted.push(pick);
+               }
+               const nnImproved = twoOptImprove(nnSorted, userLat, userLng);
+               const nnDist = totalRouteDistance(nnImproved, userLat, userLng);
+
+               if (nnDist < vroomDist * 0.95) {
+                 // NN+2opt is significantly better (>5% shorter) — use it instead
+                 taskCoordsList = nnImproved;
+                 console.log(`📍 Route order: VROOM overridden by NN+2opt (VROOM: ${vroomDist.toFixed(1)}km vs NN+2opt: ${nnDist.toFixed(1)}km — saved ${(vroomDist - nnDist).toFixed(1)}km)`);
+               } else {
+                 console.log(`📍 Route order: pre-optimized (VROOM: ${vroomDist.toFixed(1)}km, NN+2opt: ${nnDist.toFixed(1)}km — keeping VROOM)`);
+               }
              }
              // ─── End auto-sort ───
 
