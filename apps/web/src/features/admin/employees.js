@@ -135,6 +135,7 @@ export async function loadEmployeesList() {
 
 export function showAddEmployee() {
   const content = `
+    <form id="addEmpForm">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
         <div class="form-group">
           <label><i class="fas fa-user"></i> Full Name *</label>
@@ -159,12 +160,14 @@ export function showAddEmployee() {
       </div>
       <div class="modal-actions" style="margin-top:10px;">
         <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Create</button>
-        <button type="button" class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
+        <button type="button" class="btn btn-secondary" id="cancelAddEmpBtn"><i class="fas fa-times"></i> Cancel</button>
       </div>
     </form>
   `;
   
   createModal('Add New Employee', content, { icon: 'fa-user-plus', size: 'medium' });
+  
+  document.getElementById('cancelAddEmpBtn')?.addEventListener('click', closeAllModals);
   
   document.getElementById('addEmpForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -248,7 +251,7 @@ export function showEditEmployeeModal(empId) {
       </div>
       <div class="modal-actions" style="margin-top:10px;">
         <button type="button" class="btn btn-primary" onclick="window._saveEditEmployee(${emp.id})"><i class="fas fa-save"></i> Save Changes</button>
-        <button type="button" class="btn btn-secondary" onclick="document.querySelector('.modal').remove()"><i class="fas fa-times"></i> Cancel</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalCloseBtn').click()"><i class="fas fa-times"></i> Cancel</button>
       </div>
     </form>
   `;
