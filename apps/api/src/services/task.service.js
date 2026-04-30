@@ -10,12 +10,12 @@ class TaskService {
    * Fetch all tasks with filters and search
    */
   async getTasks(filters) {
-    const { status, employeeId, pincode, search, page = 1, limit = 0, fromDate, toDate } = filters;
+    const { status, employeeId, pincode, search, page = 1, limit = 0, fromDate, toDate, select = "*" } = filters;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     
     let query = supabase.from("tasks")
-      .select("*, employees:users!tasks_assigned_to_fkey(name)", { count: "exact" })
+      .select(select + ", employees:users!tasks_assigned_to_fkey(name)", { count: "exact" })
       .order("created_at", { ascending: false });
     
     if (status && status !== "all") {

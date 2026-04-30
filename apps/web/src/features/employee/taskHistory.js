@@ -1,7 +1,7 @@
 /**
  * Employee: Task History Feature
  */
-import { showToast, escapeHtml } from '../../utils/ui';
+import { showToast, escapeHtml, debounce } from '../../utils/ui';
 import { state } from '../../store/globalState';
 
 export function showTaskHistory() {
@@ -28,9 +28,9 @@ export function showTaskHistory() {
 
   content.innerHTML = html;
   
-  document.getElementById('historySearch')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loadHistoryTasks();
-  });
+  const debouncedLoad = debounce(loadHistoryTasks, 400);
+  document.getElementById('historySearch')?.addEventListener('input', debouncedLoad);
+  document.getElementById('historyStatusFilter')?.addEventListener('change', loadHistoryTasks);
 
   loadHistoryTasks();
 }

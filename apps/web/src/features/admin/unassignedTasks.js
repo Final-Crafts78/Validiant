@@ -1,7 +1,7 @@
-import { showToast, escapeHtml } from '../../utils/ui';
+import { showToast, escapeHtml, debounce } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
-import { state, fetchEmployeesIfStale } from '../../store/globalState';
+import { state, fetchEmployeesIfStale, MINIMAL_TASK_FIELDS } from '../../store/globalState';
 
 export function showUnassignedTasks() {
   const content = document.getElementById('mainContainer');
@@ -23,10 +23,10 @@ export function showUnassignedTasks() {
       <button class="btn btn-info btn-sm" data-action="admin:searchUnassigned"><i class="fas fa-filter"></i> Apply Filters</button>
     </div>
 
-    <div id="bulkActionsContainer" class="bulk-actions-bar" style="display:none;">
+    <div id="unassignedBulkActions" class="bulk-actions-bar" style="display:none;">
       <div class="bulk-info">
         <i class="fas fa-check-double"></i>
-        <span id="selectedCountText">0 task(s) selected</span>
+        <span id="unassignedSelectedCount">0 task(s) selected</span>
       </div>
       <div class="bulk-buttons">
         <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
@@ -40,9 +40,7 @@ export function showUnassignedTasks() {
     </div>
   `;
   
-  document.getElementById('unassignedSearch')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loadUnassignedTasks();
-  });
+  document.getElementById('unassignedSearch')?.addEventListener('input', debounce(loadUnassignedTasks, 400));
   
   loadUnassignedTasks();
 }
@@ -50,7 +48,7 @@ export function showUnassignedTasks() {
 export async function loadUnassignedTasks() {
   const term = document.getElementById('unassignedSearch') ? document.getElementById('unassignedSearch').value : '';
   const timestamp = Date.now();
-  let url = `/api/tasks/unassigned?_t=${timestamp}`;
+  let url = `/api/tasks/unassigned?_t=${timestamp}&select=${MINIMAL_TASK_FIELDS}`;
   if (term) url += `&search=${encodeURIComponent(term)}`;
   
   try {
@@ -152,12 +150,66 @@ function displayUnassignedList(tasks, employees) {
             <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; text-align:right;">Quick Actions</th>
           </tr>
         </thead>
-        <tbody>
-          ${rows}
-        </tbody>
+        <tbody id="unassignedTasksBody"></tbody>
       </table>
     </div>
   `;
+
+  const fragment = document.createDocumentFragment();
+  const tbody = document.getElementById('unassignedTasksBody');
+
+  tasks.forEach(t => {
+    const mapLink = t.map_url || t.mapUrl || t.mapurl;
+    const tr = document.createElement('tr');
+    tr.className = 'task-row';
+    tr.style.cssText = 'border-bottom:1px solid #334155; transition: background 0.2s;';
+    
+    tr.innerHTML = `
+      <td style="padding:12px 15px; width:40px;">
+        <input type="checkbox" class="task-checkbox unassigned-cb" value="${t.id}">
+      </td>
+      <td class="case-col" style="padding:12px 15px;">
+        <strong class="case-id" style="color:#e5e7eb; font-weight:600;">${escapeHtml(t.title)}</strong>
+      </td>
+      <td class="client-col" style="padding:12px 15px;">
+        <div style="display:flex; align-items:center; gap:8px; color:#cbd5e1;">
+          <i class="fas fa-user-tie" style="color:#94a3b8; font-size:12px;"></i>
+          <span>${escapeHtml(t.clientName || '---')}</span>
+        </div>
+      </td>
+      <td class="pincode-col" style="padding:12px 15px;">
+        <span class="pincode-badge" style="background:rgba(99,102,241,0.15); color:#a5b4fc; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:500; border:1px solid rgba(99,102,241,0.3);">
+          <i class="fas fa-map-pin" style="margin-right:4px; font-size:10px;"></i>${escapeHtml(t.pincode)}
+        </span>
+      </td>
+      <td class="map-col" style="padding:12px 15px;">
+        <div class="map-actions" style="display:flex; align-items:center; gap:8px;">
+          ${mapLink 
+            ? `<a href="${escapeHtml(mapLink)}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px; background:rgba(30,41,59,0.5); border-color:#334155;">
+                 <i class="fas fa-external-link-alt" style="margin-right:4px;"></i> View
+               </a>` 
+            : `<span class="no-map" style="color:#94a3b8; font-size:11px; font-style:italic;">No map</span>`
+          }
+          <button class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-action="admin:editMapUrl" data-id="${t.id}">
+            <i class="fas fa-pen"></i>
+          </button>
+        </div>
+      </td>
+      <td class="assign-col" style="padding:12px 15px;">
+        <select id="emp-${t.id}" class="assign-select form-input" style="padding:6px; font-size:13px; width:100%; height:32px;">
+          ${empOptions}
+        </select>
+      </td>
+      <td class="actions-col" style="padding:12px 15px; text-align:right;">
+        <button class="btn btn-success btn-sm" data-action="admin:quickAssign" data-id="${t.id}" style="padding:5px 12px;">
+          <i class="fas fa-user-check"></i> Assign
+        </button>
+      </td>
+    `;
+    fragment.appendChild(tr);
+  });
+
+  if (tbody) tbody.appendChild(fragment);
 
   // Attach Selection Event Listeners
   const selectAll = document.getElementById('selectAllCb');
@@ -199,4 +251,8 @@ export async function quickAssignTask(taskId) {
   } catch (err) {
     showToast('Network error, assignment failed', 'error');
   }
+}
+
+export function refreshUnassignedUI() {
+  displayUnassignedList(state.allUnassignedTasks, state.allEmployees);
 }

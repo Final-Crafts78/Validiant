@@ -1,13 +1,14 @@
 /**
  * Admin: All Tasks Feature
  */
-import { state } from '../../store/globalState';
-import { showToast, escapeHtml } from '../../utils/ui';
+import { state, fetchEmployeesIfStale, MINIMAL_TASK_FIELDS } from '../../store/globalState';
+import { showToast, escapeHtml, debounce } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
 
 let currentTaskPage = 1;
 const TASKS_PER_PAGE = 25;
+let lastAllTasksResponse = null;
 
 export function showAllTasks() {
   const content = document.getElementById('mainContainer');
@@ -54,10 +55,10 @@ export function showAllTasks() {
       <button class="btn btn-secondary btn-sm" data-action="admin:resetTaskFilters"><i class="fas fa-undo"></i> Reset</button>
     </div>
 
-    <div id="bulkActionsContainer" class="bulk-actions-bar" style="display:none; margin-bottom:15px;">
+    <div id="allTasksBulkActions" class="bulk-actions-bar" style="display:none; margin-bottom:15px;">
       <div class="bulk-info">
         <i class="fas fa-check-double"></i>
-        <span id="selectedCountText">0 task(s) selected</span>
+        <span id="allTasksSelectedCount">0 task(s) selected</span>
       </div>
       <div class="bulk-buttons">
         <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
@@ -70,16 +71,6 @@ export function showAllTasks() {
       <span class="filter-hint" style="color:#94a3b8; font-size:13px;">No filters applied. Showing latest tasks.</span>
     </div>
 
-    <div id="bulkActionsContainer" class="bulk-actions-bar" style="display:none; margin-bottom:15px;">
-      <div class="bulk-info">
-        <i class="fas fa-check-double"></i>
-        <span id="selectedCountText">0 task(s) selected</span>
-      </div>
-      <div class="bulk-buttons">
-        <button class="btn btn-primary btn-sm" data-action="admin:bulkAssignTasks"><i class="fas fa-user-plus"></i> Bulk Assign</button>
-        <button class="btn btn-danger btn-sm" data-action="admin:bulkDeleteTasks"><i class="fas fa-trash"></i> Bulk Delete</button>
-      </div>
-    </div>
 
     <div id="allTasksList">
       <div class="loading-spinner show"><i class="fas fa-spinner"></i> Loading all tasks...</div>
@@ -88,24 +79,29 @@ export function showAllTasks() {
 
   content.innerHTML = html;
 
-  // Load Employees for Filter
-  const usersPromise = (state.allEmployees?.length > 0)
-    ? Promise.resolve(state.allEmployees)
-    : fetch('/api/users').then(r => r.json()).then(u => { state.allEmployees = u; return u; });
-
-  usersPromise.then(users => {
+  // Load Employees for Filter using stale-while-revalidate pattern
+  fetchEmployeesIfStale().then(users => {
     const select = document.getElementById('allTasksEmployeeFilter');
     if (select) {
+      // Clear existing except "All"
+      select.innerHTML = '<option value="all">All Employees / Unassigned</option>';
       users.forEach(u => {
         select.innerHTML += `<option value="${u.id}">${escapeHtml(u.name)}</option>`;
       });
     }
   });
 
-  // Enter key listener
-  document.getElementById('allTasksSearch')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loadAllTasks();
-  });
+  // Debounced Filter Listeners
+  const debouncedLoad = debounce(loadAllTasks, 400);
+  
+  document.getElementById('allTasksSearch')?.addEventListener('input', debouncedLoad);
+  document.getElementById('allTasksPincodeFilter')?.addEventListener('input', debouncedLoad);
+  
+  // Dropdowns can trigger instantly as they are low-frequency
+  document.getElementById('allTasksStatusFilter')?.addEventListener('change', loadAllTasks);
+  document.getElementById('allTasksEmployeeFilter')?.addEventListener('change', loadAllTasks);
+  document.getElementById('allTasksFromDate')?.addEventListener('change', loadAllTasks);
+  document.getElementById('allTasksToDate')?.addEventListener('change', loadAllTasks);
 
   loadAllTasks();
 }
@@ -118,7 +114,7 @@ export async function loadAllTasks() {
   const fromDate = document.getElementById('allTasksFromDate')?.value || '';
   const toDate = document.getElementById('allTasksToDate')?.value || '';
 
-  let url = `/api/tasks?role=admin&page=${currentTaskPage}&limit=${TASKS_PER_PAGE}`;
+  let url = `/api/tasks?role=admin&page=${currentTaskPage}&limit=${TASKS_PER_PAGE}&select=${MINIMAL_TASK_FIELDS}`;
   if (status !== 'all') url += `&status=${encodeURIComponent(status)}`;
   if (empId !== 'all') url += `&employeeId=${encodeURIComponent(empId)}`;
   if (pincode) url += `&pincode=${encodeURIComponent(pincode)}`;
@@ -138,6 +134,7 @@ export async function loadAllTasks() {
     state.allAdminTasks = responseData.data || [];
     state.currentFilteredTasks = state.allAdminTasks;
 
+    lastAllTasksResponse = responseData;
     updateFilterChips();
     displayAllTasksList(responseData);
   } catch (err) {
@@ -234,7 +231,7 @@ function displayAllTasksList(responseData) {
     <div class="table-header-info gpu-boost" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
       <span><i class="fas fa-list"></i> Showing <strong>${startIndex + 1}-${endIndex}</strong> of <strong>${totalCount}</strong> tasks</span>
       
-      <div id="bulkActionsContainer" style="display:none; animation: slideIn 0.2s ease;">
+      <div id="allTasksBulkActions" style="display:none; animation: slideIn 0.2s ease;">
         <div style="display:flex; align-items:center; gap:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); padding:6px 15px; border-radius:12px;">
           <span id="selectedCountText" style="font-size:13px; color:#a5b4fc; font-weight:600;">0 selected</span>
           <div style="width:1px; height:16px; background:rgba(255,255,255,0.1);"></div>
@@ -258,8 +255,17 @@ function displayAllTasksList(responseData) {
             <th style="padding: 12px 15px; color: #94A3B8; text-align:right;">Actions</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="allTasksBody"></tbody>
+      </table>
+    </div>
   `;
+
+  // Render Table Skeleton first
+  list.innerHTML = html;
+
+  // Use DocumentFragment for performant row injection
+  const fragment = document.createDocumentFragment();
+  const tbody = document.getElementById('allTasksBody');
 
   tasks.forEach(t => {
     // Legacy Date Format
@@ -292,80 +298,66 @@ function displayAllTasksList(responseData) {
         }
     }
 
-    const mapLink = t.map_url || t.mapUrl || '';
-    const mapDisplay = `
-      <div class="map-actions" style="display:flex; align-items:center; gap:8px;">
-        ${mapLink 
-          ? `<a href="${mapLink}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px; background:rgba(30,41,59,0.5); border-color:#334155;">
-               <i class="fas fa-external-link-alt" style="margin-right:4px;"></i> View
-             </a>` 
-          : `<span class="no-map" style="color:#94a3b8; font-size:11px; font-style:italic;">No map</span>`
+    const tr = document.createElement('tr');
+    tr.className = 'task-row';
+    tr.style.borderBottom = '1px solid #334155';
+    
+    tr.innerHTML = `
+      <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
+      <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
+      <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
+      <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
+          ${escapeHtml(t.clientName || '-')}
+        </div>
+      </td>
+      <td style="padding: 12px 15px;">
+        ${isUnassigned 
+          ? `<span style="color: #F59E0B; font-size: 13px;"><i class="fas fa-exclamation-circle"></i> Unassigned</span>`
+          : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user-circle"></i> ${escapeHtml(assigneeName)}</span>`
         }
-        <button class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-action="admin:editMapUrl" data-id="${t.id}">
-          <i class="fas fa-pen"></i>
+      </td>
+      <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
+      <td style="padding: 12px 15px;">
+        <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
+          ${t.status}
+        </span>
+      </td>
+      <td style="padding: 12px 15px;">${slaBadge}</td>
+      <td style="padding: 12px 15px; text-align:right;">
+        <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}" style="padding: 5px 12px; font-weight: 600;">
+          <i class="fas fa-eye"></i> View Details
         </button>
-      </div>
+      </td>
     `;
-
-    html += `
-      <tr class="task-row" style="border-bottom: 1px solid #334155;">
-        <td style="padding: 12px 15px;"><input type="checkbox" class="task-checkbox all-tasks-cb" value="${t.id}"></td>
-        <td style="padding: 12px 15px; color: #94A3B8; font-size: 13px;">${dateStr}</td>
-        <td style="padding: 12px 15px; font-weight: 500; color: #F8FAFC;">${escapeHtml(t.title)}</td>
-        <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
-            ${escapeHtml(t.clientName || '-')}
-          </div>
-        </td>
-        <td style="padding: 12px 15px;">
-          ${isUnassigned 
-            ? `<span style="color: #F59E0B; font-size: 13px;"><i class="fas fa-exclamation-circle"></i> Unassigned</span>`
-            : `<span style="color: #60A5FA; font-size: 13px;"><i class="fas fa-user-circle"></i> ${escapeHtml(assigneeName)}</span>`
-          }
-        </td>
-        <td style="padding: 12px 15px; font-size: 13px; color: #94A3B8;">${escapeHtml(t.pincode)}</td>
-        <td style="padding: 12px 15px;">
-          <span class="status-badge status-${t.status.replace(/ /g, '-').toLowerCase()}" style="font-size: 11px;">
-            ${t.status}
-          </span>
-        </td>
-        <td style="padding: 12px 15px;">${slaBadge}</td>
-        <td style="padding: 12px 15px; text-align:right;">
-          <button class="btn btn-primary btn-sm" data-action="admin:openTaskDetails" data-id="${t.id}" style="padding: 5px 12px; font-weight: 600;">
-            <i class="fas fa-eye"></i> View Details
-          </button>
-        </td>
-      </tr>
-    `;
+    fragment.appendChild(tr);
   });
 
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
+  if (tbody) tbody.appendChild(fragment);
 
   // Pagination UI
   if (totalPages > 1) {
-    html += `
-      <div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
-        <button class="btn btn-secondary btn-sm" data-action="admin:prevPage" ${currentTaskPage === 1 ? 'disabled' : ''}>
-          <i class="fas fa-chevron-left"></i> Previous
-        </button>
-        <span style="color: #94A3B8; font-size: 14px;">Page ${currentTaskPage} of ${totalPages}</span>
-        <button class="btn btn-secondary btn-sm" data-action="admin:nextPage" ${currentTaskPage === totalPages ? 'disabled' : ''}>
-          Next <i class="fas fa-chevron-right"></i>
-        </button>
-      </div>
+    const pagination = document.createElement('div');
+    pagination.className = 'pagination';
+    pagination.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;';
+    pagination.innerHTML = `
+      <button class="btn btn-secondary btn-sm" data-action="admin:prevPage" ${currentTaskPage === 1 ? 'disabled' : ''}>
+        <i class="fas fa-chevron-left"></i> Previous
+      </button>
+      <span style="color: #94A3B8; font-size: 14px;">Page ${currentTaskPage} of ${totalPages}</span>
+      <button class="btn btn-secondary btn-sm" data-action="admin:nextPage" ${currentTaskPage === totalPages ? 'disabled' : ''}>
+        Next <i class="fas fa-chevron-right"></i>
+      </button>
     `;
+    list.appendChild(pagination);
   }
 
-  list.innerHTML = html;
+
 
   // Attach Selection Event Listeners
   const selectAll = document.getElementById('selectAllCb');
-  const bulkContainer = document.getElementById('bulkActionsContainer');
+  const bulkContainer = document.getElementById('allTasksBulkActions');
   const countText = document.getElementById('selectedCountText');
 
   const updateBulkUI = () => {
@@ -402,5 +394,14 @@ export function nextTaskPage() {
   if (currentTaskPage < (window.totalTaskPages || 1)) {
     currentTaskPage++;
     loadAllTasks();
+  }
+}
+
+/**
+ * Re-render the UI using cached local state
+ */
+export function refreshAllTasksUI() {
+  if (lastAllTasksResponse) {
+    displayAllTasksList(lastAllTasksResponse);
   }
 }

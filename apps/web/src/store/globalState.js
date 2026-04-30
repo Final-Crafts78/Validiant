@@ -19,6 +19,9 @@ export const state = {
   _cacheTimes: {}
 };
 
+// Optimized field set for task list views to reduce payload size
+export const MINIMAL_TASK_FIELDS = 'id,title,client_name,status,pincode,assigned_to,created_at,notes,latitude,longitude,map_url,location_warning';
+
 export const setState = (key, value) => {
   if (key in state) {
     state[key] = value;
@@ -63,6 +66,15 @@ export async function fetchEmployeesIfStale(maxAgeMs = DEFAULT_MAX_AGE) {
   } catch (err) {
     console.error('Failed to fetch employees:', err);
     return state.allEmployees; // Return stale data on error
+  }
+}
+
+/**
+ * Invalidate a specific cache key
+ */
+export function invalidateCache(key) {
+  if (state._cacheTimes[key]) {
+    delete state._cacheTimes[key];
   }
 }
 

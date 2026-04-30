@@ -2,7 +2,7 @@
  * Employee Task Board
  */
 import { state, setState } from '../../store/globalState';
-import { showToast, escapeHtml } from '../../utils/ui';
+import { showToast, escapeHtml, debounce } from '../../utils/ui';
 import { pincodeData } from '../../store/pincodes';
 
 export function showTodayTasks() {
@@ -32,11 +32,7 @@ export function showTodayTasks() {
   // Attach search debounce
   const searchInput = document.getElementById('todayTaskSearch');
   if (searchInput) {
-    let timeout;
-    searchInput.addEventListener('input', () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(searchTodayTasks, 300);
-    });
+    searchInput.addEventListener('input', debounce(searchTodayTasks, 300));
   }
 
   loadTodayTasks();

@@ -60,7 +60,7 @@ async function fullCleanup() {
   await cleanupCurrentView();
   cleanupTracker();
 }
-function init() {
+async function init() {
   console.log('🚀 Validiant Enterprise Bootloader Starting...');
   
   // Security Check & Auth Boot
@@ -87,16 +87,15 @@ function init() {
     
     // We need to handle the initial view load logic which is normally in setupEventDelegation
     // But since the delegator is attached to document, we can just trigger a manual load
-    triggerInitialView(lastView, role);
+    await triggerInitialView(lastView, role);
   } else {
     // Default Fallback
     if (role === 'admin') {
-      showAssignTask();
+      await showAssignTask();
       setActiveMenuItem('view:adminAssign');
     } else {
       showTodayTasks();
       setActiveMenuItem('view:employeeToday');
-      startLocationReporting(state.currentUser.id);
     }
   }
 
@@ -107,6 +106,13 @@ function init() {
 
   // Bind Global Event Delegation
   setupEventDelegation();
+
+  // 🚀 Hide initial loader (Step 1 Optimization)
+  const loader = document.getElementById('initial-loader');
+  if (loader) {
+    loader.classList.add('fade-out');
+    setTimeout(() => loader.remove(), 500);
+  }
 
   // Start Session Monitor
   setInterval(checkSession, 30000); // Check every 30 seconds
@@ -442,7 +448,7 @@ async function triggerInitialView(action, role) {
   
   switch (action) {
     case 'view:adminAssign':
-      if (role === 'admin') showAssignTask();
+      if (role === 'admin') await showAssignTask();
       break;
     case 'view:employeeToday':
       showTodayTasks();

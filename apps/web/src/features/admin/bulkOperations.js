@@ -57,13 +57,19 @@ export function clearSelection() {
 
 export function updateBulkActions() {
   const count = window.selectedTasks.size;
-  const bulkContainer = document.getElementById('bulkActionsContainer');
+  const bulkContainer = document.getElementById('allTasksBulkActions') || 
+                        document.getElementById('unassignedBulkActions') ||
+                        document.getElementById('bulkActionsContainer');
   
   if (!bulkContainer) return;
 
   if (count > 0) {
     bulkContainer.style.display = 'flex';
-    const countSpan = bulkContainer.querySelector('#selectedCountText');
+    // Try all possible count span IDs
+    const countSpan = bulkContainer.querySelector('#allTasksSelectedCount') || 
+                      bulkContainer.querySelector('#unassignedSelectedCount') ||
+                      bulkContainer.querySelector('#selectedCountText');
+                      
     if (countSpan) countSpan.innerText = `${count} task(s) selected`;
   } else {
     bulkContainer.style.display = 'none';

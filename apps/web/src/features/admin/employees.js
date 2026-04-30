@@ -1,7 +1,7 @@
 /**
  * Admin: Employee Management Feature
  */
-import { state, fetchEmployeesIfStale } from '../../store/globalState';
+import { state, fetchEmployeesIfStale, invalidateCache } from '../../store/globalState';
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 
@@ -190,6 +190,7 @@ export function showAddEmployee() {
       const data = await res.json();
       if (data.success) {
         showToast('Employee created!', 'success');
+        invalidateCache('allEmployees');
         closeAllModals();
         loadEmployeesList();
       } else {
@@ -221,6 +222,7 @@ export async function deleteEmployee(id, name) {
     const data = await res.json();
     if (data.success) {
       showToast('Employee deleted', 'success');
+      invalidateCache('allEmployees');
       showEmployees();
     } else {
       showToast(data.message || 'Failed to delete', 'error');
@@ -283,6 +285,7 @@ export function showEditEmployeeModal(empId) {
       });
       if (res.ok) {
         showToast('Employee updated successfully', 'success');
+        invalidateCache('allEmployees');
         closeAllModals();
         loadEmployeesList();
       }

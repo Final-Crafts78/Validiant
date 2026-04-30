@@ -4,8 +4,8 @@
 import { showToast, escapeHtml } from '../../utils/ui';
 import { createModal, closeAllModals } from '../../utils/modals';
 import { state } from '../../store/globalState';
-import { loadUnassignedTasks } from './unassignedTasks';
-import { loadAllTasks } from './allTasks';
+import { loadUnassignedTasks, refreshUnassignedUI } from './unassignedTasks';
+import { loadAllTasks, refreshAllTasksUI } from './allTasks';
 
 export async function openTaskDetailsModal(taskId) {
   console.log(`[DEBUG] 🔍 Opening Details for Task ID: ${taskId}`);
@@ -144,14 +144,20 @@ export async function confirmStatusUpdate(taskId) {
       showToast('Status updated successfully', 'success');
       closeAllModals();
       // Patch local state to avoid full re-fetch
-      const patchStatus = (arr) => {
-        const t = arr?.find(t => t.id == taskId);
-        if (t) t.status = newStatus;
+      const patchStatus = (taskList) => {
+        if (!taskList) return;
+        const task = taskList.find(t => t.id == taskId);
+        if (task) {
+          task.status = newStatus;
+          if (newStatus === 'Completed') task.completed_at = new Date().toISOString();
+        }
       };
       patchStatus(state.allAdminTasks);
       patchStatus(state.currentFilteredTasks);
-      // Only re-render if the table is visible
-      if(document.getElementById('allTasksList')) loadAllTasks();
+      patchStatus(state.allUnassignedTasks);
+
+      if(document.getElementById('allTasksList')) refreshAllTasksUI();
+      if(document.getElementById('unassignedTasksList')) refreshUnassignedUI();
     } else {
       showToast('Failed to update status', 'error');
     }
@@ -203,8 +209,28 @@ export async function confirmReassign(taskId) {
     if (res.ok) {
       showToast('Task assigned successfully', 'success');
       closeAllModals();
-      if(document.getElementById('allTasksList')) loadAllTasks();
-      if(document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+
+      // Patch state locally
+      const emp = state.allEmployees?.find(e => e.id == newEmpId);
+      const patchAssign = (taskList) => {
+        if (!taskList) return;
+        const task = taskList.find(t => t.id == taskId);
+        if (task) {
+          task.assigned_to = newEmpId;
+          task.assignedToName = emp ? emp.name : 'Unknown';
+          task.status = 'Pending';
+        }
+      };
+      patchAssign(state.allAdminTasks);
+      patchAssign(state.currentFilteredTasks);
+      
+      // If it was in unassigned, remove it
+      if (state.allUnassignedTasks) {
+        state.allUnassignedTasks = state.allUnassignedTasks.filter(t => t.id != taskId);
+      }
+
+      if(document.getElementById('allTasksList')) refreshAllTasksUI();
+      if(document.getElementById('unassignedTasksList')) refreshUnassignedUI();
     }
   } catch (err) {
     showToast('Failed to assign', 'error');
@@ -252,8 +278,24 @@ export async function confirmUnassign(taskId) {
     if (data.success) {
       showToast('Task moved to unassigned pool', 'success');
       closeAllModals();
-      if(document.getElementById('allTasksList')) loadAllTasks();
-      if(document.getElementById('unassignedTasksList')) loadUnassignedTasks();
+
+      const patchUnassign = (taskList) => {
+        if (!taskList) return;
+        const task = taskList.find(t => t.id == taskId);
+        if (task) {
+          task.assigned_to = 'Unassigned';
+          task.assignedToName = 'Unassigned';
+          task.status = 'Unassigned';
+          if (state.allUnassignedTasks && !state.allUnassignedTasks.find(u => u.id == taskId)) {
+             state.allUnassignedTasks.unshift({...task});
+          }
+        }
+      };
+      patchUnassign(state.allAdminTasks);
+      patchUnassign(state.currentFilteredTasks);
+
+      if(document.getElementById('allTasksList')) refreshAllTasksUI();
+      if(document.getElementById('unassignedTasksList')) refreshUnassignedUI();
     } else {
       showToast(data.message || 'Failed to unassign', 'error');
     }

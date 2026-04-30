@@ -11,6 +11,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f172a">
   <title>Validiant | Enterprise Dashboard</title>
+  
+  <!-- DNS Prefetch for performance -->
+  <link rel="dns-prefetch" href="https://api.openrouteservice.org">
+  <link rel="dns-prefetch" href="https://maps.googleapis.com">
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  
+  <!-- Preload critical assets -->
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <!-- Preload hints for bulk upload libraries (download starts but doesn't block rendering) -->
@@ -119,17 +127,33 @@
     .close-modal { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
     .close-modal:hover { color: white; }
 
-    /* UTILS */
-    .d-none { display: none !important; }
-    .text-success { color: var(--success); }
-    .text-danger { color: var(--danger); }
-      .pincode-tag { background: #334155; padding: 2px 8px; border-radius: 4px; color: #e2e8f0; font-family: monospace; }
-      
-      /* 💎 PREMIUM REFINEMENTS - Matches Old UI Design & Performance */
-      :root {
-        --scrollbar-bg: #1e293b;
-        --scrollbar-thumb: #334155;
-        --scrollbar-hover: #475569;
+    /* GPU HARDWARE ACCELERATION & CONTAINMENT */
+    .gpu-boost {
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      perspective: 1000px;
+      will-change: transform;
+    }
+
+    .sidebar, .header {
+      contain: layout paint;
+    }
+
+    .content-area { 
+      flex: 1; 
+      padding: 30px; 
+      overflow-y: auto; 
+      -webkit-overflow-scrolling: touch; 
+      overscroll-behavior-y: contain; 
+      contain: layout paint;
+      transform: translateZ(0);
+    }
+
+    /* 💎 PREMIUM REFINEMENTS - Matches Old UI Design & Performance */
+    :root {
+      --scrollbar-bg: #1e293b;
+      --scrollbar-thumb: #334155;
+      --scrollbar-hover: #475569;
       }
 
       /* Pulse Skeleton Animation */
@@ -142,6 +166,21 @@
         border-radius: 4px; 
         animation: pulse 1.5s ease-in-out infinite; 
       }
+
+      /* 🚀 INITIAL LOADER STYLES */
+      #initial-loader {
+        position: fixed; inset: 0; background: #0f172a; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        transition: opacity 0.4s ease, visibility 0.4s;
+      }
+      .loader-content { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+      .loader-ring {
+        width: 40px; height: 40px; border: 3px solid rgba(99, 102, 241, 0.1);
+        border-top-color: #6366f1; border-radius: 50%;
+        animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .loader-text { color: #94a3b8; font-size: 13px; font-weight: 500; letter-spacing: 0.5px; font-family: 'Inter', sans-serif; }
+      #initial-loader.fade-out { opacity: 0; visibility: hidden; }
 
       /* Smooth Themed Scrollbars */
       ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -946,7 +985,16 @@ select.form-input {
 }
 </style>
 </head>
-<body ontouchstart="">
+<body class="gpu-boost" ontouchstart="">
+
+  <!-- 🚀 Initial Page Loader (Removed by main.js) -->
+  <div id="initial-loader">
+    <div class="loader-content">
+      <div class="loader-ring"></div>
+      <div class="loader-text">VALIDIANT CLOUD</div>
+    </div>
+  </div>
+
 
   <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">

@@ -17,6 +17,60 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
+/**
+ * 🛰️ Unified Geolocation Wrapper
+ * Handles: High-accuracy attempt, Low-accuracy retry, Permission checks, and Button state.
+ */
+async function withUserLocation(event, actionName, callback) {
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported by your browser', 'error');
+    return;
+  }
+
+  const btn = event?.target?.closest ? event.target.closest('button') : (event?.target || null);
+  const originalHtml = btn?.innerHTML;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${actionName}...`;
+  }
+
+  const handleSuccess = async (pos) => {
+    try {
+      await callback(pos.coords.latitude, pos.coords.longitude);
+    } catch (err) {
+      console.error(`📍 ${actionName} Logic Error:`, err);
+      showToast(`${actionName} failed`, 'error');
+    } finally {
+      if (btn) {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      }
+    }
+  };
+
+  const handleError = (err) => {
+    // Retry once with low accuracy if it's a timeout or unavailable
+    if ((err.code === 2 || err.code === 3) && !withUserLocation._isRetrying) {
+      console.warn(`🛰️ GPS: High accuracy failed (${err.message}), retrying with low accuracy...`);
+      withUserLocation._isRetrying = true;
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying GPS...';
+      navigator.geolocation.getCurrentPosition(handleSuccess, (retryErr) => {
+        showToast(retryErr.code === 1 ? 'Location permission denied.' : 'Could not determine your location.', 'error');
+        if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+        withUserLocation._isRetrying = false;
+      }, { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 });
+    } else {
+      const msg = err.code === 1 ? 'Location permission denied. Please allow access.' : 'Could not determine your location.';
+      showToast(msg, 'error');
+      if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+      withUserLocation._isRetrying = false;
+    }
+  };
+
+  withUserLocation._isRetrying = false;
+  navigator.geolocation.getCurrentPosition(handleSuccess, handleError, { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 });
+}
+
 export function sortByPincode() {
   state.isNearestSortActive = false;
   state.savedEmployeeLocation = null;
@@ -29,186 +83,63 @@ export function sortByPincode() {
 }
 
 export async function sortByNearest(event) {
-  if (!navigator.geolocation) {
-    showToast('Geolocation not supported by your browser', 'error');
-    return;
+  withUserLocation(event, 'Optimizing', async (userLat, userLng) => {
+    showToast('Calculating elite route...', 'info');
+    state.savedEmployeeLocation = { latitude: userLat, longitude: userLng };
+    state.isNearestSortActive = true;
+    
+    console.log(`📍 [ORS-ENRICH] Enriching ${state.allEmployeeTasks.length} tasks for ORS optimization...`);
+    
+    const enrichedTasks = state.allEmployeeTasks.map(t => {
+      const { lat, lng } = resolveTaskCoordinates(t);
+      return { ...t, _lat: lat, _lng: lng };
+    });
+    
+    const requestPayload = {
+      employeeLocation: { lat: userLat, lng: userLng },
+      tasks: enrichedTasks.map(t => ({
+        id: t.id, _lat: t._lat, _lng: t._lng, title: t.title, pincode: t.pincode
+      }))
+    };
+    
+    const response = await fetch('/api/tasks/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestPayload)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.optimizedTasks) {
+      const optimizedOrder = result.optimizedTasks.map(opt => {
+        const task = state.allEmployeeTasks.find(t => String(t.id) === String(opt.id));
+        if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
+        return task;
+      }).filter(t => t);
+      
+      state.allEmployeeTasks = optimizedOrder;
+      refreshSortingUI();
+      showToast('Route optimized!', 'success');
+    } else {
+      fallbackSort(userLat, userLng);
+    }
+  });
+}
+
+function refreshSortingUI() {
+  const list = document.getElementById('todayTasksList');
+  const map = document.getElementById('routingMap');
+  
+  if (map && map.offsetParent !== null) {
+    Promise.all([
+      import('../routing/googleMapsEngine'),
+      import('../employee/taskPanel')
+    ]).then(([mod, panelMod]) => {
+      mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel, true);
+    }).catch(err => console.error('Failed to refresh map after sort:', err));
   }
   
-  showToast('Calculating elite route...', 'info');
-  const sortBtn = event ? (event.target.closest ? event.target.closest('button') : event.target) : null;
-  const originalBtnContent = sortBtn ? sortBtn.innerHTML : '';
-  
-  if (sortBtn) {
-    sortBtn.disabled = true;
-    sortBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Optimizing...';
-  }
-  
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      try {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        state.savedEmployeeLocation = { latitude: userLat, longitude: userLng };
-        state.isNearestSortActive = true;
-        
-        console.log(`📍 [ORS-ENRICH] Enriching ${state.allEmployeeTasks.length} tasks for ORS optimization...`);
-        
-        const enrichedTasks = state.allEmployeeTasks.map(t => {
-          const { lat, lng } = resolveTaskCoordinates(t);
-          return { ...t, _lat: lat, _lng: lng };
-        });
-        
-        const requestPayload = {
-          employeeLocation: { lat: userLat, lng: userLng },
-          tasks: enrichedTasks.map(t => ({
-            id: t.id, _lat: t._lat, _lng: t._lng, title: t.title, pincode: t.pincode
-          }))
-        };
-        
-        const response = await fetch('/api/tasks/optimize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestPayload)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.optimizedTasks) {
-          const optimizedOrder = result.optimizedTasks.map(opt => {
-            const task = state.allEmployeeTasks.find(t => String(t.id) === String(opt.id));
-            if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
-            return task;
-          }).filter(t => t);
-          
-          state.allEmployeeTasks = optimizedOrder;
-          
-          // View-Aware Logic: Update List OR Map depending on what's active
-          const list = document.getElementById('todayTasksList');
-          const map = document.getElementById('routingMap');
-          
-          if (map && map.offsetParent !== null) {
-            // We are on Map View - Lazy import routing engine to refresh map
-            Promise.all([
-              import('../routing/googleMapsEngine'),
-              import('../employee/taskPanel')
-            ]).then(([mod, panelMod]) => {
-              mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel, true);
-            }).catch(err => console.error('Failed to refresh map after sort:', err));
-          }
-          
-          if (list) {
-            displayEmployeeTasks(state.allEmployeeTasks);
-          }
-          
-          showToast('Route optimized!', 'success');
-        } else {
-          fallbackSort(userLat, userLng);
-        }
-      } catch (err) {
-        console.error('ORS Error', err);
-        fallbackSort(pos.coords.latitude, pos.coords.longitude);
-      } finally {
-        if (sortBtn) {
-          sortBtn.innerHTML = originalBtnContent;
-          sortBtn.disabled = false;
-        }
-      }
-    },
-    (err) => {
-      // If timeout or unavailable, retry with low accuracy
-      if (err.code === 2 || err.code === 3) {
-        console.warn('High-accuracy GPS failed for ORS sort, retrying with low accuracy...', err);
-        if (sortBtn) {
-          sortBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying GPS...';
-        }
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            try {
-              const userLat = pos.coords.latitude;
-              const userLng = pos.coords.longitude;
-              state.savedEmployeeLocation = { latitude: userLat, longitude: userLng };
-              state.isNearestSortActive = true;
-              
-              const enrichedTasks = state.allEmployeeTasks.map(t => {
-                const { lat, lng } = resolveTaskCoordinates(t);
-                return { ...t, _lat: lat, _lng: lng };
-              });
-              
-              const requestPayload = {
-                employeeLocation: { lat: userLat, lng: userLng },
-                tasks: enrichedTasks.map(t => ({
-                  id: t.id, _lat: t._lat, _lng: t._lng, title: t.title, pincode: t.pincode
-                }))
-              };
-              
-              const response = await fetch('/api/tasks/optimize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestPayload)
-              });
-              
-              const result = await response.json();
-              
-              if (result.success && result.optimizedTasks) {
-                const optimizedOrder = result.optimizedTasks.map(opt => {
-                  const task = state.allEmployeeTasks.find(t => String(t.id) === String(opt.id));
-                  if (task) task.distanceKm = opt.distance ? opt.distance.toFixed(1) : null;
-                  return task;
-                }).filter(t => t);
-                
-                state.allEmployeeTasks = optimizedOrder;
-                
-                const list = document.getElementById('todayTasksList');
-                const map = document.getElementById('routingMap');
-                
-                if (map && map.offsetParent !== null) {
-                  Promise.all([
-                    import('../routing/googleMapsEngine'),
-                    import('../employee/taskPanel')
-                  ]).then(([mod, panelMod]) => {
-                    mod.showMapRouting(state.allEmployeeTasks, panelMod.openTaskPanel);
-                  }).catch(err => console.error('Failed to refresh map after sort:', err));
-                }
-                
-                if (list) {
-                  displayEmployeeTasks(state.allEmployeeTasks);
-                }
-                
-                showToast('Route optimized!', 'success');
-              } else {
-                fallbackSort(userLat, userLng);
-              }
-            } catch (retryErr) {
-              console.error('ORS Error on retry', retryErr);
-              fallbackSort(pos.coords.latitude, pos.coords.longitude);
-            } finally {
-              if (sortBtn) {
-                sortBtn.innerHTML = originalBtnContent;
-                sortBtn.disabled = false;
-              }
-            }
-          },
-          (retryErr) => {
-            const msg = retryErr.code === 1 ? 'Location permission denied. Please allow access.' : 'Could not determine your location. Please try again.';
-            showToast(msg, 'error');
-            if (sortBtn) {
-              sortBtn.innerHTML = originalBtnContent;
-              sortBtn.disabled = false;
-            }
-          },
-          { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 }
-        );
-      } else {
-        // Permission denied — don't retry
-        showToast('Location permission denied. Please allow access in browser settings.', 'error');
-        if (sortBtn) {
-          sortBtn.innerHTML = originalBtnContent;
-          sortBtn.disabled = false;
-        }
-      }
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 }
-  );
+  if (list) displayEmployeeTasks(state.allEmployeeTasks);
 }
 
 function fallbackSort(userLat, userLng) {
@@ -334,155 +265,58 @@ export function reapplyDistanceSorting(tasks, userLat, userLng) {
  * User -> Nearest Task -> Next Nearest (from Task 1) -> Next Nearest (from Task 2)...
  */
 export async function calculateGreedyRoute(event) {
-  if (!navigator.geolocation) {
-    showToast('Geolocation not supported', 'error');
-    return;
-  }
+  withUserLocation(event, 'Routing', async (userLat, userLng) => {
+    showToast('Calculating custom greedy route...', 'info');
+    
+    const activeTasks = state.allEmployeeTasks.filter(t => {
+      const s = (t.status || '').toLowerCase();
+      return s !== 'verified' && s !== 'completed';
+    });
 
-  showToast('Calculating custom greedy route...', 'info');
-  const btn = event?.target.closest('button');
-  const originalHtml = btn?.innerHTML;
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Routing...';
-  }
-
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    try {
-      const userLat = pos.coords.latitude;
-      const userLng = pos.coords.longitude;
-      
-      const activeTasks = state.allEmployeeTasks.filter(t => {
-        const s = (t.status || '').toLowerCase();
-        return s !== 'verified' && s !== 'completed';
-      });
-
-      if (activeTasks.length === 0) {
-        showToast('No active tasks to route', 'warning');
-        return;
-      }
-
-      const optimizedOrder = [];
-      let currentLat = userLat;
-      let currentLng = userLng;
-      let pool = [...activeTasks];
-
-      while (pool.length > 0) {
-        let nearestIdx = -1;
-        let minDistance = Infinity;
-
-        for (let i = 0; i < pool.length; i++) {
-          const { lat, lng } = resolveTaskCoordinates(pool[i]);
-          if (!lat || !lng) continue;
-
-          const dist = calculateDistance(currentLat, currentLng, lat, lng);
-          if (dist < minDistance) {
-            minDistance = dist;
-            nearestIdx = i;
-          }
-        }
-
-        if (nearestIdx === -1) {
-          // No more tasks with coordinates, just append the rest
-          optimizedOrder.push(...pool);
-          break;
-        }
-
-        const nextTask = pool.splice(nearestIdx, 1)[0];
-        const { lat, lng } = resolveTaskCoordinates(nextTask);
-        currentLat = lat;
-        currentLng = lng;
-        optimizedOrder.push(nextTask);
-      }
-
-      // Preserve completed/verified tasks at the end if any were filtered out
-      const otherTasks = state.allEmployeeTasks.filter(t => {
-        const s = (t.status || '').toLowerCase();
-        return s === 'verified' || s === 'completed';
-      });
-
-      state.allEmployeeTasks = [...optimizedOrder, ...otherTasks];
-      
-      // Update UI
-      const map = document.getElementById('routingMap');
-      if (map && map.offsetParent !== null) {
-        const { showMapRouting } = await import('../routing/googleMapsEngine');
-        const { openTaskPanel } = await import('../employee/taskPanel');
-        showMapRouting(state.allEmployeeTasks, openTaskPanel);
-      }
-
-      const list = document.getElementById('todayTasksList');
-      if (list) displayEmployeeTasks(state.allEmployeeTasks);
-
-      showToast('Custom greedy route applied!', 'success');
-    } catch (err) {
-      console.error('Greedy Route Error:', err);
-      showToast('Routing failed', 'error');
-    } finally {
-      if (btn) {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-      }
+    if (activeTasks.length === 0) {
+      showToast('No active tasks to route', 'warning');
+      return;
     }
-  }, (err) => {
-    // If timeout or unavailable, retry with low accuracy
-    if (err.code === 2 || err.code === 3) {
-      console.warn('High-accuracy GPS failed for greedy route, retrying...', err);
-      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying GPS...';
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        try {
-          const userLat = pos.coords.latitude;
-          const userLng = pos.coords.longitude;
-          const activeTasks = state.allEmployeeTasks.filter(t => {
-            const s = (t.status || '').toLowerCase();
-            return s !== 'verified' && s !== 'completed';
-          });
-          if (activeTasks.length === 0) { showToast('No active tasks to route', 'warning'); return; }
-          const optimizedOrder = [];
-          let currentLat = userLat, currentLng = userLng;
-          let pool = [...activeTasks];
-          while (pool.length > 0) {
-            let nearestIdx = -1, minDistance = Infinity;
-            for (let i = 0; i < pool.length; i++) {
-              const { lat, lng } = resolveTaskCoordinates(pool[i]);
-              if (!lat || !lng) continue;
-              const dist = calculateDistance(currentLat, currentLng, lat, lng);
-              if (dist < minDistance) { minDistance = dist; nearestIdx = i; }
-            }
-            if (nearestIdx === -1) { optimizedOrder.push(...pool); break; }
-            const nextTask = pool.splice(nearestIdx, 1)[0];
-            const { lat, lng } = resolveTaskCoordinates(nextTask);
-            currentLat = lat; currentLng = lng;
-            optimizedOrder.push(nextTask);
-          }
-          const otherTasks = state.allEmployeeTasks.filter(t => {
-            const s = (t.status || '').toLowerCase();
-            return s === 'verified' || s === 'completed';
-          });
-          state.allEmployeeTasks = [...optimizedOrder, ...otherTasks];
-          const map = document.getElementById('routingMap');
-          if (map && map.offsetParent !== null) {
-            const { showMapRouting } = await import('../routing/googleMapsEngine');
-            const { openTaskPanel } = await import('../employee/taskPanel');
-            showMapRouting(state.allEmployeeTasks, openTaskPanel);
-          }
-          const list = document.getElementById('todayTasksList');
-          if (list) displayEmployeeTasks(state.allEmployeeTasks);
-          showToast('Custom greedy route applied!', 'success');
-        } catch (retryErr) {
-          console.error('Greedy Route Retry Error:', retryErr);
-          showToast('Routing failed', 'error');
-        } finally {
-          if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+
+    const optimizedOrder = [];
+    let currentLat = userLat;
+    let currentLng = userLng;
+    let pool = [...activeTasks];
+
+    while (pool.length > 0) {
+      let nearestIdx = -1;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < pool.length; i++) {
+        const { lat, lng } = resolveTaskCoordinates(pool[i]);
+        if (!lat || !lng) continue;
+
+        const dist = calculateDistance(currentLat, currentLng, lat, lng);
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestIdx = i;
         }
-      }, (retryErr) => {
-        const msg = retryErr.code === 1 ? 'Location permission denied.' : 'Could not determine location.';
-        showToast(msg, 'error');
-        if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
-      }, { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 });
-    } else {
-      showToast('Location permission denied. Please allow access.', 'error');
-      if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+      }
+
+      if (nearestIdx === -1) {
+        optimizedOrder.push(...pool);
+        break;
+      }
+
+      const nextTask = pool.splice(nearestIdx, 1)[0];
+      const { lat, lng } = resolveTaskCoordinates(nextTask);
+      currentLat = lat;
+      currentLng = lng;
+      optimizedOrder.push(nextTask);
     }
-  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 });
+
+    const otherTasks = state.allEmployeeTasks.filter(t => {
+      const s = (t.status || '').toLowerCase();
+      return s === 'verified' || s === 'completed';
+    });
+
+    state.allEmployeeTasks = [...optimizedOrder, ...otherTasks];
+    refreshSortingUI();
+    showToast('Custom greedy route applied!', 'success');
+  });
 }

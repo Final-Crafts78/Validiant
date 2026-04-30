@@ -2,7 +2,7 @@
  * Admin Executive Live Tracker
  */
 import { cleanupMapInstance } from '../routing/leafletEngine';
-import { showToast } from '../../utils/ui';
+import { showToast, escapeHtml } from '../../utils/ui';
 
 let trackerMap = null;
 let markerLayer = null;
@@ -10,6 +10,7 @@ let refreshInterval = null;
 let filterClickListener = null;
 let selectedExecutivesFilter = [];
 const REFRESH_RATE = 30000; // 30 seconds
+const markerStore = new Map(); // Store markers by unique keys: 'exec_ID' or 'task_ID'
 
 export async function showExecutiveTracker() {
   const container = document.getElementById('mainContainer');
@@ -133,7 +134,7 @@ export async function showExecutiveTracker() {
     
     const panel = document.getElementById('trackerFilterPanel');
     if (panel) panel.classList.remove('show');
-    renderTrackerMap(); // Re-render map visually without fetching
+    renderTrackerMap(); 
   };
 
   window._clearTrackerFilter = () => {
@@ -184,15 +185,11 @@ export async function showExecutiveTracker() {
     </div>
   `;
 
-  // Initialize Map
   await initTrackerMap();
-  
-  // Start Refresh Cycle
   startAutoRefresh();
 }
 
 async function initTrackerMap() {
-  // 1. Ensure Leaflet is loaded (shared logic with leafletEngine)
   if (!window.L) {
     await new Promise(resolve => {
       const css = document.createElement('link');
@@ -210,20 +207,19 @@ async function initTrackerMap() {
   trackerMap = L.map('trackerMap', {
     zoomControl: true,
     attributionControl: false
-  }).setView([20.5937, 78.9629], 5); // Center of India
+  }).setView([20.5937, 78.9629], 5); 
   
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap', maxZoom: 19
   }).addTo(trackerMap);
 
   markerLayer = L.layerGroup().addTo(trackerMap);
-
   await updateTrackerData();
   
-  document.getElementById('trackerMapLoading').style.display = 'none';
+  const loading = document.getElementById('trackerMapLoading');
+  if (loading) loading.style.display = 'none';
   
-  // Invalidate size to fix rendering issues
-  setTimeout(() => trackerMap.invalidateSize(), 300);
+  setTimeout(() => { if (trackerMap) trackerMap.invalidateSize(); }, 300);
 }
 
 export async function updateTrackerData() {
@@ -252,13 +248,9 @@ export async function updateTrackerData() {
       }
     }
     
-    // Ensure executives is a valid array
     const execArray = Array.isArray(executives) ? executives : [];
-    
     window._trackerCache = { execArray, tasks };
     populateFilterDropdown();
-    
-    console.log(`📍 Executive Pin Logic: Processing ${execArray.length} executives and ${tasks.length} pending tasks`);
     renderTrackerMap();
     
   } catch (error) {
@@ -275,112 +267,119 @@ function populateFilterDropdown() {
   list.innerHTML = execs.map(exec => `
     <label class="tracker-filter-item">
       <input type="checkbox" class="tracker-filter-checkbox" value="${exec.id}" ${selectedExecutivesFilter.includes(String(exec.id)) ? 'checked' : ''}>
-      ${exec.name || 'Unknown'} <span style="color:#94a3b8; font-size:11px;">(${exec.employeeId || exec.employee_id || 'N/A'})</span>
+      ${escapeHtml(exec.name || 'Unknown')} <span style="color:#94a3b8; font-size:11px;">(${escapeHtml(exec.employeeId || exec.employee_id || 'N/A')})</span>
     </label>
   `).join('');
 }
 
 async function renderTrackerMap() {
-  if (!window._trackerCache) return;
+  if (!window._trackerCache || !trackerMap) return;
   const { execArray, tasks } = window._trackerCache;
 
-  markerLayer.clearLayers();
-    
-    let online = 0, idle = 0, offline = 0;
-    const now = new Date();
-    const bounds = [];
+  const now = new Date();
+  const bounds = [];
+  const currentRenderKeys = new Set();
 
-    // 1. PLOT PENDING TASKS
-    const { resolveTaskCoordinates } = await import('../employee/sorting');
-    
-    const filteredTasks = selectedExecutivesFilter.length > 0 
-      ? tasks.filter(t => selectedExecutivesFilter.includes(String(t.assigned_to))) 
-      : tasks;
+  // 1. PLOT PENDING TASKS
+  const { resolveTaskCoordinates } = await import('../employee/sorting');
+  
+  const filteredTasks = selectedExecutivesFilter.length > 0 
+    ? tasks.filter(t => selectedExecutivesFilter.includes(String(t.assigned_to))) 
+    : tasks;
 
-    filteredTasks.forEach((t, index) => {
-      const { lat, lng, source } = resolveTaskCoordinates(t);
-      if (lat != null && lng != null) {
-        bounds.push([lat, lng]);
-        const isApprox = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
-        const pinColor = isApprox ? '#f59e0b' : '#3b82f6'; // Blue or Orange
-        const taskIcon = L.divIcon({
-          className: 'tracker-task-pin',
-          html: `<div style="background-color: ${pinColor}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-size:12px;">${index + 1}</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
+  filteredTasks.forEach((t, index) => {
+    const { lat, lng, source } = resolveTaskCoordinates(t);
+    if (lat != null && lng != null) {
+      bounds.push([lat, lng]);
+      const key = `task_${t.id}`;
+      currentRenderKeys.add(key);
+      
+      const isApprox = source === 'pincode-fallback' || source === '@-viewport' || source === 'address-pincode';
+      const pinColor = isApprox ? '#f59e0b' : '#3b82f6'; 
+      
+      const taskIcon = L.divIcon({
+        className: 'tracker-task-pin',
+        html: `<div style="background-color: ${pinColor}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-size:12px;">${index + 1}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
 
-        L.marker([lat, lng], {
+      let marker = markerStore.get(key);
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(taskIcon);
+      } else {
+        marker = L.marker([lat, lng], {
           icon: taskIcon,
           title: `Task: ${t.title || t.case_id || 'Unknown'}`,
           riseOnHover: true
         }).bindPopup(`
           <div style="font-family:'Inter',sans-serif; padding:5px;">
-            <b style="color:#2563eb;">${t.title || t.case_id || 'Task'}</b><br>
-            <span style="font-size:12px; color:#64748b;">Status: ${t.status || 'Pending'}</span><br>
-            <span style="font-size:12px; color:#64748b;">Assigned To: ${t.assignedToName || t.assigned_to_name || 'Unassigned'}</span>
+            <b style="color:#2563eb;">${escapeHtml(t.title || t.case_id || 'Task')}</b><br>
+            <span style="font-size:12px; color:#64748b;">Status: ${escapeHtml(t.status || 'Pending')}</span><br>
+            <span style="font-size:12px; color:#64748b;">Assigned To: ${escapeHtml(t.assignedToName || t.assigned_to_name || 'Unassigned')}</span>
           </div>
         `).addTo(markerLayer);
+        markerStore.set(key, marker);
       }
-    });
+    }
+  });
 
-    // 2. PLOT EXECUTIVES
-    execArray.forEach(exec => {
-      // Allow raw string parsing, handle cases where lat/lng properties might be differently named
-      const latRaw = exec.latitude !== undefined && exec.latitude !== null ? exec.latitude : exec.lat;
-      const lngRaw = exec.longitude !== undefined && exec.longitude !== null ? exec.longitude : exec.lng;
-      const lat = parseFloat(latRaw);
-      const lng = parseFloat(lngRaw);
-      
-      const lastActiveDate = exec.lastActive || exec.last_active;
-      const lastActive = lastActiveDate ? new Date(lastActiveDate) : null;
-      
-      // Calculate status even if no coordinates
-      let statusClass = 'tracker-status-offline';
-      let isOnline = false;
-      let diffMinutes = 9999;
+  // 2. PLOT EXECUTIVES
+  let online = 0, idle = 0, offline = 0;
+  
+  execArray.forEach(exec => {
+    const latRaw = exec.latitude !== undefined && exec.latitude !== null ? exec.latitude : exec.lat;
+    const lngRaw = exec.longitude !== undefined && exec.longitude !== null ? exec.longitude : exec.lng;
+    const lat = parseFloat(latRaw);
+    const lng = parseFloat(lngRaw);
+    
+    const lastActiveDate = exec.lastActive || exec.last_active;
+    const lastActive = lastActiveDate ? new Date(lastActiveDate) : null;
+    
+    let statusClass = 'tracker-status-offline';
+    let isOnline = false;
+    let diffMinutes = 9999;
 
-      if (lastActive && !isNaN(lastActive.getTime())) {
-        diffMinutes = Math.max(0, (now - lastActive) / (1000 * 60));
-        
-        if (diffMinutes < 10) {
-          statusClass = 'tracker-status-online';
-          online++;
-          isOnline = true;
-        } else if (diffMinutes < 60) {
-          statusClass = 'tracker-status-idle';
-          idle++;
-        } else {
-          offline++;
-        }
+    if (lastActive && !isNaN(lastActive.getTime())) {
+      diffMinutes = Math.max(0, (now - lastActive) / (1000 * 60));
+      if (diffMinutes < 10) {
+        statusClass = 'tracker-status-online';
+        online++;
+        isOnline = true;
+      } else if (diffMinutes < 60) {
+        statusClass = 'tracker-status-idle';
+        idle++;
       } else {
         offline++;
       }
+    } else {
+      offline++;
+    }
 
-      // Only add to map if we have valid coordinates
-      if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
-        return;
-      }
+    if (!isNaN(lat) && !isNaN(lng)) {
+      bounds.push([lat, lng]);
+      const key = `exec_${exec.id}`;
+      currentRenderKeys.add(key);
 
       const icon = L.divIcon({
         className: 'tracker-pin-container',
         html: `
           <div class="tracker-pin ${statusClass}">
-            <div class="tracker-pin-inner">
-               <i class="fas fa-user-tie"></i>
-            </div>
             ${isOnline ? '<div class="pulse-ring"></div>' : ''}
+            <div class="tracker-pin-inner">
+              <i class="fas fa-motorcycle"></i>
+            </div>
           </div>
         `,
-        iconSize: [38, 38],
-        iconAnchor: [19, 38],
-        popupAnchor: [0, -38]
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
       });
 
-      const lastSeenText = diffMinutes < 1 ? 'Just now' : diffMinutes > 1440 ? 'Over a day ago' : `${Math.floor(diffMinutes)} mins ago`;
       const displayEmployeeId = exec.employeeId || exec.employee_id || 'N/A';
       const activeTaskCount = exec.activeTasks || exec.active_tasks || 0;
       const slaBreachedCount = exec.slaBreachedTasks || 0;
+      const lastSeenText = diffMinutes < 1 ? 'Just now' : diffMinutes > 1440 ? 'Over a day ago' : `${Math.floor(diffMinutes)} mins ago`;
 
       const popupContent = `
         <div style="padding:12px; min-width:280px; font-family: 'Inter', sans-serif;">
@@ -389,8 +388,8 @@ async function renderTrackerMap() {
               <i class="fas fa-user-tie" style="color:#6366f1; font-size:20px;"></i>
             </div>
             <div>
-              <div style="font-weight:700; font-size:15px; color:#f8fafc;">${exec.name || 'Unknown Executive'}</div>
-              <div style="font-size:11px; color:#94a3b8; font-weight:500;">${displayEmployeeId}</div>
+              <div style="font-weight:700; font-size:15px; color:#f8fafc;">${escapeHtml(exec.name || 'Unknown Executive')}</div>
+              <div style="font-size:11px; color:#94a3b8; font-weight:500;">${escapeHtml(displayEmployeeId)}</div>
             </div>
           </div>
           
@@ -415,30 +414,48 @@ async function renderTrackerMap() {
         </div>
       `;
 
-      L.marker([lat, lng], { 
-        icon,
-        title: exec.name,
-        riseOnHover: true
-      }).bindPopup(popupContent, {
-        className: 'tracker-popup',
-        maxWidth: 300
-      }).addTo(markerLayer);
-      
-      bounds.push([lat, lng]);
-    });
-
-    // Update Counts
-    document.getElementById('onlineCount').textContent = online;
-    document.getElementById('idleCount').textContent = idle;
-    document.getElementById('offlineCount').textContent = offline;
-
-    // Center map if we have data and it's the first load or zoom is too high/low
-    if (bounds.length > 0) {
-      const currentZoom = trackerMap.getZoom();
-      if (currentZoom <= 5 || currentZoom > 15) {
-        trackerMap.fitBounds(bounds, { padding: [100, 100], maxZoom: 14 });
+      let marker = markerStore.get(key);
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(icon);
+        marker.setPopupContent(popupContent);
+      } else {
+        marker = L.marker([lat, lng], { 
+          icon,
+          title: exec.name,
+          riseOnHover: true
+        }).bindPopup(popupContent, {
+          className: 'tracker-popup',
+          maxWidth: 300
+        }).addTo(markerLayer);
+        markerStore.set(key, marker);
       }
     }
+  });
+
+  // 3. CLEANUP STALE MARKERS
+  for (const [key, marker] of markerStore.entries()) {
+    if (!currentRenderKeys.has(key)) {
+      markerLayer.removeLayer(marker);
+      markerStore.delete(key);
+    }
+  }
+
+  // Update Counts
+  const onlineEl = document.getElementById('onlineCount');
+  if (onlineEl) onlineEl.textContent = online;
+  const idleEl = document.getElementById('idleCount');
+  if (idleEl) idleEl.textContent = idle;
+  const offlineEl = document.getElementById('offlineCount');
+  if (offlineEl) offlineEl.textContent = offline;
+
+  // Center map if needed
+  if (bounds.length > 0) {
+    const currentZoom = trackerMap.getZoom();
+    if (currentZoom <= 5) {
+      trackerMap.fitBounds(bounds, { padding: [100, 100], maxZoom: 14 });
+    }
+  }
 }
 
 function startAutoRefresh() {
@@ -453,9 +470,6 @@ export function stopAutoRefresh() {
   }
 }
 
-/**
- * Export a cleanup function for main.js
- */
 export function cleanupTracker() {
   stopAutoRefresh();
   if (trackerMap) {
@@ -463,5 +477,6 @@ export function cleanupTracker() {
     trackerMap.remove();
     trackerMap = null;
     markerLayer = null;
+    markerStore.clear();
   }
 }
