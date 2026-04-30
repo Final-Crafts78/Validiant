@@ -14,7 +14,6 @@ export function showEmployees() {
       <h2><i class="fas fa-users"></i> Employees</h2>
       <button class="btn btn-primary" data-action="admin:showAddEmployee"><i class="fas fa-user-plus"></i> Add Employee</button>
     </div>
-    </div>
     <div id="employeesList"><div class="loading-spinner show">Loading...</div></div>
     <style>
       /* Toggle Switch */
@@ -183,7 +182,9 @@ export function showAddEmployee() {
           employeeId: document.getElementById('newEmpId').value,
           email: document.getElementById('newEmpEmail').value,
           phone: document.getElementById('newEmpPhone').value,
-          password: document.getElementById('newEmpPass').value
+          password: document.getElementById('newEmpPass').value,
+          adminId: state.currentUser.id,
+          adminName: state.currentUser.name
         })
       });
       const data = await res.json();
@@ -211,7 +212,11 @@ export async function deleteEmployee(id, name) {
     const res = await fetch(`/api/users/${id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminPassword: pass })
+      body: JSON.stringify({ 
+        adminPassword: pass,
+        adminId: state.currentUser.id,
+        adminName: state.currentUser.name
+      })
     });
     const data = await res.json();
     if (data.success) {
@@ -226,8 +231,12 @@ export async function deleteEmployee(id, name) {
 }
 
 export function showEditEmployeeModal(empId) {
-  const emp = state.allEmployees?.find(u => u.id === empId);
-  if (!emp) return showToast('Employee data not found', 'error');
+  console.log(`[DEBUG] 🛠️ showEditEmployeeModal called for ID: ${empId} (Type: ${typeof empId})`);
+  const emp = state.allEmployees?.find(u => u.id == empId);
+  if (!emp) {
+    console.error(`[DEBUG] ❌ Employee ${empId} NOT FOUND in state.allEmployees:`, state.allEmployees);
+    return showToast('Employee data not found', 'error');
+  }
 
   const content = `
     <form id="editEmpForm" style="display:flex; flex-direction:column; gap:15px;">
@@ -267,7 +276,9 @@ export function showEditEmployeeModal(empId) {
           name: document.getElementById('editEmpName').value,
           employeeId: document.getElementById('editEmpId').value,
           email: document.getElementById('editEmpEmail').value,
-          phone: document.getElementById('editEmpPhone').value
+          phone: document.getElementById('editEmpPhone').value,
+          adminId: state.currentUser.id,
+          adminName: state.currentUser.name
         })
       });
       if (res.ok) {

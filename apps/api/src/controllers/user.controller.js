@@ -37,10 +37,12 @@ class UserController {
   async deleteEmployee(req, res) {
     try {
       const { id } = req.params;
-      const { adminPassword } = req.body;
-      await userService.deleteEmployee(id, adminPassword);
+      const { adminPassword, adminId } = req.body;
+      console.log(`[DEBUG] 📲 DELETE /api/users/${id} | Admin ID: ${adminId}`);
+      await userService.deleteEmployee(id, adminPassword, adminId);
       res.json({ success: true, message: "Employee deleted" });
     } catch (err) {
+      console.error(`[DEBUG] ❌ deleteEmployee Error:`, err.message);
       res.status(500).json({ success: false, message: err.message });
     }
   }

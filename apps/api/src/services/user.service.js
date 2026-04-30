@@ -38,7 +38,12 @@ class UserService {
       name, email, password: hashedPassword, role: "employee", employee_id: employeeId, phone, is_active: true
     }]);
 
-    if (error) throw error;
+    if (error) {
+      console.error('[DEBUG] ❌ createEmployee Supabase Error:', error);
+      throw error;
+    }
+    
+    console.log(`[DEBUG] ✅ Employee created: ${name}. Logging activity...`);
     await logActivity(adminId, adminName, 'USER_CREATED', null, `Created employee: ${name} (${employeeId})`);
     return true;
   }
@@ -55,7 +60,12 @@ class UserService {
     }
 
     const { error } = await supabase.from("users").update(dbUpdateData).eq("id", id);
-    if (error) throw error;
+    if (error) {
+      console.error('[DEBUG] ❌ updateEmployee Supabase Error:', error);
+      throw error;
+    }
+
+    console.log(`[DEBUG] ✅ Employee updated: ${name}. Logging activity...`);
 
     await logActivity(adminId, adminName, "USER_UPDATED", null, `Updated Employee: ${name}`);
     return true;
@@ -64,10 +74,24 @@ class UserService {
   /**
    * Delete an employee
    */
-  async deleteEmployee(id, adminPassword) {
-    const { data: admin } = await supabase.from("users").select("*").eq("email", "abc@gmail.com").single();
+  async deleteEmployee(id, adminPassword, adminId) {
+    console.log(`[DEBUG] 🗑️ deleteEmployee request for ID: ${id} by Admin: ${adminId}`);
     
-    if (!admin || !(await bcrypt.compare(adminPassword, admin.password))) {
+    // FETCH ADMIN (Dynamic lookup instead of hardcoded email)
+    const { data: admin, error: adminErr } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", adminId)
+      .single();
+    
+    if (adminErr || !admin) {
+      console.error('[DEBUG] ❌ Admin lookup failed:', adminErr || 'Not found');
+      throw new Error("Admin authentication failed");
+    }
+    
+    const isPassValid = await bcrypt.compare(adminPassword, admin.password);
+    if (!isPassValid) {
+      console.warn(`[DEBUG] ⚠️ Invalid password attempt for admin: ${admin.email}`);
       throw new Error("Invalid admin password");
     }
 
