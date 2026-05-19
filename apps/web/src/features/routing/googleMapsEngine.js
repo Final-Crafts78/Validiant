@@ -112,7 +112,8 @@ export async function showMapRouting(allEmployeeTasks, openTaskDetailsModal, isP
               mapTypeControl: false,
               streetViewControl: false,
               fullscreenControl: true,
-              clickableIcons: false
+              clickableIcons: false,
+              gestureHandling: 'greedy'
             });
           } else {
             // Restore the orphaned map instance to the new DOM container
