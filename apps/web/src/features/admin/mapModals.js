@@ -85,6 +85,15 @@ export function showEditMapModal(taskId) {
           if (qMatch) {
             latInput.value = qMatch[1];
             lngInput.value = qMatch[2];
+            return;
+          }
+
+          // 4. SHORT LINK PASSTHROUGH: (goo.gl, maps.app.goo.gl, etc. expanded on backend)
+          const isShortLink = url.includes('goo.gl') || url.includes('maps.app.goo.gl') || url.includes('bit.ly') || url.trim().length < 50;
+          if (isShortLink) {
+            latInput.value = '';
+            lngInput.value = '';
+            showToast('✓ Google short link detected. Precise coordinates will be resolved automatically by the server!', 'success');
           }
         }
       });

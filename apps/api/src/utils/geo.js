@@ -2,9 +2,16 @@ const https = require('https');
 const http = require('http');
 
 /**
- * Follows HTTP redirects to expand short URLs (goo.gl, maps.app.goo.gl, etc.)
+ * Follows HTTP redirects recursively to expand short URLs (goo.gl, maps.app.goo.gl, etc.)
+ * @param {string} shortUrl 
+ * @param {number} depth 
+ * @returns {Promise<string>} Expanded URL
  */
-async function expandUrl(shortUrl) {
+async function expandUrl(shortUrl, depth = 0) {
+  if (depth > 3) {
+    console.log('📍 [COORD-EXTRACT] Max redirect depth reached for short URL:', shortUrl);
+    return shortUrl;
+  }
   if (!shortUrl || !shortUrl.includes('//')) return shortUrl;
   
   return new Promise((resolve) => {
@@ -12,11 +19,23 @@ async function expandUrl(shortUrl) {
       const urlObj = new URL(shortUrl);
       const client = urlObj.protocol === 'https:' ? https : http;
       
-      const req = client.request(shortUrl, { method: 'HEAD', timeout: 5000 }, (res) => {
+      const req = client.request(shortUrl, { 
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 5000 
+      }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          // Recursively expand if needed, but limit to 3 levels to avoid infinite loops
-          resolve(res.headers.location);
+          let nextUrl = res.headers.location;
+          // Resolve relative redirect paths against current URL if necessary
+          if (!nextUrl.includes('//')) {
+            nextUrl = new URL(nextUrl, urlObj.href).href;
+          }
+          res.resume(); // Drain memory / stream
+          resolve(expandUrl(nextUrl, depth + 1));
         } else {
+          res.resume();
           resolve(shortUrl);
         }
       });
@@ -43,10 +62,6 @@ async function extractCoordinates(url) {
   if (url.includes('goo.gl') || url.includes('maps.app.goo.gl') || url.includes('bit.ly') || url.length < 50) {
     console.log('📍 [COORD-EXTRACT] Expanding short URL:', url);
     targetUrl = await expandUrl(url);
-    // Google often does double redirects for mobile shares
-    if (targetUrl.includes('goo.gl') || targetUrl.includes('maps.app.goo.gl')) {
-      targetUrl = await expandUrl(targetUrl);
-    }
   }
 
   console.log('📍 [COORD-EXTRACT] Processing URL:', targetUrl.substring(0, 250));
