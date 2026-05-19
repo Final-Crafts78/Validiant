@@ -5,6 +5,35 @@ const taskService = require("../services/task.service");
  */
 class TaskController {
   /**
+   * Expand Google Maps short URLs and resolve coordinates on the fly for the client UI
+   */
+  async expandMapUrl(req, res) {
+    try {
+      const { url } = req.query;
+      if (!url) {
+        return res.status(400).json({ success: false, message: "URL is required" });
+      }
+
+      const { extractCoordinates } = require("../utils/geo");
+      const coords = await extractCoordinates(url);
+      
+      if (coords) {
+        res.json({
+          success: true,
+          coordinates: coords
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "Could not extract coordinates from the provided URL"
+        });
+      }
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * List tasks with filters
    */
   async getTasks(req, res) {

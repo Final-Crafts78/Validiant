@@ -348,12 +348,32 @@ export async function showAssignTask() {
           return;
         }
 
-        // 4. SHORT LINK PASSTHROUGH: (goo.gl, maps.app.goo.gl, etc. expanded on backend)
+        // 4. SHORT LINK RESOLUTION: (goo.gl, maps.app.goo.gl, etc. resolved on-the-fly via API)
         const isShortLink = url.includes('goo.gl') || url.includes('maps.app.goo.gl') || url.includes('bit.ly') || url.trim().length < 50;
         if (isShortLink) {
           latInput.value = '';
           lngInput.value = '';
-          showToast('✓ Google short link detected. Precise coordinates will be resolved automatically by the server!', 'success');
+          latInput.placeholder = 'Resolving...';
+          lngInput.placeholder = 'Resolving...';
+          
+          fetch(`/api/tasks/expand-url?url=${encodeURIComponent(url)}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.coordinates) {
+                latInput.value = data.coordinates.latitude;
+                lngInput.value = data.coordinates.longitude;
+                latInput.placeholder = 'Manual Lat';
+                lngInput.placeholder = 'Manual Lng';
+                showToast('✓ Short link expanded! Coordinates resolved successfully.', 'success');
+              } else {
+                latInput.placeholder = 'Manual Lat';
+                lngInput.placeholder = 'Manual Lng';
+              }
+            })
+            .catch(() => {
+              latInput.placeholder = 'Manual Lat';
+              lngInput.placeholder = 'Manual Lng';
+            });
           return;
         }
 

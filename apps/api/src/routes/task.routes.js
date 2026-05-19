@@ -22,6 +22,7 @@ router.post('/bulk/check-duplicates', taskController.bulkCheckDuplicates);
 router.post('/bulk/create', taskController.bulkCreateJson);
 
 router.get('/unassigned', taskController.getUnassignedTasks);
+router.get('/expand-url', taskController.expandMapUrl);
 router.get('/:id', taskController.getTaskById);
 router.post('/optimize', taskController.optimize);
 router.put('/:id', taskController.updateTask);
