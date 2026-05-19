@@ -276,7 +276,9 @@ class TaskController {
           created_by: adminId || null,
           geocode_confidence: geocodeConfidence,
           geocode_match_level: geocodeMatchLevel,
-          location_warning: !!locationWarning
+          location_warning: !!locationWarning,
+          individual_phone: row.individualphone || row.phone || null,
+          individual_alt_phone: row.individualalternatephone || row.individualaltphone || row.altphone || null
         });
         successCount++;
       }

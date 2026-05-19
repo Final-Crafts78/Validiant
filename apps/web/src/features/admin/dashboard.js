@@ -59,6 +59,32 @@ export async function showAssignTask() {
               />
             </div>
             
+            <div class="form-row">
+              <div class="form-group">
+                <label for="individualPhone">
+                  <i class="fas fa-phone"></i> Individual Phone
+                </label>
+                <input 
+                  type="tel" 
+                  id="individualPhone" 
+                  placeholder="Individual Phone"
+                  class="form-input"
+                />
+              </div>
+              
+              <div class="form-group">
+                <label for="individualAltPhone">
+                  <i class="fas fa-phone-square-alt"></i> Alternate Phone
+                </label>
+                <input 
+                  type="tel" 
+                  id="individualAltPhone" 
+                  placeholder="Alt Phone"
+                  class="form-input"
+                />
+              </div>
+            </div>
+            
             <div class="form-group">
               <label for="pincode">
                 <i class="fas fa-map-pin"></i> Pincode <span class="required">*</span>
@@ -425,6 +451,8 @@ async function handleTaskSubmit(e) {
   const payload = {
     title: document.getElementById('caseId').value,
     clientName: document.getElementById('clientName').value || null,
+    individual_phone: document.getElementById('individualPhone').value || null,
+    individual_alt_phone: document.getElementById('individualAltPhone').value || null,
     pincode: pincode,
     address: document.getElementById('address') ? document.getElementById('address').value : null,
     notes: document.getElementById('notes').value || null,

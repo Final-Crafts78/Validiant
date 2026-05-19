@@ -61,11 +61,33 @@ export async function openTaskPanel(taskId) {
       <div class="form-grid" style="grid-template-columns: 1fr; gap:15px;">
         <div class="info-row">
           <label><i class="fas fa-user-tie"></i> Client Name</label>
-          <div>${escapeHtml(task.clientName)}</div>
+          <div>${escapeHtml(task.clientName || task.client_name)}</div>
         </div>
         <div class="info-row">
           <label><i class="fas fa-map-pin"></i> Pincode</label>
           <div>${task.pincode}</div>
+        </div>
+        <div class="info-row">
+          <label><i class="fas fa-phone"></i> Individual Phone</label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${task.individual_phone ? `
+              <span>${escapeHtml(task.individual_phone)}</span>
+              <a href="tel:${escapeHtml(task.individual_phone)}" style="color: #34d399; font-size: 13px; text-decoration: none;" title="Call Number">
+                <i class="fas fa-phone-alt"></i>
+              </a>
+            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
+          </div>
+        </div>
+        <div class="info-row">
+          <label><i class="fas fa-phone-square-alt"></i> Alternate Phone</label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${task.individual_alt_phone ? `
+              <span>${escapeHtml(task.individual_alt_phone)}</span>
+              <a href="tel:${escapeHtml(task.individual_alt_phone)}" style="color: #34d399; font-size: 13px; text-decoration: none;" title="Call Alternate Number">
+                <i class="fas fa-phone-alt"></i>
+              </a>
+            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
+          </div>
         </div>
         <div class="info-row">
           <label><i class="fas fa-sticky-note"></i> Notes</label>
