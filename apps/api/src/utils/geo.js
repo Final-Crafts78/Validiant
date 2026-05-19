@@ -125,22 +125,23 @@ async function extractCoordinates(url) {
 
 /**
  * Fetches a Google Maps page and extracts coordinates from the HTML body.
- * Google embeds "center=LAT%2CLNG" in the page for Place ID URLs.
+ * Leverages high-precision protobuf-based place previews, falling back to page patterns.
  */
 function fetchPageCoordinates(url) {
   return new Promise((resolve) => {
     try {
-      const req = https.get(url, { 
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        timeout: 8000 
-      }, (res) => {
+      const options = {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 8000
+      };
+
+      const req = https.get(url, options, (res) => {
         // Follow one redirect if needed
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume(); // drain the response
-          const redirectReq = https.get(res.headers.location, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 8000
-          }, (redirectRes) => {
+          const redirectReq = https.get(res.headers.location, options, (redirectRes) => {
             collectAndParse(redirectRes, resolve);
           });
           redirectReq.on('error', () => resolve(null));
@@ -160,29 +161,76 @@ function fetchPageCoordinates(url) {
 function collectAndParse(res, resolve) {
   let body = '';
   res.on('data', chunk => { body += chunk; });
-  res.on('end', () => {
-    // Pattern 1: center=LAT%2CLNG (URL-encoded comma in meta/link tags)
-    const centerMatch = body.match(/center=(-?\d{1,3}\.\d{4,})%2C(-?\d{1,3}\.\d{4,})/);
-    if (centerMatch) {
-      return resolve({ latitude: parseFloat(centerMatch[1]), longitude: parseFloat(centerMatch[2]) });
-    }
+  res.on('end', async () => {
+    try {
+      // 1. High-Precision Check: /maps/preview/place in the HTML Link tag
+      const previewMatch = body.match(/\/maps\/preview\/place\?[^"]+/);
+      if (previewMatch) {
+        const rawPath = previewMatch[0].replace(/&amp;/g, '&');
+        const previewUrl = `https://www.google.com` + rawPath;
+        const coords = await fetchPreviewJson(previewUrl);
+        if (coords) {
+          return resolve(coords);
+        }
+      }
 
-    // Pattern 2: !3d/!4d that appeared in the body (sometimes in embedded data)
-    const m3d = body.match(/!3d(-?\d+(?:\.\d+)?)/);
-    const m4d = body.match(/!4d(-?\d+(?:\.\d+)?)/);
-    if (m3d && m4d) {
-      return resolve({ latitude: parseFloat(m3d[1]), longitude: parseFloat(m4d[1]) });
-    }
+      // 2. Fallbacks: Regex patterns in HTML
+      const centerMatch = body.match(/center=(-?\d{1,3}\.\d{4,})%2C(-?\d{1,3}\.\d{4,})/);
+      if (centerMatch) {
+        return resolve({ latitude: parseFloat(centerMatch[1]), longitude: parseFloat(centerMatch[2]) });
+      }
 
-    // Pattern 3: @LAT,LNG in the body
-    const atMatch = body.match(/@(-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
-    if (atMatch) {
-      return resolve({ latitude: parseFloat(atMatch[1]), longitude: parseFloat(atMatch[2]) });
+      const m3d = body.match(/!3d(-?\d+(?:\.\d+)?)/);
+      const m4d = body.match(/!4d(-?\d+(?:\.\d+)?)/);
+      if (m3d && m4d) {
+        return resolve({ latitude: parseFloat(m3d[1]), longitude: parseFloat(m4d[1]) });
+      }
+
+      const atMatch = body.match(/@(-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
+      if (atMatch) {
+        return resolve({ latitude: parseFloat(atMatch[1]), longitude: parseFloat(atMatch[2]) });
+      }
+    } catch (e) {
+      // safe fallback
     }
 
     resolve(null);
   });
   res.on('error', () => resolve(null));
+}
+
+function fetchPreviewJson(url) {
+  return new Promise((resolve) => {
+    try {
+      https.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 8000
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            const clean = body.replace(/^\)\]\}'/, '').trim();
+            const data = JSON.parse(clean);
+            if (data && data[4] && data[4][0]) {
+              const lat = data[4][0][2];
+              const lng = data[4][0][1];
+              if (lat && lng) {
+                return resolve({ latitude: parseFloat(lat), longitude: parseFloat(lng) });
+              }
+            }
+          } catch (e) {
+            // silent fail
+          }
+          resolve(null);
+        });
+      }).on('error', () => resolve(null));
+    } catch (e) {
+      resolve(null);
+    }
+  });
 }
 
 module.exports = { extractCoordinates };
