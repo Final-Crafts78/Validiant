@@ -78,17 +78,17 @@ export async function openTaskPanel(taskId) {
             ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
           </div>
         </div>
+        ${task.individual_alt_phone ? `
         <div class="info-row">
           <label><i class="fas fa-phone-square-alt"></i> Alternate Phone</label>
           <div style="display: flex; align-items: center; gap: 8px;">
-            ${task.individual_alt_phone ? `
-              <span>${escapeHtml(task.individual_alt_phone)}</span>
-              <a href="tel:${escapeHtml(task.individual_alt_phone)}" style="color: #34d399; font-size: 13px; text-decoration: none;" title="Call Alternate Number">
-                <i class="fas fa-phone-alt"></i>
-              </a>
-            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
+            <span>${escapeHtml(task.individual_alt_phone)}</span>
+            <a href="tel:${escapeHtml(task.individual_alt_phone)}" style="color: #34d399; font-size: 13px; text-decoration: none;" title="Call Alternate Number">
+              <i class="fas fa-phone-alt"></i>
+            </a>
           </div>
         </div>
+        ` : ''}
         <div class="info-row">
           <label><i class="fas fa-sticky-note"></i> Notes</label>
           <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; font-size:13px; white-space:pre-wrap;">${escapeHtml(task.notes || 'No notes provided')}</div>
