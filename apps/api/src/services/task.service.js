@@ -15,7 +15,7 @@ class TaskService {
     const limitNum = parseInt(limit);
     
     let query = supabase.from("tasks")
-      .select(select + ", employees:users!tasks_assigned_to_fkey(name)", { count: "exact" })
+      .select(select + ", employees:users!tasks_assigned_to_fkey(name, phone)", { count: "exact" })
       .order("created_at", { ascending: false });
     
     if (status && status !== "all") {
@@ -51,6 +51,7 @@ class TaskService {
         map: addressText.length > 0 ? "Yes" : "No",
         clientName: task.client_name || "-",
         assignedToName: task.employees ? task.employees.name : "Unassigned",
+        assignedToPhone: task.employees ? task.employees.phone : "",
         status: task.status
       };
     });
@@ -72,7 +73,7 @@ class TaskService {
   async getTaskById(taskId) {
     const { data: task, error } = await supabase
       .from("tasks")
-      .select("*, employees:users!tasks_assigned_to_fkey(name)")
+      .select("*, employees:users!tasks_assigned_to_fkey(name, phone)")
       .eq("id", taskId)
       .single();
 
@@ -82,7 +83,8 @@ class TaskService {
     return {
       ...task,
       clientName: task.client_name || "-",
-      assignedToName: task.employees ? task.employees.name : "Unassigned"
+      assignedToName: task.employees ? task.employees.name : "Unassigned",
+      assignedToPhone: task.employees ? task.employees.phone : ""
     };
   }
 
@@ -151,7 +153,8 @@ class TaskService {
       geocode_match_level: geocodeMatchLevel,
       location_warning: !!locationWarning,
       individual_phone: individual_phone || null,
-      individual_alt_phone: individual_alt_phone || null
+      individual_alt_phone: individual_alt_phone || null,
+      whatsapp_sent: false
     }]).select();
 
     if (error) throw error;
@@ -164,7 +167,7 @@ class TaskService {
    * Update task details
    */
   async updateTask(id, updateFields, userId, userName) {
-    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude, individual_phone, individual_alt_phone } = updateFields;
+    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude, individual_phone, individual_alt_phone, whatsapp_sent } = updateFields;
     
     // Fetch current task state to detect transitions and for logging
     const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to, title, client_name").eq("id", id).single();
@@ -181,6 +184,7 @@ class TaskService {
     if (notes) { updateData.notes = notes; changes.push("Notes"); }
     if (individual_phone !== undefined) { updateData.individual_phone = individual_phone; changes.push("Individual Phone"); }
     if (individual_alt_phone !== undefined) { updateData.individual_alt_phone = individual_alt_phone; changes.push("Individual Alternate Phone"); }
+    if (whatsapp_sent !== undefined) { updateData.whatsapp_sent = whatsapp_sent; changes.push(`WhatsApp Sent status to ${whatsapp_sent}`); }
     
     const finalMapUrl = map_url || mapUrl;
     if (finalMapUrl !== undefined) {

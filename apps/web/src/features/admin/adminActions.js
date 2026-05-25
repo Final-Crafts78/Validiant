@@ -114,6 +114,19 @@ export async function openTaskDetailsModal(taskId) {
             <i class="fas fa-map-marker-alt"></i> View Map
           </a>
         ` : ''}
+        ${task.individual_phone ? (() => {
+          const isWhatsappSent = task.whatsapp_sent === true || task.whatsapp_sent === 'true';
+          return `
+            <button class="btn" data-action="admin:sendWhatsApp" data-id="${task.id}" 
+                    style="background: ${isWhatsappSent ? 'transparent' : '#10b981'}; 
+                           color: ${isWhatsappSent ? '#10b981' : '#ffffff'}; 
+                           border: 1px solid #10b981; 
+                           display: inline-flex; align-items: center; gap: 8px; font-weight: 600; 
+                           padding: 9px 16px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+              ${isWhatsappSent ? '<i class="fas fa-sync-alt"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
+            </button>
+          `;
+        })() : ''}
         <button class="btn btn-secondary" data-action="admin:editMapUrl" data-id="${task.id}">
            <i class="fas fa-link"></i> Edit URL
         </button>

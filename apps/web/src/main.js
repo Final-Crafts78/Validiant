@@ -8,8 +8,8 @@ import { showAssignTask } from './features/admin/dashboard';
 import { showTodayTasks, loadTodayTasks } from './features/employee/taskBoard';
 import { showMapRouting } from './features/routing/googleMapsEngine';
 import { openTaskPanel, updateTaskStatus } from './features/employee/taskPanel';
-import { showUnassignedTasks, loadUnassignedTasks, quickAssignTask } from './features/admin/unassignedTasks';
-import { showAllTasks, loadAllTasks, resetAllTaskFilters, prevTaskPage, nextTaskPage } from './features/admin/allTasks';
+import { showUnassignedTasks, loadUnassignedTasks, quickAssignTask, refreshUnassignedUI } from './features/admin/unassignedTasks';
+import { showAllTasks, loadAllTasks, resetAllTaskFilters, prevTaskPage, nextTaskPage, refreshAllTasksUI } from './features/admin/allTasks';
 import { showEmployees, showAddEmployee, deleteEmployee } from './features/admin/employees';
 import { showAnalyticsDashboard } from './features/admin/analytics';
 import { showTaskHistory, loadHistoryTasks } from './features/employee/taskHistory';
@@ -38,6 +38,7 @@ import {
 import { startLocationReporting, stopLocationReporting } from './core/locationReporter';
 import { showExecutiveTracker, cleanupTracker, updateTrackerData } from './features/admin/executiveTracker';
 import { showAdminSettings } from './features/admin/adminSettings';
+import { handleSendWhatsApp } from './utils/whatsapp';
 
 /**
  * SESSION MANAGEMENT (30 Minutes Inactivity Timeout)
@@ -290,6 +291,20 @@ function setupEventDelegation() {
         case 'admin:openTaskDetails':
           if(id) await openTaskDetailsModal(id);
           break;
+        case 'admin:sendWhatsApp':
+          if (id) {
+            const task = state.allAdminTasks?.find(t => t.id == id) 
+                      || state.currentFilteredTasks?.find(t => t.id == id)
+                      || state.allUnassignedTasks?.find(t => t.id == id);
+            if (task) {
+              await handleSendWhatsApp(task, () => {
+                openTaskDetailsModal(parseInt(id));
+                if (document.getElementById('allTasksList')) refreshAllTasksUI();
+                if (document.getElementById('unassignedTasksList')) refreshUnassignedUI();
+              });
+            }
+          }
+          break;
         case 'admin:openStatusUpdate':
           if(id) openStatusUpdateModal(id, status || '');
           break;
@@ -499,6 +514,17 @@ async function triggerInitialView(action, role) {
       else showTodayTasks();
   }
 }
+
+// Global Employee WhatsApp handler
+window._sendEmployeeWhatsApp = async (taskId, event) => {
+  if (event) event.stopPropagation();
+  const task = state.allEmployeeTasks?.find(t => t.id == taskId);
+  if (task) {
+    await handleSendWhatsApp(task, () => {
+      if (window._currentRefreshHandler) window._currentRefreshHandler();
+    });
+  }
+};
 
 // Start the engine
 document.addEventListener('DOMContentLoaded', init);

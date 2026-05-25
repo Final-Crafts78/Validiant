@@ -183,46 +183,64 @@ export function displayEmployeeTasks(tasks) {
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
             <span class="status-badge ${statusClass}">${task.status}</span>
             ${slaBadge}
-            <div onclick="event.stopPropagation();" style="margin-top:auto;">
+            <div onclick="event.stopPropagation();" style="margin-top:auto; display:flex; flex-direction:column; gap:8px; align-items:stretch;">
               ${(() => {
+                const isWhatsappSent = task.whatsapp_sent === true || task.whatsapp_sent === 'true';
+                const whatsappBtn = task.individual_phone ? `
+                  <button onclick="window._sendEmployeeWhatsApp(${task.id}, event)" 
+                          class="btn btn-sm" 
+                          style="padding:8px 12px; font-size:12px; 
+                                 background: ${isWhatsappSent ? 'transparent' : '#10b981'}; 
+                                 color: ${isWhatsappSent ? '#10b981' : '#ffffff'}; 
+                                 border: 1px solid #10b981; 
+                                 border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; 
+                                 cursor:pointer; font-weight:600; transition: all 0.2s; white-space:nowrap;">
+                    ${isWhatsappSent ? '<i class="fas fa-sync-alt"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
+                  </button>
+                ` : '';
+
                 if (mapLink) {
                   return `
                     <button onclick="window.open('${escapeHtml(mapLink)}', '_blank')" 
                             class="btn btn-primary btn-sm navigate-btn-elite" 
-                            style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                            style="padding:8px 12px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active; margin-bottom: 2px;">
                       <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
                       <span style="font-weight:600;">Navigate</span>
                     </button>
+                    ${whatsappBtn}
                   `;
                 } else if (hasCoords && confidence >= 95) {
                   return `
                     <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}', '_blank')" 
                             class="btn btn-primary btn-sm navigate-btn-elite" 
-                            style="padding:10px 20px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                            style="padding:8px 12px; font-size:12px; background:#3b82f6; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(59, 130, 246, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active; margin-bottom: 2px;">
                       <i class="fas fa-location-arrow" style="font-size:14px;"></i> 
                       <span style="font-weight:600;">Navigate</span>
                     </button>
+                    ${whatsappBtn}
                   `;
                 } else if (hasCoords && confidence >= 75) {
                   return `
                     <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${task.latitude},${task.longitude}', '_blank')" 
                             class="btn btn-warning btn-sm navigate-btn-elite" 
-                            style="padding:10px 20px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(245, 158, 11, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;" title="Location is approximate">
+                            style="padding:8px 12px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(245, 158, 11, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active; margin-bottom: 2px;" title="Location is approximate">
                       <i class="fas fa-exclamation-triangle" style="font-size:14px;"></i> 
                       <span style="font-weight:600;">Navigate</span>
                     </button>
+                    ${whatsappBtn}
                   `;
                 } else if (canEditMap) {
                   return `
                     <button onclick="event.stopPropagation(); const card = document.querySelector('[data-action=\\'task:openPanel\\'][data-id=\\'${task.id}\\']'); if(card) card.click(); setTimeout(() => { const btn = document.querySelector('#editMapContainer_${task.id}'); if(btn) { btn.style.display='block'; if(btn.previousElementSibling) btn.previousElementSibling.style.display='none'; } }, 300);" 
                             class="btn btn-primary btn-sm navigate-btn-elite" 
-                            style="padding:10px 20px; font-size:12px; background:#6366f1; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(99, 102, 241, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active;">
+                            style="padding:8px 12px; font-size:12px; background:#6366f1; border:none; color:white; border-radius:8px; box-shadow:0 4px 6px -1px rgba(99, 102, 241, 0.5); width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: transform 0.1s active; margin-bottom: 2px;">
                       <i class="fas fa-plus-circle" style="font-size:14px;"></i> 
                       <span style="font-weight:600;">Add Map Link</span>
                     </button>
+                    ${whatsappBtn}
                   `;
                 }
-                return '';
+                return whatsappBtn;
               })()}
             </div>
           </div>

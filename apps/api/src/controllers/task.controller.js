@@ -278,7 +278,8 @@ class TaskController {
           geocode_match_level: geocodeMatchLevel,
           location_warning: !!locationWarning,
           individual_phone: row.individualphone || row.phone || null,
-          individual_alt_phone: row.individualalternatephone || row.individualaltphone || row.altphone || null
+          individual_alt_phone: row.individualalternatephone || row.individualaltphone || row.altphone || null,
+          whatsapp_sent: false
         });
         successCount++;
       }
@@ -439,7 +440,8 @@ class TaskController {
           assigned_date: assignedDate, created_by: createdBy || adminId,
           geocode_confidence: geocodeConfidence,
           geocode_match_level: geocodeMatchLevel,
-          location_warning: !!locationWarning
+          location_warning: !!locationWarning,
+          whatsapp_sent: false
         });
       }
 
