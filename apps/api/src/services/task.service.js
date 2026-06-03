@@ -25,7 +25,14 @@ class TaskService {
         query = query.eq("status", status);
       }
     }
-    if (employeeId && employeeId !== "all") query = query.eq("assigned_to", parseInt(employeeId));
+    if (employeeId && employeeId !== "all") {
+      const ids = employeeId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      if (ids.length > 1) {
+        query = query.in("assigned_to", ids);
+      } else if (ids.length === 1) {
+        query = query.eq("assigned_to", ids[0]);
+      }
+    }
     if (pincode) query = query.eq("pincode", pincode);
     if (fromDate) query = query.gte("created_at", `${fromDate}T00:00:00`);
     if (toDate) query = query.lte("created_at", `${toDate}T23:59:59`);

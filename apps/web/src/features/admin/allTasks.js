@@ -7,7 +7,7 @@ import { createModal, closeAllModals } from '../../utils/modals';
 import { toggleSelectAll, handleSingleSelection, clearSelection } from './bulkOperations';
 
 let currentTaskPage = 1;
-const TASKS_PER_PAGE = 25;
+let tasksPerPage = 25;
 let lastAllTasksResponse = null;
 
 export function showAllTasks() {
@@ -42,14 +42,32 @@ export function showAllTasks() {
         <option value="Unable To Verify">Unable To Verify</option>
       </select>
 
-      <select id="allTasksEmployeeFilter" class="form-input" style="flex:1 1 180px;">
-        <option value="all">All Employees / Unassigned</option>
-      </select>
+      <div style="position:relative; flex:1 1 180px;" id="employeeFilterWrapper">
+        <div id="employeeSelectBtn" class="form-input" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+          <span id="employeeSelectText" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">All Employees / Unassigned</span>
+          <i class="fas fa-chevron-down"></i>
+        </div>
+        <div id="employeeDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#1e293b; border:1px solid #334155; border-radius:8px; z-index:100; max-height:250px; overflow-y:auto; padding:8px; margin-top:4px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+          <label style="display:flex; align-items:center; gap:8px; padding:6px; cursor:pointer; color:#e2e8f0; font-size:13px; border-radius:4px;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'">
+            <input type="checkbox" value="all" class="emp-filter-cb" checked id="empFilterAll"> All Employees / Unassigned
+          </label>
+          <hr style="border-color:#334155; margin:4px 0;">
+          <div id="employeeCheckboxList"></div>
+        </div>
+      </div>
 
       <input type="text" id="allTasksPincodeFilter" class="form-input" placeholder="Pincode" style="flex:1 1 100px; max-width:120px;">
       <input type="date" id="allTasksFromDate" class="form-input" title="From Date" style="flex:1 1 130px; max-width:150px;">
       <input type="date" id="allTasksToDate" class="form-input" title="To Date" style="flex:1 1 130px; max-width:150px;">
       <input type="text" id="allTasksSearch" class="search-box" placeholder="Search Case ID, Client, Notes..." style="flex:1 1 220px; max-width:360px;">
+
+      <select id="allTasksPerPage" class="form-input" style="flex:0 0 130px;" title="Page Size">
+        <option value="25">Page Size: 25</option>
+        <option value="50">Page Size: 50</option>
+        <option value="100">Page Size: 100</option>
+        <option value="200">Page Size: 200</option>
+        <option value="500">Page Size: 500</option>
+      </select>
 
       <button class="btn btn-info btn-sm" data-action="admin:loadAllTasks"><i class="fas fa-filter"></i> Apply</button>
       <button class="btn btn-secondary btn-sm" data-action="admin:resetTaskFilters"><i class="fas fa-undo"></i> Reset</button>
@@ -81,42 +99,118 @@ export function showAllTasks() {
 
   // Load Employees for Filter using stale-while-revalidate pattern
   fetchEmployeesIfStale().then(users => {
-    const select = document.getElementById('allTasksEmployeeFilter');
-    if (select) {
-      // Clear existing except "All"
-      select.innerHTML = '<option value="all">All Employees / Unassigned</option>';
+    const listContainer = document.getElementById('employeeCheckboxList');
+    if (listContainer) {
+      listContainer.innerHTML = '';
       users.forEach(u => {
-        select.innerHTML += `<option value="${u.id}">${escapeHtml(u.name)}</option>`;
+        listContainer.innerHTML += `
+          <label style="display:flex; align-items:center; gap:8px; padding:6px; cursor:pointer; color:#cbd5e1; font-size:13px; border-radius:4px;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'">
+            <input type="checkbox" value="${u.id}" class="emp-filter-cb emp-filter-item"> ${escapeHtml(u.name)}
+          </label>
+        `;
       });
+      setupEmployeeFilterDropdown();
     }
   });
 
+function setupEmployeeFilterDropdown() {
+  const btn = document.getElementById('employeeSelectBtn');
+  const dropdown = document.getElementById('employeeDropdown');
+  const allCb = document.getElementById('empFilterAll');
+  const itemCbs = document.querySelectorAll('.emp-filter-item');
+  const textSpan = document.getElementById('employeeSelectText');
+
+  if (!btn || !dropdown) return;
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('employeeFilterWrapper')?.contains(e.target)) {
+      if (dropdown) dropdown.style.display = 'none';
+    }
+  });
+
+  const updateText = () => {
+    const selected = Array.from(itemCbs).filter(cb => cb.checked);
+    if (allCb.checked || selected.length === 0) {
+      textSpan.textContent = 'All Employees / Unassigned';
+      allCb.checked = true;
+      itemCbs.forEach(cb => cb.checked = false);
+    } else if (selected.length === 1) {
+      textSpan.textContent = selected[0].parentNode.textContent.trim();
+    } else {
+      textSpan.textContent = `${selected.length} Employees Selected`;
+    }
+    currentTaskPage = 1;
+    loadAllTasks();
+  };
+
+  allCb.onchange = (e) => {
+    if (allCb.checked) {
+      itemCbs.forEach(cb => cb.checked = false);
+    } else {
+      allCb.checked = true; 
+    }
+    updateText();
+  };
+
+  itemCbs.forEach(cb => {
+    cb.onchange = (e) => {
+      if (cb.checked) {
+        allCb.checked = false;
+      }
+      updateText();
+    };
+  });
+}
+
+  const resetPageAndLoad = () => {
+    currentTaskPage = 1;
+    loadAllTasks();
+  };
+
   // Debounced Filter Listeners
-  const debouncedLoad = debounce(loadAllTasks, 400);
+  const debouncedLoad = debounce(resetPageAndLoad, 400);
   
   document.getElementById('allTasksSearch')?.addEventListener('input', debouncedLoad);
   document.getElementById('allTasksPincodeFilter')?.addEventListener('input', debouncedLoad);
   
   // Dropdowns can trigger instantly as they are low-frequency
-  document.getElementById('allTasksStatusFilter')?.addEventListener('change', loadAllTasks);
-  document.getElementById('allTasksEmployeeFilter')?.addEventListener('change', loadAllTasks);
-  document.getElementById('allTasksFromDate')?.addEventListener('change', loadAllTasks);
-  document.getElementById('allTasksToDate')?.addEventListener('change', loadAllTasks);
+  document.getElementById('allTasksStatusFilter')?.addEventListener('change', resetPageAndLoad);
+  document.getElementById('allTasksPerPage')?.addEventListener('change', (e) => {
+    tasksPerPage = parseInt(e.target.value) || 25;
+    resetPageAndLoad();
+  });
+  // Employee filter triggers inside its setup
+  document.getElementById('allTasksFromDate')?.addEventListener('change', resetPageAndLoad);
+  document.getElementById('allTasksToDate')?.addEventListener('change', resetPageAndLoad);
 
-  loadAllTasks();
+  resetPageAndLoad();
 }
 
 export async function loadAllTasks() {
   const status = document.getElementById('allTasksStatusFilter')?.value || 'all';
-  const empId = document.getElementById('allTasksEmployeeFilter')?.value || 'all';
+  
+  let empIds = 'all';
+  const allCb = document.getElementById('empFilterAll');
+  if (allCb && !allCb.checked) {
+    const selected = Array.from(document.querySelectorAll('.emp-filter-item:checked')).map(cb => cb.value);
+    if (selected.length > 0) {
+      empIds = selected.join(',');
+    }
+  }
+
   const pincode = document.getElementById('allTasksPincodeFilter')?.value?.trim() || '';
   const search = document.getElementById('allTasksSearch')?.value?.trim() || '';
   const fromDate = document.getElementById('allTasksFromDate')?.value || '';
   const toDate = document.getElementById('allTasksToDate')?.value || '';
 
-  let url = `/api/tasks?role=admin&page=${currentTaskPage}&limit=${TASKS_PER_PAGE}&select=${MINIMAL_TASK_FIELDS}`;
+  let url = `/api/tasks?role=admin&page=${currentTaskPage}&limit=${tasksPerPage}&select=${MINIMAL_TASK_FIELDS}`;
   if (status !== 'all') url += `&status=${encodeURIComponent(status)}`;
-  if (empId !== 'all') url += `&employeeId=${encodeURIComponent(empId)}`;
+  if (empIds !== 'all') url += `&employeeId=${encodeURIComponent(empIds)}`;
   if (pincode) url += `&pincode=${encodeURIComponent(pincode)}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
   if (fromDate) url += `&fromDate=${encodeURIComponent(fromDate)}`;
@@ -178,7 +272,19 @@ function applyDateFilter(tasks) {
 
 export function resetAllTaskFilters() {
   if (document.getElementById('allTasksStatusFilter')) document.getElementById('allTasksStatusFilter').value = 'all';
-  if (document.getElementById('allTasksEmployeeFilter')) document.getElementById('allTasksEmployeeFilter').value = 'all';
+  if (document.getElementById('allTasksPerPage')) document.getElementById('allTasksPerPage').value = '25';
+  
+  tasksPerPage = 25;
+  currentTaskPage = 1;
+  
+  const allCb = document.getElementById('empFilterAll');
+  if (allCb) {
+    allCb.checked = true;
+    document.querySelectorAll('.emp-filter-item').forEach(cb => cb.checked = false);
+    const textSpan = document.getElementById('employeeSelectText');
+    if (textSpan) textSpan.textContent = 'All Employees / Unassigned';
+  }
+  
   if (document.getElementById('allTasksPincodeFilter')) document.getElementById('allTasksPincodeFilter').value = '';
   if (document.getElementById('allTasksFromDate')) document.getElementById('allTasksFromDate').value = '';
   if (document.getElementById('allTasksToDate')) document.getElementById('allTasksToDate').value = '';
@@ -193,6 +299,18 @@ function updateFilterChips() {
   
   const status = document.getElementById('allTasksStatusFilter')?.value;
   if(status && status !== 'all') chips.push(`Status: ${status}`);
+  
+  const allCb = document.getElementById('empFilterAll');
+  if (allCb && !allCb.checked) {
+    const selected = Array.from(document.querySelectorAll('.emp-filter-item:checked'));
+    if (selected.length > 0) {
+      if (selected.length === 1) {
+        chips.push(`Employee: ${selected[0].parentNode.textContent.trim()}`);
+      } else {
+        chips.push(`Employees: ${selected.length} Selected`);
+      }
+    }
+  }
   
   const search = document.getElementById('allTasksSearch')?.value;
   if(search) chips.push(`Search: ${search}`);
@@ -224,8 +342,8 @@ function displayAllTasksList(responseData) {
     return;
   }
 
-  const startIndex = (currentTaskPage - 1) * TASKS_PER_PAGE;
-  const endIndex = Math.min(startIndex + TASKS_PER_PAGE, totalCount);
+  const startIndex = (currentTaskPage - 1) * tasksPerPage;
+  const endIndex = Math.min(startIndex + tasksPerPage, totalCount);
 
   let html = `
     <div class="table-header-info gpu-boost" style="margin-bottom:15px; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
