@@ -67,17 +67,17 @@ export async function openTaskPanel(taskId) {
           <label><i class="fas fa-map-pin"></i> Pincode</label>
           <div>${task.pincode}</div>
         </div>
+        ${task.individual_phone ? `
         <div class="info-row">
           <label><i class="fas fa-phone"></i> Individual Phone</label>
           <div style="display: flex; align-items: center; gap: 8px;">
-            ${task.individual_phone ? `
               <span>${escapeHtml(task.individual_phone)}</span>
               <a href="tel:${escapeHtml(task.individual_phone)}" style="color: #34d399; font-size: 13px; text-decoration: none;" title="Call Number">
                 <i class="fas fa-phone-alt"></i>
               </a>
-            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
           </div>
         </div>
+        ` : ''}
         ${task.individual_alt_phone ? `
         <div class="info-row">
           <label><i class="fas fa-phone-square-alt"></i> Alternate Phone</label>

@@ -54,9 +54,9 @@ export async function loadEmployeesList() {
     }
 
     let html = `
-      <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
+      <div class="table-container gpu-boost" style="overflow-x: auto; background: #1e293b; border-radius: 8px; border: 1px solid #334155; contain: content;">
+        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead style="border-bottom: 1px solid #334155;">
             <tr>
               <th>Name</th>
               <th>ID</th>
@@ -79,7 +79,7 @@ export async function loadEmployeesList() {
         <td style="padding:12px 15px; text-align:center;"><span class="info-badge" style="background:#312e81; color:#c7d2fe;">${activeTasks}</span></td>
         <td style="padding:12px 15px; text-align:center;">
           <label class="switch" style="transform: scale(0.8); margin: 0;">
-            <input type="checkbox" ${hasMapAccess ? 'checked' : ''} onchange="window._toggleEmployeeMapAccess(${u.id}, this.checked, this)">
+            <input type="checkbox" ${hasMapAccess ? 'checked' : ''} onchange="window._toggleEmployeeMapAccess('${u.id}', this.checked, this)">
             <span class="slider"></span>
           </label>
         </td>
@@ -261,7 +261,7 @@ export function showEditEmployeeModal(empId) {
         </div>
       </div>
       <div class="modal-actions" style="margin-top:10px;">
-        <button type="button" class="btn btn-primary" onclick="window._saveEditEmployee(${emp.id})"><i class="fas fa-save"></i> Save Changes</button>
+        <button type="button" class="btn btn-primary" onclick="window._saveEditEmployee('${emp.id}')"><i class="fas fa-save"></i> Save Changes</button>
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalCloseBtn').click()"><i class="fas fa-times"></i> Cancel</button>
       </div>
     </form>

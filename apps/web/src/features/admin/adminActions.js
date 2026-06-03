@@ -65,28 +65,28 @@ export async function openTaskDetailsModal(taskId) {
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Assigned To</div>
           <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${escapeHtml(task.assignedToName || 'Unassigned')}</div>
         </div>
+        ${task.individual_phone ? `
         <div class="info-item">
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Individual Phone</div>
           <div style="color: #E5E7EB; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            ${task.individual_phone ? `
               <span>${escapeHtml(task.individual_phone)}</span>
               <a href="tel:${escapeHtml(task.individual_phone)}" style="color: #10B981; font-size: 13px; text-decoration: none;" title="Call Number">
                 <i class="fas fa-phone-alt"></i>
               </a>
-            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
           </div>
         </div>
+        ` : ''}
+        ${task.individual_alt_phone ? `
         <div class="info-item">
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Individual Alternate Phone</div>
           <div style="color: #E5E7EB; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            ${task.individual_alt_phone ? `
               <span>${escapeHtml(task.individual_alt_phone)}</span>
               <a href="tel:${escapeHtml(task.individual_alt_phone)}" style="color: #10B981; font-size: 13px; text-decoration: none;" title="Call Alternate Number">
                 <i class="fas fa-phone-alt"></i>
               </a>
-            ` : '<span style="color:#64748b; font-style:italic;">-</span>'}
           </div>
         </div>
+        ` : ''}
       </div>
       
       <div class="task-notes-section" style="background: rgba(15, 23, 42, 0.4); padding: 15px; border-radius: 8px; margin-bottom: 25px; position:relative;">
