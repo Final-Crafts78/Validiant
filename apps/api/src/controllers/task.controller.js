@@ -385,7 +385,7 @@ class TaskController {
 
       for (let i = 0; i < tasks.length; i++) {
         const taskData = tasks[i];
-        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude } = taskData;
+        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
         let finalMapUrl = mapUrl || map_url || null;
         
         let finalLat = latitude || null;
@@ -441,6 +441,8 @@ class TaskController {
           geocode_confidence: geocodeConfidence,
           geocode_match_level: geocodeMatchLevel,
           location_warning: !!locationWarning,
+          individual_phone: individual_phone || null,
+          individual_alt_phone: individual_alt_phone || null,
           whatsapp_sent: false
         });
       }

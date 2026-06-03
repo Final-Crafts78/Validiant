@@ -195,7 +195,7 @@ export function displayEmployeeTasks(tasks) {
                                  border: 1px solid #10b981; 
                                  border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; 
                                  cursor:pointer; font-weight:600; transition: all 0.2s; white-space:nowrap;">
-                    ${isWhatsappSent ? '<i class="fas fa-sync-alt"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
+                    ${isWhatsappSent ? '<i class="fab fa-whatsapp"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
                   </button>
                 ` : '';
 

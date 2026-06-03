@@ -78,6 +78,16 @@ export const handleSendWhatsApp = async (task, onStateChange) => {
     
     if (res.ok) {
       task.whatsapp_sent = true;
+      // Patch all state arrays to ensure consistent Resend state regardless of lookup source
+      const patchSent = (arr) => {
+        if (!arr) return;
+        const t = arr.find(item => item.id == task.id);
+        if (t) t.whatsapp_sent = true;
+      };
+      patchSent(state.allAdminTasks);
+      patchSent(state.currentFilteredTasks);
+      patchSent(state.allUnassignedTasks);
+      patchSent(state.allEmployeeTasks);
       if (onStateChange) {
         onStateChange();
       }

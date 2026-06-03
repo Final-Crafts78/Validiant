@@ -123,7 +123,7 @@ export async function openTaskDetailsModal(taskId) {
                            border: 1px solid #10b981; 
                            display: inline-flex; align-items: center; gap: 8px; font-weight: 600; 
                            padding: 9px 16px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-              ${isWhatsappSent ? '<i class="fas fa-sync-alt"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
+              ${isWhatsappSent ? '<i class="fab fa-whatsapp"></i> Resend' : '<i class="fab fa-whatsapp"></i> Send'}
             </button>
           `;
         })() : ''}
