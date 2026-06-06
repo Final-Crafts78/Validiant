@@ -212,7 +212,9 @@ function smartColumnMapper(rawData) {
   const normalized = [];
   const mapRules = {
     title: ['caseid', 'requestid', 'id', 'title', 'case', 'ticket', 'ref', 'number'],
-    clientName: ['client', 'customer', 'individual', 'name', 'party'],
+    individual_phone: ['individualphone', 'phone', 'mobile', 'cell', 'phoneno', 'mobileno', 'contactno', 'contactnumber'],
+    individual_alt_phone: ['alternatephone', 'altphone', 'secondaryphone', 'altmobile', 'alternateno', 'individualaltphone', 'individualalternatephone'],
+    clientName: ['client', 'customer', 'individualname', 'party', 'company'],
     pincode: ['pincode', 'pin', 'zip', 'postal'],
     address: ['address', 'location', 'addr', 'site'],
     mapUrl: ['map', 'url', 'link', 'google', 'location_link'],
@@ -237,6 +239,8 @@ function smartColumnMapper(rawData) {
     newRow.address = findValue('address');
     newRow.mapUrl = findValue('mapUrl');
     newRow.notes = findValue('notes');
+    newRow.individual_phone = findValue('individual_phone') ? String(findValue('individual_phone')).trim() : null;
+    newRow.individual_alt_phone = findValue('individual_alt_phone') ? String(findValue('individual_alt_phone')).trim() : null;
     
     // Legacy Employee Matching (ID OR Name)
     const empVal = findValue('assignedTo');
@@ -284,6 +288,8 @@ function showSmartPreview(tasks) {
               <th>Case ID / Title</th>
               <th>Pincode</th>
               <th>Client</th>
+              <th style="min-width:110px;">Phone</th>
+              <th style="min-width:110px;">Alt Phone</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -293,6 +299,8 @@ function showSmartPreview(tasks) {
                 <td><input type="text" value="${escapeHtml(t.title)}" class="form-input text-sm" name="title"></td>
                 <td><input type="text" value="${escapeHtml(t.pincode || '')}" class="form-input text-sm" name="pincode" style="width:80px"></td>
                 <td>${escapeHtml(t.clientName || '-')}</td>
+                <td>${t.individual_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
+                <td>${t.individual_alt_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_alt_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
                 <td>${t.assignedTo ? '<span class="status-badge status-verified">Matched</span>' : '<span class="status-badge status-unassigned">Pool</span>'}</td>
               </tr>
             `).join('')}
@@ -442,6 +450,8 @@ async function updateExistingTasks(duplicates) {
     if (dup.clientName) updatePayload.clientName = dup.clientName;
     if (dup.mapUrl) updatePayload.mapUrl = dup.mapUrl;
     if (dup.assignedTo) updatePayload.assignedTo = dup.assignedTo;
+    if (dup.individual_phone) updatePayload.individual_phone = dup.individual_phone;
+    if (dup.individual_alt_phone) updatePayload.individual_alt_phone = dup.individual_alt_phone;
 
     try {
       const res = await fetch(`/api/tasks/${dup.existingId}`, {
@@ -497,10 +507,10 @@ async function processBulkUpload(tasks) {
 }
 
 export function downloadBulkUploadTemplate() {
-  const csvContent = `CaseID,Pincode,ClientName,Address,EmployeeID,MapURL,Notes
-CASE001,560001,ABC Company,123 MG Road Bangalore 560001,,http://maps.google.com/example,Priority task
-CASE002,560002,XYZ Corp,456 Anna Salai Chennai 560002,EMP123,,Assign to specific ID
-CASE003,560003,Test Client,789 Park Street Kolkata 560003,,,Leave EmployeeID empty for pool`;
+  const csvContent = `CaseID,Pincode,ClientName,IndividualPhone,AltPhone,Address,EmployeeID,MapURL,Notes
+CASE001,560001,ABC Company,9876543210,9876543211,123 MG Road Bangalore 560001,,http://maps.google.com/example,Priority task
+CASE002,560002,XYZ Corp,8765432100,,456 Anna Salai Chennai 560002,EMP123,,Assign to specific ID
+CASE003,560003,Test Client,,,789 Park Street Kolkata 560003,,,Leave EmployeeID empty for pool`;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
