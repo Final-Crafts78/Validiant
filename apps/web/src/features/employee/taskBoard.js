@@ -59,16 +59,6 @@ export async function loadTodayTasks(searchTerm = "") {
     const list = document.getElementById('todayTasksList');
     if (list) list.innerHTML = renderTaskSkeleton();
 
-    if (state.featureFlags.executive_map_edit === undefined) {
-      try {
-        const flagRes = await fetch('/api/settings/executive_map_edit');
-        const flagData = await flagRes.json();
-        state.featureFlags.executive_map_edit = (flagData.success && flagData.value) ? flagData.value : {};
-      } catch (e) {
-        state.featureFlags.executive_map_edit = {};
-      }
-    }
-
     const ts = Date.now();
     const url = `/api/tasks?role=employee&status=active&employeeId=${state.currentUser.id}&_t=${ts}` + 
                 (searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '');
@@ -150,7 +140,9 @@ export function displayEmployeeTasks(tasks) {
       ? `<span style="background:rgba(16,185,129,0.15); color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500;"><i class="fas fa-route"></i> ${task.distanceKm} km</span>`
       : '';
 
-    const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
+    const canEditMap = state.featureFlags.executive_map_edit_global?.enabled === true &&
+                       state.featureFlags.executive_map_edit_users[state.currentUser.id] === true &&
+                       state.currentUser.role === 'employee';
     const confidence = parseFloat(task.geocode_confidence) || 0;
     const hasCoords = parseFloat(task.latitude) && parseFloat(task.longitude);
     const noMapLink = !mapLink;

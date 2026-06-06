@@ -26,10 +26,10 @@ class SettingsController {
       const { employeeId } = req.params;
       const { enabled, adminId, adminName } = req.body;
       
-      const currentValue = await settingsService.getSetting('executive_map_edit') || {};
+      const currentValue = await settingsService.getSetting('executive_map_edit_users') || {};
       currentValue[employeeId] = enabled;
       
-      await settingsService.setSetting('executive_map_edit', currentValue, adminId);
+      await settingsService.setSetting('executive_map_edit_users', currentValue, adminId);
       
       if (adminId && adminName) {
          await logActivity(adminId, adminName, 'SETTING_UPDATED', null, `Updated map access for employee ${employeeId} to ${enabled}`);

@@ -11,6 +11,8 @@ let filterClickListener = null;
 let selectedExecutivesFilter = [];
 const REFRESH_RATE = 30000; // 30 seconds
 const markerStore = new Map(); // Store markers by unique keys: 'exec_ID' or 'task_ID'
+let activePathLine = null;
+let pathMarkers = [];
 
 export async function showExecutiveTracker() {
   const container = document.getElementById('mainContainer');
@@ -408,6 +410,10 @@ async function renderTrackerMap() {
             </div>
           </div>
 
+          <button class="btn btn-info btn-sm" style="width:100%; height:32px; font-size:12px; font-weight:600; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:8px; background:#6366f1; border-color:#6366f1; color:white;" onclick="window._showExecutiveBreadcrumbs('${exec.id}', '${escapeHtml(exec.name)}')">
+            <i class="fas fa-route"></i> View Today's Path
+          </button>
+
           <button class="btn btn-primary btn-sm" style="width:100%; height:32px; font-size:12px; font-weight:600; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.location.hash='#employees';">
             <i class="fas fa-external-link-alt"></i> View Profile
           </button>
@@ -472,6 +478,20 @@ export function stopAutoRefresh() {
 
 export function cleanupTracker() {
   stopAutoRefresh();
+  
+  if (activePathLine) {
+    if (trackerMap) trackerMap.removeLayer(activePathLine);
+    activePathLine = null;
+  }
+  
+  if (pathMarkers.length > 0) {
+    if (trackerMap) pathMarkers.forEach(m => trackerMap.removeLayer(m));
+    pathMarkers = [];
+  }
+  
+  const clearBtn = document.getElementById('clearBreadcrumbBtn');
+  if (clearBtn) clearBtn.remove();
+  
   if (trackerMap) {
     trackerMap.off();
     trackerMap.remove();
@@ -480,3 +500,92 @@ export function cleanupTracker() {
     markerStore.clear();
   }
 }
+
+// 4. HISTORICAL TRACKER BREADCRUMBS RPC BRIDGE
+window._showExecutiveBreadcrumbs = async (userId, userName) => {
+  // Clear any existing breadcrumb line or markers
+  if (activePathLine) {
+    if (trackerMap) trackerMap.removeLayer(activePathLine);
+    activePathLine = null;
+  }
+  if (pathMarkers.length > 0) {
+    if (trackerMap) pathMarkers.forEach(m => trackerMap.removeLayer(m));
+    pathMarkers = [];
+  }
+  const prevClearBtn = document.getElementById('clearBreadcrumbBtn');
+  if (prevClearBtn) prevClearBtn.remove();
+
+  try {
+    showToast(`Loading tracking points for ${userName}...`, 'info');
+    const res = await fetch(`/api/users/${userId}/location-history?_t=${Date.now()}`);
+    const data = await res.json();
+    
+    if (!data || data.length === 0) {
+      showToast(`No location history recorded for ${userName} today.`, 'warning');
+      return;
+    }
+    
+    const latLngs = data.map(log => [parseFloat(log.latitude), parseFloat(log.longitude)]);
+    
+    // Create Leaflet Polyline
+    activePathLine = L.polyline(latLngs, {
+      color: '#6366f1',
+      weight: 4,
+      opacity: 0.8,
+      dashArray: '5, 10'
+    }).addTo(trackerMap);
+    
+    // Add Start and End Marker Nodes
+    const startNode = L.divIcon({
+      className: 'breadcrumb-node',
+      html: '<div style="background:#10b981; border:2px solid white; border-radius:50%; width:12px; height:12px; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+    
+    const endNode = L.divIcon({
+      className: 'breadcrumb-node',
+      html: '<div style="background:#ef4444; border:2px solid white; border-radius:50%; width:12px; height:12px; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+    
+    const startMarker = L.marker(latLngs[0], { icon: startNode, title: "Start of Day" })
+      .bindPopup(`<b>Start of Day Path</b><br>${new Date(data[0].created_at).toLocaleTimeString()}`)
+      .addTo(trackerMap);
+      
+    const endMarker = L.marker(latLngs[latLngs.length - 1], { icon: endNode, title: "Latest Position" })
+      .bindPopup(`<b>Latest Location</b><br>${new Date(data[data.length - 1].created_at).toLocaleTimeString()}`)
+      .addTo(trackerMap);
+      
+    pathMarkers.push(startMarker, endMarker);
+    
+    // Center map around executive's path
+    trackerMap.fitBounds(activePathLine.getBounds(), { padding: [50, 50] });
+    
+    // Floating clear button inside map element
+    const clearBtn = document.createElement('button');
+    clearBtn.id = 'clearBreadcrumbBtn';
+    clearBtn.className = 'btn btn-danger btn-sm';
+    clearBtn.style.cssText = 'position:absolute; top:20px; right:20px; z-index:1000; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-weight:600; padding:8px 12px; border-radius:8px; cursor:pointer;';
+    clearBtn.innerHTML = '<i class="fas fa-times-circle"></i> Clear Path';
+    clearBtn.onclick = () => {
+      if (activePathLine) {
+        if (trackerMap) trackerMap.removeLayer(activePathLine);
+        activePathLine = null;
+      }
+      if (pathMarkers.length > 0) {
+        if (trackerMap) pathMarkers.forEach(m => trackerMap.removeLayer(m));
+        pathMarkers = [];
+      }
+      clearBtn.remove();
+      showToast('Tracking path cleared', 'info');
+    };
+    document.getElementById('trackerMap').appendChild(clearBtn);
+    
+    showToast(`Plotted ${latLngs.length} tracking points successfully!`, 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to load path history', 'error');
+  }
+};

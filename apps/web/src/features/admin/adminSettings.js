@@ -105,7 +105,7 @@ async function loadSettings() {
 
   try {
     const [resExec, resAddr] = await Promise.all([
-      fetch('/api/settings/executive_map_edit'),
+      fetch('/api/settings/executive_map_edit_global'),
       fetch('/api/settings/address_routing')
     ]);
     
@@ -170,7 +170,7 @@ async function loadSettings() {
           adminName: state.currentUser.name
         };
         
-        const res = await fetch('/api/settings/executive_map_edit', {
+        const res = await fetch('/api/settings/executive_map_edit_global', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

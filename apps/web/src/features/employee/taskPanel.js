@@ -30,16 +30,9 @@ export async function openTaskPanel(taskId) {
   }
 
   // Check feature flag
-  if (state.featureFlags.executive_map_edit === undefined) {
-    try {
-      const res = await fetch('/api/settings/executive_map_edit');
-      const data = await res.json();
-      state.featureFlags.executive_map_edit = (data.success && data.value) ? data.value : {};
-    } catch (e) {
-      state.featureFlags.executive_map_edit = {};
-    }
-  }
-  const canEditMap = state.featureFlags.executive_map_edit[state.currentUser.id] === true && state.currentUser.role === 'employee';
+  const canEditMap = state.featureFlags.executive_map_edit_global?.enabled === true && 
+                     state.featureFlags.executive_map_edit_users?.[state.currentUser.id] === true && 
+                     state.currentUser.role === 'employee';
   
   const mapLink = task.map_url || task.mapUrl || task.mapurl;
   const confidence = parseFloat(task.geocode_confidence) || 0;

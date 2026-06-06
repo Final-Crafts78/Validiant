@@ -66,6 +66,16 @@ class UserController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  async getLocationHistory(req, res) {
+    try {
+      const { id } = req.params;
+      const history = await userService.getLocationHistory(id);
+      res.json(history);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = new UserController();

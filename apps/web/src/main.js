@@ -66,6 +66,21 @@ async function init() {
   
   // Security Check & Auth Boot
   initAuth();
+
+  // Fetch feature flags once globally at boot for the current user session
+  try {
+    const [resGlobal, resUsers] = await Promise.all([
+      fetch('/api/settings/executive_map_edit_global'),
+      fetch('/api/settings/executive_map_edit_users')
+    ]);
+    const dataGlobal = await resGlobal.json();
+    const dataUsers = await resUsers.json();
+    state.featureFlags.executive_map_edit_global = (dataGlobal.success && dataGlobal.value) ? dataGlobal.value : { enabled: false };
+    state.featureFlags.executive_map_edit_users = (dataUsers.success && dataUsers.value) ? dataUsers.value : {};
+  } catch (e) {
+    state.featureFlags.executive_map_edit_global = { enabled: false };
+    state.featureFlags.executive_map_edit_users = {};
+  }
   
   // Initialize Menu
   initMenu();

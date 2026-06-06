@@ -34,7 +34,7 @@ export async function loadEmployeesList() {
   try {
     const [users, mapSettingRes] = await Promise.all([
       fetchEmployeesIfStale(0), // Force refresh for employee management view
-      fetch('/api/settings/executive_map_edit').catch(() => ({ ok: false }))
+      fetch('/api/settings/executive_map_edit_users').catch(() => ({ ok: false }))
     ]);
     
     let mapAccess = {};
@@ -108,7 +108,7 @@ export async function loadEmployeesList() {
           adminId: state.currentUser.id,
           adminName: state.currentUser.name
         };
-        const res = await fetch(`/api/settings/executive_map_edit/${empId}`, {
+        const res = await fetch(`/api/settings/executive_map_edit_users/${empId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

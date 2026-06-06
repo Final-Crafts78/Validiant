@@ -97,12 +97,19 @@ class UserService {
 
     const { data: employee } = await supabase.from("users").select("name").eq("id", id).single();
     
-    // Cleanup related records
-    await supabase.from("tasks").update({ assigned_to: null, status: "Unassigned" }).eq("assigned_to", id);
-    await supabase.from("activity_logs").update({ user_id: null }).eq("user_id", id);
+    // Cleanup related records transactionally via Postgres RPC function
+    const { error: rpcError } = await supabase.rpc('delete_employee_v1', { employee_id: parseInt(id) });
     
-    const { error } = await supabase.from("users").delete().eq("id", id).eq("role", "employee");
-    if (error) throw error;
+    if (rpcError) {
+      console.warn("⚠️ [USER_SERVICE] delete_employee_v1 RPC failed or not found, using multi-query fallback:", rpcError.message);
+      
+      // Fallback: Run individual queries sequentially
+      await supabase.from("tasks").update({ assigned_to: null, status: "Unassigned" }).eq("assigned_to", id);
+      await supabase.from("activity_logs").update({ user_id: null }).eq("user_id", id);
+      
+      const { error: deleteErr } = await supabase.from("users").delete().eq("id", id).eq("role", "employee");
+      if (deleteErr) throw deleteErr;
+    }
 
     await logActivity(admin.id, "Admin", "EMPLOYEE_DELETED", null, `Deleted: ${employee?.name}`);
     return true;
@@ -119,11 +126,44 @@ class UserService {
         .update({ latitude, longitude, last_active: new Date() })
         .eq("id", userId);
       if (error) throw error;
+
+      // Log asynchronously to location_history for breadcrumbs
+      supabase
+        .from("location_history")
+        .insert([{
+          user_id: parseInt(userId),
+          latitude,
+          longitude,
+          created_at: new Date()
+        }])
+        .then(({ error: histErr }) => {
+          if (histErr) console.warn("⚠️ [USER_SERVICE] Location history logging failed:", histErr.message);
+        });
+
       return true;
     } catch (err) {
       console.error('[DEBUG] ❌ updateLocation failed:', err.message);
       throw err;
     }
+  }
+
+  /**
+   * Get employee location logs for the current day
+   */
+  async getLocationHistory(userId) {
+    const todayStr = new Date().toISOString().split('T')[0] + 'T00:00:00';
+    const { data, error } = await supabase
+      .from("location_history")
+      .select("latitude, longitude, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", todayStr)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("⚠️ [USER_SERVICE] Failed to fetch location history (table may not exist):", error.message);
+      return [];
+    }
+    return data || [];
   }
 
   /**

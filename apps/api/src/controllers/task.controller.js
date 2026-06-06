@@ -107,9 +107,10 @@ class TaskController {
       }
 
       const settingsService = require("../services/settings.service");
-      const setting = await settingsService.getSetting("executive_map_edit");
+      const globalSetting = await settingsService.getSetting("executive_map_edit_global") || {};
+      const userSetting = await settingsService.getSetting("executive_map_edit_users") || {};
       
-      if (!setting || setting[userId] !== true) {
+      if (globalSetting.enabled !== true || userSetting[userId] !== true) {
         return res.status(403).json({ success: false, message: "Feature disabled by admin" });
       }
 
@@ -218,12 +219,7 @@ class TaskController {
 
       let successCount = 0;
       const tasksToInsert = [];
-      const { extractCoordinates } = require("../utils/geo");
-      const settingsService = require("../services/settings.service");
-      
-      const addressRoutingSetting = await settingsService.getSetting("address_routing");
-      const isAddressRoutingEnabled = addressRoutingSetting?.enabled !== false;
-      
+
       for (let i = 0; i < rawData.length; i++) {
         const raw = rawData[i];
         const row = {};
@@ -234,34 +230,9 @@ class TaskController {
         
         if (!title || !pincode) continue; 
         
-        let finalLat = row.latitude || row.lat;
-        let finalLng = row.longitude || row.lng;
+        let finalLat = row.latitude || row.lat || null;
+        let finalLng = row.longitude || row.lng || null;
         let finalMapUrl = row.mapurl || row.map || null;
-        
-        if (finalMapUrl && (!finalLat || !finalLng)) {
-          const coords = await extractCoordinates(finalMapUrl);
-          if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
-        }
-
-        let geocodeConfidence = null;
-        let geocodeMatchLevel = null;
-        let locationWarning = null;
-
-        if (isAddressRoutingEnabled && (!finalLat || !finalLng) && (row.address || pincode)) {
-          const { geocodeFromAddress } = require("../utils/geocode");
-          const geo = await geocodeFromAddress(row.address, pincode);
-          if (geo) { 
-            geocodeConfidence = geo.confidence;
-            geocodeMatchLevel = geo.matchLevel;
-            locationWarning = geo.warning;
-            // Only store coordinates if geocode confidence >= 95%
-            if (geo.confidence >= 0.95) {
-              finalLat = geo.latitude; 
-              finalLng = geo.longitude;
-              finalMapUrl = `https://www.google.com/maps/search/?api=1&query=${finalLat},${finalLng}`;
-            }
-          }
-        }
 
         tasksToInsert.push({
           title: String(title),
@@ -269,14 +240,14 @@ class TaskController {
           client_name: row.clientname || row.individualname || "Unknown Client",
           map_url: finalMapUrl,
           address: row.address || null,
-          latitude: finalLat || null,
-          longitude: finalLng || null,
+          latitude: finalLat ? parseFloat(finalLat) : null,
+          longitude: finalLng ? parseFloat(finalLng) : null,
           notes: row.notes || null,
           status: "Unassigned",
           created_by: adminId || null,
-          geocode_confidence: geocodeConfidence,
-          geocode_match_level: geocodeMatchLevel,
-          location_warning: !!locationWarning,
+          geocode_confidence: null,
+          geocode_match_level: null,
+          location_warning: false,
           individual_phone: row.individualphone || row.phone || null,
           individual_alt_phone: row.individualalternatephone || row.individualaltphone || row.altphone || null,
           whatsapp_sent: false
@@ -286,10 +257,11 @@ class TaskController {
 
       if (tasksToInsert.length > 0) {
         await taskService.bulkCreate(tasksToInsert);
+        const { triggerBackgroundGeocoding } = require("../utils/backgroundGeocoder");
+        triggerBackgroundGeocoding();
       }
 
       if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      // Note: Activity logging would go here if needed, keeping it slim for now
       res.json({ success: true, message: `${successCount} tasks uploaded.`, successCount });
     } catch (err) {
       const fs = require("fs");
@@ -375,12 +347,6 @@ class TaskController {
         return res.status(400).json({ success: false, message: "No tasks provided" });
       }
       
-      const { extractCoordinates } = require("../utils/geo");
-      const { geocodeFromAddress } = require("../utils/geocode");
-      const settingsService = require("../services/settings.service");
-      
-      const addressRoutingSetting = await settingsService.getSetting("address_routing");
-      const isAddressRoutingEnabled = addressRoutingSetting?.enabled !== false;
       const tasksToInsert = [];
 
       for (let i = 0; i < tasks.length; i++) {
@@ -390,38 +356,6 @@ class TaskController {
         
         let finalLat = latitude || null;
         let finalLng = longitude || null;
-        
-        if (finalMapUrl && (!finalLat || !finalLng)) {
-          try {
-            const coords = await extractCoordinates(finalMapUrl);
-            if (coords) { finalLat = coords.latitude; finalLng = coords.longitude; }
-          } catch (coordErr) {
-            // Silently skip coordinate errors for individual tasks in bulk mode
-          }
-        }
-
-        let geocodeConfidence = null;
-        let geocodeMatchLevel = null;
-        let locationWarning = null;
-
-        if (isAddressRoutingEnabled && (!finalLat || !finalLng) && (address || pincode)) {
-          try {
-            const geo = await geocodeFromAddress(address, pincode);
-            if (geo) {
-              geocodeConfidence = geo.confidence;
-              geocodeMatchLevel = geo.matchLevel;
-              locationWarning = geo.warning;
-              // Only store coordinates if geocode confidence >= 95%
-              if (geo.confidence >= 0.95) {
-                finalLat = geo.latitude;
-                finalLng = geo.longitude;
-                finalMapUrl = `https://www.google.com/maps/search/?api=1&query=${finalLat},${finalLng}`;
-              }
-            }
-          } catch (geoErr) {
-            // Silently skip geocoding errors for individual tasks in bulk mode
-          }
-        }
 
         let initialStatus = "Unassigned";
         let finalAssignee = null;
@@ -435,12 +369,14 @@ class TaskController {
         
         tasksToInsert.push({
           title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
-          latitude: finalLat, longitude: finalLng, notes, client_name: clientName, 
+          latitude: finalLat ? parseFloat(finalLat) : null,
+          longitude: finalLng ? parseFloat(finalLng) : null,
+          notes, client_name: clientName, 
           status: initialStatus, assigned_to: finalAssignee, 
           assigned_date: assignedDate, created_by: createdBy || adminId,
-          geocode_confidence: geocodeConfidence,
-          geocode_match_level: geocodeMatchLevel,
-          location_warning: !!locationWarning,
+          geocode_confidence: null,
+          geocode_match_level: null,
+          location_warning: false,
           individual_phone: individual_phone || null,
           individual_alt_phone: individual_alt_phone || null,
           whatsapp_sent: false
@@ -448,6 +384,9 @@ class TaskController {
       }
 
       await taskService.bulkCreate(tasksToInsert);
+      const { triggerBackgroundGeocoding } = require("../utils/backgroundGeocoder");
+      triggerBackgroundGeocoding();
+      
       res.json({ success: true, message: `${tasks.length} tasks created successfully` });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
