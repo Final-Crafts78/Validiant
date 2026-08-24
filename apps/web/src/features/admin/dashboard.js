@@ -63,6 +63,19 @@ export async function showAssignTask() {
               />
             </div>
             
+            <div class="form-group">
+              <label for="communityName">
+                <i class="fas fa-building"></i> Community Name
+              </label>
+              <input 
+                type="text" 
+                id="communityName" 
+                placeholder="Enter community name (optional)"
+                maxlength="200"
+                class="form-input"
+              />
+            </div>
+            
             <div class="form-row">
               <div class="form-group">
                 <label for="individualPhone">
@@ -539,6 +552,7 @@ async function handleTaskSubmit(e) {
   const payload = {
     title: document.getElementById('caseId').value,
     clientName: document.getElementById('clientName').value || null,
+    communityName: document.getElementById('communityName')?.value || null,
     individual_phone: document.getElementById('individualPhone').value || null,
     individual_alt_phone: document.getElementById('individualAltPhone').value || null,
     pincode: pincode,

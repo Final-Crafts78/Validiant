@@ -181,6 +181,7 @@ export function processSmartText() {
       }
       if (lowerKey.includes('case') || lowerKey.includes('id')) currentObj.title = val;
       if (lowerKey.includes('pin')) currentObj.pincode = val;
+      if (lowerKey.includes('community')) currentObj.communityName = val;
       if (lowerKey.includes('client')) currentObj.clientName = val;
     });
     if (currentObj.title) data.push(currentObj);
@@ -214,6 +215,7 @@ function smartColumnMapper(rawData) {
     title: ['caseid', 'requestid', 'id', 'title', 'case', 'ticket', 'ref', 'number'],
     individual_phone: ['individualphone', 'phone', 'mobile', 'cell', 'phoneno', 'mobileno', 'contactno', 'contactnumber'],
     individual_alt_phone: ['alternatephone', 'altphone', 'secondaryphone', 'altmobile', 'alternateno', 'individualaltphone', 'individualalternatephone'],
+    communityName: ['community', 'communityname', 'society', 'building', 'project'],
     clientName: ['client', 'customer', 'individualname', 'party', 'company'],
     pincode: ['pincode', 'pin', 'zip', 'postal'],
     address: ['address', 'location', 'addr', 'site'],
@@ -234,6 +236,8 @@ function smartColumnMapper(rawData) {
     };
 
     newRow.title = findValue('title') || `CASE-${Math.floor(Math.random()*100000)}`;
+    const rawCommunity = findValue('communityName');
+    newRow.communityName = rawCommunity ? String(rawCommunity).split('::')[0].trim() : null;
     newRow.clientName = findValue('clientName');
     newRow.pincode = findValue('pincode');
     newRow.address = findValue('address');
@@ -287,6 +291,7 @@ function showSmartPreview(tasks) {
             <tr>
               <th>Case ID / Title</th>
               <th>Pincode</th>
+              <th>Community</th>
               <th>Client</th>
               <th style="min-width:110px;">Phone</th>
               <th style="min-width:110px;">Alt Phone</th>
@@ -298,6 +303,7 @@ function showSmartPreview(tasks) {
               <tr data-idx="${idx}">
                 <td><input type="text" value="${escapeHtml(t.title)}" class="form-input text-sm" name="title"></td>
                 <td><input type="text" value="${escapeHtml(t.pincode || '')}" class="form-input text-sm" name="pincode" style="width:80px"></td>
+                <td>${escapeHtml(t.communityName || '-')}</td>
                 <td>${escapeHtml(t.clientName || '-')}</td>
                 <td>${t.individual_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
                 <td>${t.individual_alt_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_alt_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
@@ -448,6 +454,7 @@ async function updateExistingTasks(duplicates) {
     if (dup.address) updatePayload.address = dup.address;
     if (dup.notes) updatePayload.notes = dup.notes;
     if (dup.clientName) updatePayload.clientName = dup.clientName;
+    if (dup.communityName) updatePayload.communityName = dup.communityName;
     if (dup.mapUrl) updatePayload.mapUrl = dup.mapUrl;
     if (dup.assignedTo) updatePayload.assignedTo = dup.assignedTo;
     if (dup.individual_phone) updatePayload.individual_phone = dup.individual_phone;
@@ -507,10 +514,10 @@ async function processBulkUpload(tasks) {
 }
 
 export function downloadBulkUploadTemplate() {
-  const csvContent = `CaseID,Pincode,ClientName,IndividualPhone,AltPhone,Address,EmployeeID,MapURL,Notes
-CASE001,560001,ABC Company,9876543210,9876543211,123 MG Road Bangalore 560001,,http://maps.google.com/example,Priority task
-CASE002,560002,XYZ Corp,8765432100,,456 Anna Salai Chennai 560002,EMP123,,Assign to specific ID
-CASE003,560003,Test Client,,,789 Park Street Kolkata 560003,,,Leave EmployeeID empty for pool`;
+  const csvContent = `CaseID,Pincode,CommunityName,ClientName,IndividualPhone,AltPhone,Address,EmployeeID,MapURL,Notes
+CASE001,560001,Tech Park,ABC Company,9876543210,9876543211,123 MG Road Bangalore 560001,,http://maps.google.com/example,Priority task
+CASE002,560002,Business Tower,XYZ Corp,8765432100,,456 Anna Salai Chennai 560002,EMP123,,Assign to specific ID
+CASE003,560003,Residency,Test Client,,,789 Park Street Kolkata 560003,,,Leave EmployeeID empty for pool`;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
