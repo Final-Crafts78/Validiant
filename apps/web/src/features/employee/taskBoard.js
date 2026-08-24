@@ -47,6 +47,7 @@ export function searchTodayTasks() {
     (t.title || '').toLowerCase().includes(term) || 
     String(t.pincode || '').includes(term) || 
     (t.address || '').toLowerCase().includes(term) ||
+    (t.communityName || t.community_name || '').toLowerCase().includes(term) ||
     (t.clientName || t.client_name || '').toLowerCase().includes(term)
   );
   
@@ -159,7 +160,7 @@ export function displayEmployeeTasks(tasks) {
               ${escapeHtml(task.title)}
             </h3>
             <div style="font-size:13px; color:#94a3b8; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client')}</span>
+              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.communityName || task.community_name || task.clientName || task.client_name || 'No Client')}</span>
               <span class="pincode-tag"><i class="fas fa-map-pin" style="color:#60a5fa;"></i> ${task.pincode}</span>
               ${distanceBadge}
               ${approxBadge}

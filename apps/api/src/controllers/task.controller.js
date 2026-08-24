@@ -234,10 +234,17 @@ class TaskController {
         let finalLng = row.longitude || row.lng || null;
         let finalMapUrl = row.mapurl || row.map || null;
 
+        let rawCommunityName = row.communityname || row.community || null;
+        let community_name = null;
+        if (rawCommunityName) {
+          community_name = String(rawCommunityName).split('::')[0].trim();
+        }
+
         tasksToInsert.push({
           title: String(title),
           pincode: String(pincode).trim(),
           client_name: row.clientname || row.individualname || "Unknown Client",
+          community_name: community_name,
           map_url: finalMapUrl,
           address: row.address || null,
           latitude: finalLat ? parseFloat(finalLat) : null,
@@ -351,11 +358,17 @@ class TaskController {
 
       for (let i = 0; i < tasks.length; i++) {
         const taskData = tasks[i];
-        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
+        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, communityName, community_name, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
         let finalMapUrl = mapUrl || map_url || null;
         
         let finalLat = latitude || null;
         let finalLng = longitude || null;
+
+        let rawCommunityName = communityName || community_name || null;
+        let finalCommunityName = null;
+        if (rawCommunityName) {
+            finalCommunityName = String(rawCommunityName).split('::')[0].trim();
+        }
 
         let initialStatus = "Unassigned";
         let finalAssignee = null;
@@ -371,7 +384,7 @@ class TaskController {
           title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
           latitude: finalLat ? parseFloat(finalLat) : null,
           longitude: finalLng ? parseFloat(finalLng) : null,
-          notes, client_name: clientName, 
+          notes, client_name: clientName, community_name: finalCommunityName,
           status: initialStatus, assigned_to: finalAssignee, 
           assigned_date: assignedDate, created_by: createdBy || adminId,
           geocode_confidence: null,

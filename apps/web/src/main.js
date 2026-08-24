@@ -4,7 +4,7 @@
 import { state, setCurrentUser } from './store/globalState';
 import { initAuth, logout } from './core/auth';
 import { showToast, showLoading } from './utils/ui';
-import { showAssignTask } from './features/admin/dashboard';
+import { showAssignTask, cleanupPlannerMap } from './features/admin/dashboard';
 import { showTodayTasks, loadTodayTasks } from './features/employee/taskBoard';
 import { showMapRouting } from './features/routing/googleMapsEngine';
 import { openTaskPanel, updateTaskStatus } from './features/employee/taskPanel';
@@ -60,6 +60,7 @@ function checkSession() {
 async function fullCleanup() {
   await cleanupCurrentView();
   cleanupTracker();
+  cleanupPlannerMap();
 }
 async function init() {
   console.log('🚀 Validiant Enterprise Bootloader Starting...');

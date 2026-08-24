@@ -38,7 +38,7 @@ class TaskService {
     if (toDate) query = query.lte("created_at", `${toDate}T23:59:59`);
     
     if (search) {
-      query = query.or(`title.ilike.%${search}%,client_name.ilike.%${search}%,pincode.ilike.%${search}%`);
+      query = query.or(`title.ilike.%${search}%,client_name.ilike.%${search}%,community_name.ilike.%${search}%,pincode.ilike.%${search}%`);
     }
 
     if (limitNum > 0) {
@@ -57,6 +57,7 @@ class TaskService {
         address: addressText,
         map: addressText.length > 0 ? "Yes" : "No",
         clientName: task.client_name || "-",
+        communityName: task.community_name || "-",
         assignedToName: task.employees ? task.employees.name : "Unassigned",
         assignedToPhone: task.employees ? task.employees.phone : "",
         status: task.status
@@ -90,6 +91,7 @@ class TaskService {
     return {
       ...task,
       clientName: task.client_name || "-",
+      communityName: task.community_name || "-",
       assignedToName: task.employees ? task.employees.name : "Unassigned",
       assignedToPhone: task.employees ? task.employees.phone : ""
     };
@@ -99,7 +101,7 @@ class TaskService {
    * Create a new task
    */
   async createTask(taskData) {
-    const { title, pincode, address, mapUrl, map_url, notes, createdBy, createdByName, assignedTo, clientName, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
+    const { title, pincode, address, mapUrl, map_url, notes, createdBy, createdByName, assignedTo, clientName, communityName, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
     let finalMapUrl = mapUrl || map_url || null;
     let finalLat = latitude, finalLng = longitude;
     
@@ -153,7 +155,7 @@ class TaskService {
     const { data, error } = await supabase.from("tasks").insert([{
       title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
       latitude: finalLat, longitude: finalLng, notes,
-      client_name: clientName, status: initialStatus,
+      client_name: clientName, community_name: communityName, status: initialStatus,
       assigned_to: finalAssignee, assigned_date: assignedDate,
       created_by: createdBy,
       geocode_confidence: geocodeConfidence,
@@ -174,10 +176,10 @@ class TaskService {
    * Update task details
    */
   async updateTask(id, updateFields, userId, userName) {
-    const { title, pincode, address, notes, status, assignedTo, clientName, mapUrl, map_url, latitude, longitude, individual_phone, individual_alt_phone, whatsapp_sent } = updateFields;
+    const { title, pincode, address, notes, status, assignedTo, clientName, communityName, mapUrl, map_url, latitude, longitude, individual_phone, individual_alt_phone, whatsapp_sent } = updateFields;
     
     // Fetch current task state to detect transitions and for logging
-    const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to, title, client_name").eq("id", id).single();
+    const { data: currentTask } = await supabase.from("tasks").select("status, assigned_to, title, client_name, community_name").eq("id", id).single();
     
     const updateData = { updated_at: new Date() };
     let changes = [];
@@ -188,6 +190,7 @@ class TaskService {
     if (pincode) { updateData.pincode = pincode; changes.push(`Pincode to ${pincode}`); }
     if (address) { updateData.address = address; changes.push("Address"); }
     if (clientName) { updateData.client_name = clientName; changes.push("Client Name"); }
+    if (communityName) { updateData.community_name = communityName; changes.push("Community Name"); }
     if (notes) { updateData.notes = notes; changes.push("Notes"); }
     if (individual_phone !== undefined) { updateData.individual_phone = individual_phone; changes.push("Individual Phone"); }
     if (individual_alt_phone !== undefined) { updateData.individual_alt_phone = individual_alt_phone; changes.push("Individual Alternate Phone"); }

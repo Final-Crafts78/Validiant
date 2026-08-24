@@ -20,7 +20,7 @@ export const state = {
 };
 
 // Optimized field set for task list views to reduce payload size
-export const MINIMAL_TASK_FIELDS = 'id,title,client_name,status,pincode,assigned_to,created_at,notes,latitude,longitude,map_url,location_warning,individual_phone,individual_alt_phone,whatsapp_sent,address,assigned_date,completed_at,verified_at';
+export const MINIMAL_TASK_FIELDS = 'id,title,client_name,community_name,status,pincode,assigned_to,created_at,notes,latitude,longitude,map_url,location_warning,individual_phone,individual_alt_phone,whatsapp_sent,address,assigned_date,completed_at,verified_at';
 
 export const setState = (key, value) => {
   if (key in state) {
