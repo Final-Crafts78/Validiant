@@ -160,7 +160,8 @@ export function displayEmployeeTasks(tasks) {
               ${escapeHtml(task.title)}
             </h3>
             <div style="font-size:13px; color:#94a3b8; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.communityName || task.community_name || task.clientName || task.client_name || 'No Client')}</span>
+              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client')}</span>
+              ${task.communityName || task.community_name ? `<span><i class="fas fa-building"></i> ${escapeHtml(task.communityName || task.community_name)}</span>` : ''}
               <span class="pincode-tag"><i class="fas fa-map-pin" style="color:#60a5fa;"></i> ${task.pincode}</span>
               ${distanceBadge}
               ${approxBadge}

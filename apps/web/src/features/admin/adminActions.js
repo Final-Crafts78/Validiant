@@ -55,7 +55,11 @@ export async function openTaskDetailsModal(taskId) {
       <div class="task-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
         <div class="info-item">
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Client</div>
-          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${escapeHtml(task.community_name || task.communityName || task.client_name || task.clientName || 'Unknown')}</div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${escapeHtml(task.client_name || task.clientName || 'Unknown')}</div>
+        </div>
+        <div class="info-item">
+          <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Community</div>
+          <div style="color: #E5E7EB; font-size: 15px; font-weight: 500;">${escapeHtml(task.community_name || task.communityName || '-')}</div>
         </div>
         <div class="info-item">
           <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Pincode</div>
@@ -277,7 +281,7 @@ export function openUnassignModal(taskId) {
             || state.currentFilteredTasks?.find(t => t.id == taskId)
             || state.allUnassignedTasks?.find(t => t.id == taskId);
   const displayTitle = task ? escapeHtml(task.title) : 'this task';
-  const displayClient = task?.community_name || task?.communityName ? ` (${escapeHtml(task.community_name || task.communityName)})` : task?.client_name || task?.clientName ? ` (${escapeHtml(task.client_name || task.clientName)})` : '';
+  const displayClient = task?.client_name || task?.clientName ? ` (${escapeHtml(task.client_name || task.clientName)})` : '';
 
   const content = `
     <div class="unassign-form">

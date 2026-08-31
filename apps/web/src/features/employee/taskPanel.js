@@ -54,7 +54,11 @@ export async function openTaskPanel(taskId) {
       <div class="form-grid" style="grid-template-columns: 1fr; gap:15px;">
         <div class="info-row">
           <label><i class="fas fa-user-tie"></i> Client Name</label>
-          <div>${escapeHtml(task.communityName || task.community_name || task.clientName || task.client_name)}</div>
+          <div>${escapeHtml(task.clientName || task.client_name || '-')}</div>
+        </div>
+        <div class="info-row">
+          <label><i class="fas fa-building"></i> Community</label>
+          <div>${escapeHtml(task.communityName || task.community_name || '-')}</div>
         </div>
         <div class="info-row">
           <label><i class="fas fa-map-pin"></i> Pincode</label>
