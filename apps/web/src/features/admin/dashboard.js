@@ -51,12 +51,12 @@ export async function showAssignTask() {
             </div>
             
             <div class="form-group">
-              <label for="clientName">
-                <i class="fas fa-user-tie"></i> Client Name
+              <label for="candidateName">
+                <i class="fas fa-user-tie"></i> Candidate Name
               </label>
               <input 
                 type="text" 
-                id="clientName" 
+                id="candidateName" 
                 placeholder="Enter client name (optional)"
                 maxlength="200"
                 class="form-input"
@@ -551,7 +551,7 @@ async function handleTaskSubmit(e) {
 
   const payload = {
     title: document.getElementById('caseId').value,
-    clientName: document.getElementById('clientName').value || null,
+    candidateName: document.getElementById('candidateName').value || null,
     communityName: document.getElementById('communityName')?.value || null,
     individual_phone: document.getElementById('individualPhone').value || null,
     individual_alt_phone: document.getElementById('individualAltPhone').value || null,

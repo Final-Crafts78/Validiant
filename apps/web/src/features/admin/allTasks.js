@@ -59,7 +59,7 @@ export function showAllTasks() {
       <input type="text" id="allTasksPincodeFilter" class="form-input" placeholder="Pincode" style="flex:1 1 100px; max-width:120px;">
       <input type="date" id="allTasksFromDate" class="form-input" title="From Date" style="flex:1 1 130px; max-width:150px;">
       <input type="date" id="allTasksToDate" class="form-input" title="To Date" style="flex:1 1 130px; max-width:150px;">
-      <input type="text" id="allTasksSearch" class="search-box" placeholder="Search Case ID, Client, Notes..." style="flex:1 1 220px; max-width:360px;">
+      <input type="text" id="allTasksSearch" class="search-box" placeholder="Search Case ID, Candidate, Notes..." style="flex:1 1 220px; max-width:360px;">
 
       <select id="allTasksPerPage" class="form-input" style="flex:0 0 130px;" title="Page Size">
         <option value="25">Page Size: 25</option>
@@ -365,7 +365,7 @@ function displayAllTasksList(responseData) {
             <th style="padding: 12px 15px; color: #94A3B8; width:40px;"><input type="checkbox" id="selectAllCb"></th>
             <th style="padding: 12px 15px; color: #94A3B8; min-width: 80px;">Date</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Case ID</th>
-            <th style="padding: 12px 15px; color: #94A3B8;">Client</th>
+            <th style="padding: 12px 15px; color: #94A3B8;">Candidate</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Employee</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Pincode</th>
             <th style="padding: 12px 15px; color: #94A3B8;">Status</th>
@@ -427,7 +427,7 @@ function displayAllTasksList(responseData) {
       <td style="padding: 12px 15px; color: #cbd5e1; font-size: 13px;">
         <div style="display:flex; align-items:center; gap:6px;">
           <i class="fas fa-user-tie" style="color:#64748b; font-size:11px;"></i>
-          ${escapeHtml(t.clientName || '-')}
+          ${escapeHtml(t.candidateName || '-')}
         </div>
       </td>
       <td style="padding: 12px 15px;">

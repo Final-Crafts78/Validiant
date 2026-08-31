@@ -18,7 +18,7 @@ export function showUnassignedTasks() {
     <div class="filter-section" style="display:flex; gap:10px; align-items:center; background:#1e293b; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #334155;">
       <div style="position:relative; flex:1; max-width:400px;">
         <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8;"></i>
-        <input type="text" id="unassignedSearch" class="search-box" placeholder="Search by Case ID, Client, or Pincode..." style="width:100%; padding-left:35px;">
+        <input type="text" id="unassignedSearch" class="search-box" placeholder="Search by Case ID, Candidate, or Pincode..." style="width:100%; padding-left:35px;">
       </div>
       <button class="btn btn-info btn-sm" data-action="admin:searchUnassigned"><i class="fas fa-filter"></i> Apply Filters</button>
     </div>
@@ -95,10 +95,10 @@ function displayUnassignedList(tasks, employees) {
         <td class="case-col" style="padding:12px 15px;">
           <strong class="case-id" style="color:#e5e7eb; font-weight:600;">${escapeHtml(t.title)}</strong>
         </td>
-        <td class="client-col" style="padding:12px 15px;">
+        <td class="candidate-col" style="padding:12px 15px;">
           <div style="display:flex; align-items:center; gap:8px; color:#cbd5e1;">
             <i class="fas fa-user-tie" style="color:#94a3b8; font-size:12px;"></i>
-            <span>${escapeHtml(t.clientName || '---')}</span>
+            <span>${escapeHtml(t.candidateName || '---')}</span>
           </div>
         </td>
         <td class="pincode-col" style="padding:12px 15px;">
@@ -143,7 +143,7 @@ function displayUnassignedList(tasks, employees) {
           <tr style="border-bottom:1px solid #334155;">
             <th style="padding:12px 15px; width:40px;"><input type="checkbox" id="selectAllCb"></th>
             <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Task Details</th>
-            <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Client Name</th>
+            <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Candidate Name</th>
             <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Pincode</th>
             <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Location</th>
             <th style="padding:12px 15px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">Assign To</th>
@@ -171,10 +171,10 @@ function displayUnassignedList(tasks, employees) {
       <td class="case-col" style="padding:12px 15px;">
         <strong class="case-id" style="color:#e5e7eb; font-weight:600;">${escapeHtml(t.title)}</strong>
       </td>
-      <td class="client-col" style="padding:12px 15px;">
+      <td class="candidate-col" style="padding:12px 15px;">
         <div style="display:flex; align-items:center; gap:8px; color:#cbd5e1;">
           <i class="fas fa-user-tie" style="color:#94a3b8; font-size:12px;"></i>
-          <span>${escapeHtml(t.clientName || '---')}</span>
+          <span>${escapeHtml(t.candidateName || '---')}</span>
         </div>
       </td>
       <td class="pincode-col" style="padding:12px 15px;">

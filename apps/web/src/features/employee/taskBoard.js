@@ -48,7 +48,7 @@ export function searchTodayTasks() {
     String(t.pincode || '').includes(term) || 
     (t.address || '').toLowerCase().includes(term) ||
     (t.communityName || t.community_name || '').toLowerCase().includes(term) ||
-    (t.clientName || t.client_name || '').toLowerCase().includes(term)
+    (t.candidateName || t.candidate_name || '').toLowerCase().includes(term)
   );
   
   displayEmployeeTasks(filtered);
@@ -160,7 +160,7 @@ export function displayEmployeeTasks(tasks) {
               ${escapeHtml(task.title)}
             </h3>
             <div style="font-size:13px; color:#94a3b8; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.clientName || task.client_name || 'No Client')}</span>
+              <span><i class="fas fa-user-tie"></i> ${escapeHtml(task.candidateName || task.candidate_name || 'No Candidate')}</span>
               ${task.communityName || task.community_name ? `<span><i class="fas fa-building"></i> ${escapeHtml(task.communityName || task.community_name)}</span>` : ''}
               <span class="pincode-tag"><i class="fas fa-map-pin" style="color:#60a5fa;"></i> ${task.pincode}</span>
               ${distanceBadge}
@@ -168,9 +168,9 @@ export function displayEmployeeTasks(tasks) {
               ${addMapBadge}
             </div>
             ${task.notes ? `
-              <div class="task-notes-preview" style="font-size:12px; color:#64748b; margin-top:8px; display:flex; gap:6px; align-items:start; background:rgba(0,0,0,0.1); padding:6px 8px; border-radius:6px; border-left:2px solid #6366f1;">
-                <i class="fas fa-sticky-note" style="margin-top:2px; color:#818cf8; font-size:10px;"></i>
-                <span style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;">${escapeHtml(task.notes)}</span>
+              <div class="task-notes-preview" style="font-size:12px; color:#fef3c7; margin-top:8px; display:flex; gap:6px; align-items:start; background:rgba(245,158,11,0.15); padding:8px 10px; border-radius:6px; border-left:3px solid #f59e0b; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <i class="fas fa-exclamation-circle" style="margin-top:2px; color:#fbbf24; font-size:11px;"></i>
+                <span style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; font-weight: 500;">${escapeHtml(task.notes)}</span>
               </div>
             ` : ''}
           </div>

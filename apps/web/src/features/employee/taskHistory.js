@@ -99,7 +99,7 @@ function displayHistoryTasks(tasks) {
         <td style="padding:12px 10px; color:#9ca3af; font-size:13px;">${d.toLocaleDateString()}</td>
         <td style="padding:12px 10px;">
           <strong style="color:#e5e7eb;">${escapeHtml(t.title)}</strong>
-          ${t.clientName ? `<div style="font-size:11px; color:#6b7280;">${escapeHtml(t.clientName)}</div>` : ''}
+          ${t.candidateName ? `<div style="font-size:11px; color:#6b7280;">${escapeHtml(t.candidateName)}</div>` : ''}
         </td>
         <td style="padding:12px 10px; font-size:13px;">${escapeHtml(t.pincode)}</td>
         <td style="padding:12px 10px;">

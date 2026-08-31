@@ -64,11 +64,11 @@ class AdminController {
       if (error) throw error;
       
       // Generate CSV
-      const headers = ["Task ID", "Title", "Client", "Pincode", "Status", "Assigned To", "Assigned Date", "Created At"];
+      const headers = ["Task ID", "Title", "Candidate", "Pincode", "Status", "Assigned To", "Assigned Date", "Created At"];
       const rows = data.map(t => [
         t.id,
         t.title,
-        t.client_name || t.clientName || '',
+        t.candidate_name || t.candidateName || '',
         t.pincode,
         t.status,
         t.employees ? t.employees.name : 'Unassigned',

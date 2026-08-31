@@ -53,8 +53,8 @@ export async function openTaskPanel(taskId) {
 
       <div class="form-grid" style="grid-template-columns: 1fr; gap:15px;">
         <div class="info-row">
-          <label><i class="fas fa-user-tie"></i> Client Name</label>
-          <div>${escapeHtml(task.clientName || task.client_name || '-')}</div>
+          <label><i class="fas fa-user-tie"></i> Candidate Name</label>
+          <div>${escapeHtml(task.candidateName || task.candidate_name || '-')}</div>
         </div>
         <div class="info-row">
           <label><i class="fas fa-building"></i> Community</label>
@@ -88,7 +88,11 @@ export async function openTaskPanel(taskId) {
         ` : ''}
         <div class="info-row">
           <label><i class="fas fa-sticky-note"></i> Notes</label>
-          <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; font-size:13px; white-space:pre-wrap;">${escapeHtml(task.notes || 'No notes provided')}</div>
+          ${task.notes ? `
+          <div style="background:rgba(245,158,11,0.15); padding:12px; border-radius:8px; font-size:14px; white-space:pre-wrap; border-left:4px solid #f59e0b; color:#fef3c7; font-weight:500; letter-spacing:0.3px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"><i class="fas fa-exclamation-circle" style="color:#fbbf24; margin-right:6px;"></i> ${escapeHtml(task.notes)}</div>
+          ` : `
+          <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; font-size:13px; color:#6b7280;">No notes provided</div>
+          `}
         </div>
       </div>
 

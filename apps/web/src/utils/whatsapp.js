@@ -8,7 +8,7 @@ import { state } from '../store/globalState';
  * Safely handles missing fields to avoid leftover braces, empty parentheses, or bad punctuation.
  */
 export const getCompiledMessage = (task) => {
-  const individualName = (task.client_name || task.clientName || '').trim();
+  const individualName = (task.candidate_name || task.candidateName || '').trim();
   const communityName = (task.community_name || task.communityName || '').trim();
   const address = (task.address || '').trim();
   

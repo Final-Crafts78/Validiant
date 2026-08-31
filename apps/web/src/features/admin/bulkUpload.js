@@ -52,7 +52,7 @@ export async function showBulkUpload() {
         <div class="file-drop-zone" id="smartDropZone">
           <i class="fas fa-cloud-upload-alt"></i>
           <h4>Drag & Drop Excel/CSV</h4>
-          <p>We'll auto-detect columns like "Request ID", "Pin", "Client"</p>
+          <p>We'll auto-detect columns like "Request ID", "Pin", "Candidate"</p>
           <input type="file" id="smartFileIn" accept=".xlsx,.xls,.csv" hidden>
           <button class="btn btn-primary" onclick="document.getElementById('smartFileIn').click()">Select File</button>
           
@@ -182,7 +182,7 @@ export function processSmartText() {
       if (lowerKey.includes('case') || lowerKey.includes('id')) currentObj.title = val;
       if (lowerKey.includes('pin')) currentObj.pincode = val;
       if (lowerKey.includes('community')) currentObj.communityName = val;
-      if (lowerKey.includes('client')) currentObj.clientName = val;
+      if (lowerKey.includes('client')) currentObj.candidateName = val;
     });
     if (currentObj.title) data.push(currentObj);
   } else {
@@ -216,7 +216,7 @@ function smartColumnMapper(rawData) {
     individual_phone: ['individualphone', 'phone', 'mobile', 'cell', 'phoneno', 'mobileno', 'contactno', 'contactnumber'],
     individual_alt_phone: ['alternatephone', 'altphone', 'secondaryphone', 'altmobile', 'alternateno', 'individualaltphone', 'individualalternatephone'],
     communityName: ['community', 'communityname', 'society', 'building', 'project'],
-    clientName: ['client', 'customer', 'individualname', 'party', 'company'],
+    candidateName: ['client', 'customer', 'individualname', 'party', 'company'],
     pincode: ['pincode', 'pin', 'zip', 'postal'],
     address: ['address', 'location', 'addr', 'site'],
     mapUrl: ['map', 'url', 'link', 'google', 'location_link'],
@@ -238,7 +238,7 @@ function smartColumnMapper(rawData) {
     newRow.title = findValue('title') || `CASE-${Math.floor(Math.random()*100000)}`;
     const rawCommunity = findValue('communityName');
     newRow.communityName = rawCommunity ? String(rawCommunity).split('::')[0].trim() : null;
-    newRow.clientName = findValue('clientName');
+    newRow.candidateName = findValue('candidateName');
     newRow.pincode = findValue('pincode');
     newRow.address = findValue('address');
     newRow.mapUrl = findValue('mapUrl');
@@ -292,7 +292,7 @@ function showSmartPreview(tasks) {
               <th>Case ID / Title</th>
               <th>Pincode</th>
               <th>Community</th>
-              <th>Client</th>
+              <th>Candidate</th>
               <th style="min-width:110px;">Phone</th>
               <th style="min-width:110px;">Alt Phone</th>
               <th>Status</th>
@@ -304,7 +304,7 @@ function showSmartPreview(tasks) {
                 <td><input type="text" value="${escapeHtml(t.title)}" class="form-input text-sm" name="title"></td>
                 <td><input type="text" value="${escapeHtml(t.pincode || '')}" class="form-input text-sm" name="pincode" style="width:80px"></td>
                 <td>${escapeHtml(t.communityName || '-')}</td>
-                <td>${escapeHtml(t.clientName || '-')}</td>
+                <td>${escapeHtml(t.candidateName || '-')}</td>
                 <td>${t.individual_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
                 <td>${t.individual_alt_phone ? `<span style="color:#34d399; font-size:12px;"><i class="fas fa-phone" style="font-size:10px;"></i> ${escapeHtml(t.individual_alt_phone)}</span>` : '<span style="color:#6b7280; font-size:11px;">—</span>'}</td>
                 <td>${t.assignedTo ? '<span class="status-badge status-verified">Matched</span>' : '<span class="status-badge status-unassigned">Pool</span>'}</td>
@@ -453,7 +453,7 @@ async function updateExistingTasks(duplicates) {
     if (dup.pincode) updatePayload.pincode = dup.pincode;
     if (dup.address) updatePayload.address = dup.address;
     if (dup.notes) updatePayload.notes = dup.notes;
-    if (dup.clientName) updatePayload.clientName = dup.clientName;
+    if (dup.candidateName) updatePayload.candidateName = dup.candidateName;
     if (dup.communityName) updatePayload.communityName = dup.communityName;
     if (dup.mapUrl) updatePayload.mapUrl = dup.mapUrl;
     if (dup.assignedTo) updatePayload.assignedTo = dup.assignedTo;

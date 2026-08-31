@@ -243,7 +243,7 @@ class TaskController {
         tasksToInsert.push({
           title: String(title),
           pincode: String(pincode).trim(),
-          client_name: row.clientname || row.individualname || "Unknown Client",
+          candidate_name: row.candidatename || row.individualname || "Unknown Client",
           community_name: community_name,
           map_url: finalMapUrl,
           address: row.address || null,
@@ -358,7 +358,7 @@ class TaskController {
 
       for (let i = 0; i < tasks.length; i++) {
         const taskData = tasks[i];
-        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, clientName, communityName, community_name, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
+        const { title, pincode, address, mapUrl, map_url, notes, createdBy, assignedTo, candidateName, communityName, community_name, latitude, longitude, individual_phone, individual_alt_phone } = taskData;
         let finalMapUrl = mapUrl || map_url || null;
         
         let finalLat = latitude || null;
@@ -384,7 +384,7 @@ class TaskController {
           title, pincode, address: address || finalMapUrl, map_url: finalMapUrl,
           latitude: finalLat ? parseFloat(finalLat) : null,
           longitude: finalLng ? parseFloat(finalLng) : null,
-          notes, client_name: clientName, community_name: finalCommunityName,
+          notes, candidate_name: candidateName, community_name: finalCommunityName,
           status: initialStatus, assigned_to: finalAssignee, 
           assigned_date: assignedDate, created_by: createdBy || adminId,
           geocode_confidence: null,
